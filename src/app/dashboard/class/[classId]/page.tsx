@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { supabase } from '../../../../lib/supabaseClient'
+import { supabase } from '../../../../lib/supabaseClient' // Ruta relativa corregida
 
 // Interfaces para los tipos de datos
 interface ClassDetails {
