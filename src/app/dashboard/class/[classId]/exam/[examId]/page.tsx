@@ -121,7 +121,7 @@ export default function ExamManagementPage() {
     } finally {
       setIsSubmissionModalOpen(false);
       setSubmissionFiles([]);
-      // Asegurar que se recargue la lista de entregas
+      // Recargar la lista de entregas como última acción
       await fetchSubmissions();
       setUploading(false);
     }
