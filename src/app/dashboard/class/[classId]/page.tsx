@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { supabase } from '../../../../lib/supabaseClient' // Ruta relativa corregida
+import { supabase } from '../../../../lib/supabaseClient'
 
 // Interfaces para los tipos de datos
 interface ClassDetails {
@@ -21,57 +21,57 @@ interface Exam {
 }
 
 export default function ClassDetailPage() {
-  const params = useParams();
-  const classId = parseInt(params.classId as string, 10);
+  const params = useParams()
+  const classId = parseInt(params.classId as string, 10)
 
-  const [classDetails, setClassDetails] = useState<ClassDetails | null>(null);
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newExamName, setNewExamName] = useState('');
+  const [classDetails, setClassDetails] = useState<ClassDetails | null>(null)
+  const [exams, setExams] = useState<Exam[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [newExamName, setNewExamName] = useState('')
 
   // Función para obtener los detalles de la clase
   const fetchClassDetails = useCallback(async () => {
-    if (isNaN(classId)) return;
+    if (isNaN(classId)) return
     const { data, error } = await supabase
       .from('classes')
       .select('*')
       .eq('id', classId)
-      .single();
+      .single()
     if (error) {
-      console.error("Error al cargar detalles de la clase:", error);
+      console.error("Error al cargar detalles de la clase:", error)
     } else {
-      setClassDetails(data);
+      setClassDetails(data)
     }
-  }, [classId]);
+  }, [classId])
 
   // Función para obtener los exámenes de la clase
   const fetchExams = useCallback(async () => {
-    if (isNaN(classId)) return;
+    if (isNaN(classId)) return
     const { data, error } = await supabase
       .from('exams')
       .select('*')
       .eq('class_id', classId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
     if (error) {
-      console.error("Error al cargar los exámenes:", error);
+      console.error("Error al cargar los exámenes:", error)
     } else {
-      setExams(data || []);
+      setExams(data || [])
     }
-  }, [classId]);
+  }, [classId])
 
   // useEffect para cargar todos los datos al inicio
   useEffect(() => {
     const loadData = async () => {
-      setLoading(true);
-      await fetchClassDetails();
-      await fetchExams();
-      setLoading(false);
-    };
-    if (!isNaN(classId)) {
-      loadData();
+      setLoading(true)
+      await fetchClassDetails()
+      await fetchExams()
+      setLoading(false)
     }
-  }, [classId, fetchClassDetails, fetchExams]);
+    if (!isNaN(classId)) {
+      loadData()
+    }
+  }, [classId, fetchClassDetails, fetchExams])
   
   // Función para crear un nuevo examen
   const handleCreateExam = async (e: React.FormEvent) => {
