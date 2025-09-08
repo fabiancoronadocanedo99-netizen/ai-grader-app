@@ -97,6 +97,7 @@ export default function ExamManagementPage() {
   
   const handleUploadSubmissions = async () => {
     if (submissionFiles.length === 0 || isNaN(examId)) return;
+    const newSubmissions = [];
     setUploading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -112,8 +113,9 @@ export default function ExamManagementPage() {
           student_name: file.name.split('.').slice(0, -1).join('.'),
           user_id: user.id
         };
-        const { error: insertError } = await supabase.from('submissions').insert([newSubmission]);
+        const { data: insertedData, error: insertError } = await supabase.from('submissions').insert([newSubmission]).select();
         if (insertError) console.error(`Error al crear registro para ${file.name}:`, insertError);
+        if (insertedData) newSubmissions.push(insertedData[0]);
       }
       alert('Entregas subidas exitosamente');
     } catch (error) {
@@ -121,8 +123,8 @@ export default function ExamManagementPage() {
     } finally {
       setIsSubmissionModalOpen(false);
       setSubmissionFiles([]);
-      // Recargar la lista de entregas como última acción
-      await fetchSubmissions();
+      // Actualizar el estado localmente con los datos recién insertados
+      setSubmissions(prev => [...newSubmissions, ...prev]);
       setUploading(false);
     }
   };
