@@ -62,6 +62,9 @@ export default function ExamManagementPage() {
   useEffect(() => {
     const loadData = async () => {
       if (isNaN(examId)) { setLoading(false); return; }
+      // Limpiar estados anteriores al principio
+      setExamDetails(null);
+      setSubmissions([]);
       setLoading(true);
       await Promise.all([fetchExamDetails(), fetchSubmissions()]);
       setLoading(false);
@@ -118,6 +121,7 @@ export default function ExamManagementPage() {
     } finally {
       setIsSubmissionModalOpen(false);
       setSubmissionFiles([]);
+      // Asegurar que se recargue la lista de entregas
       await fetchSubmissions();
       setUploading(false);
     }
