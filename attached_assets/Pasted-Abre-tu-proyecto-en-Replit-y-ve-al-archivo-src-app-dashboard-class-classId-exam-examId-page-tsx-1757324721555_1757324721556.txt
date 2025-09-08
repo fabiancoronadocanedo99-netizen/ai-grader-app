@@ -1,0 +1,15 @@
+Abre tu proyecto en Replit y ve al archivo:
+src/app/dashboard/class/[classId]/exam/[examId]/page.tsx
+Abre el chat del "Agent" (el panel de la IA de Replit).
+Copia y pega el siguiente prompt completo en el chat. Es largo, pero es extremadamente preciso para que la IA no tenga ninguna duda de lo que tiene que hacer.
+Hola, Agente. Necesito que refactorices y corrijas el código en el archivo actual (src/app/dashboard/class/[classId]/exam/[examId]/page.tsx) para solucionar los bugs finales y mejorar la estructura.
+Por favor, realiza los siguientes cambios:
+Reestructura el Componente: Divide el componente principal ExamManagementPage en componentes hijos más pequeños para mejorar la legibilidad y el mantenimiento. Necesito los siguientes componentes nuevos DENTRO de este mismo archivo:
+SolutionUploader
+SubmissionsManager
+CreateSubmissionModal
+Centraliza la Carga de Datos: Crea una única función fetchData dentro de ExamManagementPage que se encargue de obtener tanto los detalles del examen como la lista de entregas, usando Promise.all para eficiencia.
+Corrige el useEffect: Asegúrate de que el useEffect principal llame a fetchData y que su array de dependencias sea [fetchData]. Dentro de fetchData, antes de cargar los nuevos datos, limpia los estados anteriores (setExamDetails(null), setSubmissions([])) para evitar "datos fantasma".
+Implementa el Refresco Automático Correctamente: Los componentes hijos (SolutionUploader y CreateSubmissionModal) deben recibir una prop llamada onUploadSuccess. Cuando una subida sea exitosa, deben llamar a esta función, que a su vez ejecutará fetchData en el componente padre para refrescar toda la información de la página sin necesidad de recargarla.
+Asegura la Funcionalidad: Revisa que toda la lógica de react-dropzone para subir archivos, la lógica de los modales y las llamadas a Supabase para insert y update se mantengan y funcionen correctamente dentro de los nuevos componentes refactorizados.
+El objetivo es tener un único componente principal que maneje todos los datos, y componentes hijos que se encarguen de la interfaz y le notifiquen al padre cuándo debe refrescar los datos.

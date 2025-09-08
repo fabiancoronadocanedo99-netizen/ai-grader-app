@@ -23,11 +23,8 @@ export default function ExamManagementPage() {
   const fetchData = useCallback(async () => {
     if (isNaN(examId)) { setLoading(false); return; }
 
-    setExamDetails(null);
-    setSubmissions([]);
-    setLoading(true);
-
     console.log("Fetching data for exam ID:", examId);
+    setLoading(true);
 
     const examPromise = supabase.from('exams').select('*').eq('id', examId).single();
     const submissionsPromise = supabase.from('submissions').select('*').eq('exam_id', examId).order('created_at', { ascending: false });
