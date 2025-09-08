@@ -187,28 +187,34 @@ function CreateSubmissionModal({ isOpen, onClose, examId, onUploadSuccess }: {
     const { getRootProps, getInputProps } = useDropzone({ onDrop, multiple: true });
 
     const handleUpload = async () => {
+        console.log('Iniciando subida de entregas...');
         if (files.length === 0) return;
         setIsUploading(true);
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('Usuario no autenticado.');
+            console.log('Obtenido usuario:', user.id);
 
             for (const file of files) {
                 const filePath = `${user.id}/submissions/${examId}-${Date.now()}-${file.name}`;
                 const { data, error } = await supabase.storage.from('exam_files').upload(filePath, file);
                 if (error) throw error;
+                console.log('Archivo subido a Storage:', data.path);
 
                 const { data: { publicUrl } } = supabase.storage.from('exam_files').getPublicUrl(data.path);
+                console.log('URL pública obtenida:', publicUrl);
                 const newSubmission = { 
                     exam_id: examId,
                     submission_file_url: publicUrl, 
                     student_name: file.name.split('.').slice(0, -1).join('.'),
                     user_id: user.id
                 };
-                const { error: insertError } = await supabase.from('submissions').insert([newSubmission]);
+                const { error: insertError } = await supabase.from('submissions').insert([newSubmission]).select();
                 if (insertError) throw insertError;
+                console.log('Registro insertado en DB para:', file.name);
             }
             alert('Entregas subidas exitosamente!');
+            console.log('Subida completada, llamando a refresco...');
             onUploadSuccess(); // Llama a la función de refresco del padre
         } catch (error) {
             alert(`Error: ${(error as Error).message}`);
