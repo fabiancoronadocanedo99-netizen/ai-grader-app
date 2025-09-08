@@ -221,7 +221,7 @@ function CreateSubmissionModal({ isOpen, onClose, examId, onUploadSuccess }: {
             setIsUploading(false);
             setFiles([]);
             onClose();
-            window.location.reload();
+            onUploadSuccess();
         }
     };
 
