@@ -215,13 +215,13 @@ function CreateSubmissionModal({ isOpen, onClose, examId, onUploadSuccess }: {
             }
             alert('Entregas subidas exitosamente!');
             console.log('Subida completada, llamando a refresco...');
-            onUploadSuccess(); // Llama a la función de refresco del padre
         } catch (error) {
             alert(`Error: ${(error as Error).message}`);
         } finally {
             setIsUploading(false);
             setFiles([]);
             onClose();
+            window.location.reload();
         }
     };
 
