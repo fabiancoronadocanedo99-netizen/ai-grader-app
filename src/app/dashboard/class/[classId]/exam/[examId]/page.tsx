@@ -121,7 +121,7 @@ function SubmissionsManager({ submissions, examId, onUploadSuccess, onGrade }: {
         <div className="bg-gray-200/60 backdrop-blur-sm rounded-xl p-6 shadow-[8px_8px_16px_#d1d9e6,-8px_-8px_16px_#ffffff]">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-700">Entregas de Alumnos</h2>
-                <button onClick={() => setIsModalOpen(true)} className="bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl shadow-[6px_6px_12px_#d1d9e-6,-6px_-6px_12px_#ffffff]">Añadir Entregas</button>
+                <button onClick={() => setIsModalOpen(true)} className="bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl shadow-[6px_6px_12px_#d1d9e6,-6px_-6px_12px_#ffffff]">Añadir Entregas</button>
             </div>
             {submissions.length === 0 ? (
                 <div className="text-center text-gray-600 py-8">Aún no hay entregas para este examen</div>
