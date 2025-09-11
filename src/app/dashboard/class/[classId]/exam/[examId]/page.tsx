@@ -19,41 +19,81 @@ export default function ExamManagementPage() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // --- Carga de Datos ---
-  const fetchData = useCallback(async () => {
-    if (isNaN(examId)) { setLoading(false); return; }
+      // --- Funciones para Cargar Datos (Versión Corregida) ---
+      const fetchData = useCallback(async () => {
+        if (isNaN(examId)) {
+          setLoading(false);
+          return;
+        }
+        // Limpiamos los estados para evitar "datos fantasma"
+        setExamDetails(null);
+        setSubmissions([]);
+        setLoading(true);
 
-    console.log("Fetching data for exam ID:", examId);
-    setLoading(true);
+        try {
+          const examPromise = supabase.from('exams').select('*').eq('id', examId).single();
+          const submissionsPromise = supabase.from('submissions').select('*').eq('exam_id', examId).order('created_at', { ascending: false });
 
-    const examPromise = supabase.from('exams').select('*').eq('id', examId).single();
-    const submissionsPromise = supabase.from('submissions').select('*').eq('exam_id', examId).order('created_at', { ascending: false });
+          const [examResult, submissionsResult] = await Promise.all([examPromise, submissionsPromise]);
 
-    const [examResult, submissionsResult] = await Promise.all([examPromise, submissionsPromise]);
+          if (examResult.error) throw examResult.error;
+          setExamDetails(examResult.data);
 
-    if (examResult.error) {
-      console.error("Error fetching exam details:", examResult.error);
-    } else {
-      setExamDetails(examResult.data);
-    }
+          if (submissionsResult.error) throw submissionsResult.error;
+          setSubmissions(submissionsResult.data || []);
+        } catch (error) {
+          console.error("Error al cargar los datos de la página:", error);
+        } finally {
+          setLoading(false);
+        }
+      }, [examId]);
 
-    if (submissionsResult.error) {
-      console.error("Error fetching submissions:", submissionsResult.error);
-    } else {
-      setSubmissions(submissionsResult.data || []);
-    }
+      useEffect(() => {
+        fetchData();
+      }, [fetchData]);
 
-    setLoading(false);
-  }, [examId]);
+    const onUploadSuccess = () => {
+      console.log("Upload exitoso, refrescando datos...");
+      fetchData(); // Llama a la función principal para recargar todo
+    };
 
-  const onUploadSuccess = () => {
-    window.location.reload();
-  };
+    const handleGrade = async (submissionId: number) => {
+      // Actualizar estado local para mostrar "processing"
+      setSubmissions(prev => 
+        prev.map(sub => 
+          sub.id === submissionId 
+            ? { ...sub, status: 'processing' }
+            : sub
+        )
+      );
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+      try {
+        // Llamar a la Edge Function de Supabase
+        const { data, error } = await supabase.functions.invoke('grade-submission', {
+          body: { submissionId }
+        });
 
+        if (error) throw error;
+
+        // Mostrar alerta de éxito
+        alert('Calificación completada');
+        
+        // Refrescar los datos
+        await fetchData();
+      } catch (error) {
+        // Mostrar error y revertir estado
+        alert(`Error: ${(error as Error).message}`);
+        
+        // Revertir estado a "pending"
+        setSubmissions(prev => 
+          prev.map(sub => 
+            sub.id === submissionId 
+              ? { ...sub, status: 'pending' }
+              : sub
+          )
+        );
+      }
+    };
   // --- Renderizado ---
   if (loading) return <div className="p-8 text-center">Cargando...</div>;
   if (!examDetails) return <div className="p-8 text-center">Examen no encontrado.</div>;
@@ -65,7 +105,7 @@ export default function ExamManagementPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <SolutionUploader examDetails={examDetails} onUploadSuccess={onUploadSuccess} />
-        <SubmissionsManager submissions={submissions} examId={examId} onUploadSuccess={onUploadSuccess} />
+        <SubmissionsManager submissions={submissions} examId={examId} onUploadSuccess={onUploadSuccess} onGrade={handleGrade} />
       </div>
 
       <CreateSubmissionModal
@@ -145,7 +185,7 @@ function SolutionUploader({ examDetails, onUploadSuccess }: { examDetails: ExamD
 }
 
 // Componente para gestionar las entregas
-function SubmissionsManager({ submissions, examId, onUploadSuccess }: { submissions: Submission[]; examId: number; onUploadSuccess: () => void }) {
+function SubmissionsManager({ submissions, examId, onUploadSuccess, onGrade }: { submissions: Submission[]; examId: number; onUploadSuccess: () => void; onGrade: (submissionId: number) => Promise<void> }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     return (
@@ -161,7 +201,9 @@ function SubmissionsManager({ submissions, examId, onUploadSuccess }: { submissi
                     {submissions.map(sub => (
                         <div key={sub.id} className="bg-gray-200/80 rounded-lg p-4 flex justify-between items-center">
                             <p>{sub.student_name}</p>
-                            <button className="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff]">Calificar</button>
+                            <button onClick={() => onGrade(sub.id)} className="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff]">
+                              {sub.status === 'processing' ? 'Procesando...' : 'Calificar'}
+                            </button>
                         </div>
                     ))}
                 </div>
