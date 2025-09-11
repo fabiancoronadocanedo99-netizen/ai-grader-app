@@ -84,13 +84,6 @@ export default function ExamManagementPage() {
         <SolutionUploader examDetails={examDetails} onUploadSuccess={onUploadSuccess} />
         <SubmissionsManager submissions={submissions} examId={examId} onUploadSuccess={onUploadSuccess} onGrade={handleGrade} />
       </div>
-
-      <CreateSubmissionModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        examId={examId}
-        onUploadSuccess={onUploadSuccess}
-      />
     </div>
   );
 }
@@ -99,72 +92,23 @@ export default function ExamManagementPage() {
 
 // Componente para subir el solucionario
 function SolutionUploader({ examDetails, onUploadSuccess }: { examDetails: ExamDetails; onUploadSuccess: () => void }) {
-    const [solutionFile, setSolutionFile] = useState<File | null>(null);
-    const [uploading, setUploading] = useState(false);
-
-    const onDrop = useCallback((acceptedFiles: File[]) => {
-        setSolutionFile(acceptedFiles[0] || null);
-    }, []);
-
-    const { getRootProps, getInputProps } = useDropzone({ onDrop, multiple: false });
-
-    const handleUpload = async () => {
-        console.log('Iniciando subida de solucionario...');
-        if (!solutionFile) return;
-        setUploading(true);
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Usuario no autenticado.');
-            console.log('Obtenido usuario:', user.id);
-
-            const filePath = `${user.id}/solutions/${examDetails.id}-${Date.now()}-${solutionFile.name}`;
-            const { data, error } = await supabase.storage.from('exam_files').upload(filePath, solutionFile);
-            if (error) throw error;
-            console.log('Archivo subido a Storage:', data.path);
-
-            const { data: { publicUrl } } = supabase.storage.from('exam_files').getPublicUrl(data.path);
-            console.log('URL pública obtenida:', publicUrl);
-            
-            const { error: updateError } = await supabase.from('exams').update({ solution_file_url: publicUrl }).eq('id', examDetails.id);
-            if (updateError) throw updateError;
-            console.log('Registro actualizado en DB para examen:', examDetails.id);
-
-            alert('Solucionario subido con éxito!');
-            console.log('Subida completada, llamando a refresco...');
-            onUploadSuccess(); // Llama a la función de refresco del padre
-        } catch (error) {
-            console.error('Error en subida de solucionario:', error);
-            alert(`Error: ${(error as Error).message}`);
-        } finally {
-            setUploading(false);
-            setSolutionFile(null);
-        }
-    };
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     return (
         <div className="bg-gray-200/60 backdrop-blur-sm rounded-xl p-6 shadow-[8px_8px_16px_#d1d9e6,-8px_-8px_16px_#ffffff]">
-            <h2 className="text-2xl font-bold text-gray-700 mb-6">Material de Referencia</h2>
-            {examDetails.solution_file_url ? (
-                <div>
-                    <p className="text-sm text-gray-600 mb-2">Archivo actual:</p>
-                    <a href={examDetails.solution_file_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">Ver solucionario</a>
-                </div>
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-700">Material de Referencia</h2>
+                <button onClick={() => setIsModalOpen(true)} className="bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl shadow-[6px_6px_12px_#d1d9e6,-6px_-6px_12px_#ffffff]">Añadir Solucionario</button>
+            </div>
+            {!examDetails.solution_file_url ? (
+                <div className="text-center text-gray-600 py-8">Aún no hay solucionario para este examen</div>
             ) : (
-                <div className="space-y-4">
-                    <div {...getRootProps()} className="bg-gray-200/80 rounded-lg p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center">
-                        <input {...getInputProps()} />
-                        <p>Arrastra el solucionario aquí, o haz clic para seleccionarlo.</p>
-                    </div>
-                    {solutionFile && (
-                        <div>
-                            <p>{solutionFile.name}</p>
-                            <button onClick={handleUpload} disabled={uploading} className="w-full mt-4 bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] disabled:opacity-50">
-                                {uploading ? 'Subiendo...' : 'Guardar Solucionario'}
-                            </button>
-                        </div>
-                    )}
+                <div className="bg-gray-200/80 rounded-lg p-4 flex justify-between items-center">
+                    <p>Archivo actual</p>
+                    <a href={examDetails.solution_file_url} target="_blank" rel="noopener noreferrer" className="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff] no-underline hover:shadow-[1px_1px_3px_#d1d9e6,-1px_-1px_3px_#ffffff]">Ver Solucionario</a>
                 </div>
             )}
+            {isModalOpen && <CreateSolutionModal examId={examDetails.id} onUploadSuccess={() => { onUploadSuccess(); setIsModalOpen(false); }} onClose={() => setIsModalOpen(false)} />}
         </div>
     );
 }
@@ -206,8 +150,7 @@ function SubmissionsManager({ submissions, examId, onUploadSuccess, onGrade }: {
 }
 
 // Componente Modal para subir entregas
-function CreateSubmissionModal({ isOpen, onClose, examId, onUploadSuccess }: {
-    isOpen: boolean;
+function CreateSubmissionModal({ onClose, examId, onUploadSuccess }: {
     onClose: () => void;
     examId: number;
     onUploadSuccess: () => void;
@@ -280,6 +223,76 @@ function CreateSubmissionModal({ isOpen, onClose, examId, onUploadSuccess }: {
                     <button onClick={onClose} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff]">Cancelar</button>
                     <button onClick={handleUpload} disabled={isUploading || files.length === 0} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] disabled:opacity-50">
                         {isUploading ? 'Subiendo...' : `Subir ${files.length} Archivos`}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// Modal para subir solucionario
+function CreateSolutionModal({ examId, onUploadSuccess, onClose }: { examId: number; onUploadSuccess: () => void; onClose: () => void }) {
+    const [file, setFile] = useState<File | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+
+    const onDrop = useCallback((acceptedFiles: File[]) => {
+        setFile(acceptedFiles[0] || null);
+    }, []);
+
+    const { getRootProps, getInputProps } = useDropzone({ onDrop, multiple: false });
+
+    const handleUpload = async () => {
+        console.log('Iniciando subida de solucionario...');
+        if (!file) return;
+        setIsUploading(true);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Usuario no autenticado.');
+            console.log('Obtenido usuario:', user.id);
+
+            const filePath = `${user.id}/solutions/${examId}-${Date.now()}-${file.name}`;
+            const { data, error } = await supabase.storage.from('exam_files').upload(filePath, file);
+            if (error) throw error;
+            console.log('Archivo subido a Storage:', data.path);
+
+            const { data: { publicUrl } } = supabase.storage.from('exam_files').getPublicUrl(data.path);
+            console.log('URL pública obtenida:', publicUrl);
+            
+            const { error: updateError } = await supabase.from('exams').update({ solution_file_url: publicUrl }).eq('id', examId);
+            if (updateError) throw updateError;
+            console.log('Registro actualizado en DB para examen:', examId);
+
+            alert('Solucionario subido con éxito!');
+            console.log('Subida completada, llamando a refresco...');
+        } catch (error) {
+            console.error('Error en subida de solucionario:', error);
+            alert(`Error: ${(error as Error).message}`);
+        } finally {
+            setIsUploading(false);
+            setFile(null);
+            onClose();
+            onUploadSuccess();
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+            <div className="relative bg-gray-200/60 backdrop-blur-md rounded-xl p-8 shadow-lg max-w-2xl w-full mx-4">
+                <h2 className="text-center font-bold text-2xl mb-6">Subir Solucionario</h2>
+                <div {...getRootProps()} className="mb-6 bg-gray-200/80 rounded-lg p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center">
+                    <input {...getInputProps()} />
+                    <p>Arrastra el solucionario aquí, o haz clic para seleccionarlo.</p>
+                </div>
+                {file && (
+                    <div className="mb-6">
+                        <p className="text-sm">{file.name}</p>
+                    </div>
+                )}
+                <div className="flex space-x-4">
+                    <button onClick={onClose} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff]">Cancelar</button>
+                    <button onClick={handleUpload} disabled={isUploading || !file} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] disabled:opacity-50">
+                        {isUploading ? 'Subiendo...' : 'Subir Solucionario'}
                     </button>
                 </div>
             </div>
