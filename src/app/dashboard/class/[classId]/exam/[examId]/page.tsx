@@ -206,20 +206,20 @@ function CreateSubmissionModal({ onClose, examId, onUploadSuccess }: {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-            <div className="relative bg-gray-200/60 backdrop-blur-md rounded-xl p-8 shadow-lg max-w-2xl w-full mx-4">
-                <h2 className="text-center font-bold text-2xl mb-6">Subir Entregas</h2>
+            <div className="relative bg-gray-200/60 backdrop-blur-md rounded-xl p-8 shadow-lg border border-white/20 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.3),inset_-1px_-1px_2px_rgba(0,0,0,0.1),8px_8px_16px_rgba(0,0,0,0.15)] max-w-2xl w-full mx-4">
+                <h2 className="text-center font-bold text-2xl mb-6 text-slate-800">Subir Entregas</h2>
                 <div {...getRootProps()} className="mb-6 bg-gray-200/80 rounded-lg p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center">
                     <input {...getInputProps()} />
-                    <p>Arrastra los archivos aquí, o haz clic para seleccionarlos.</p>
+                    <p className="text-slate-700">Arrastra los archivos aquí, o haz clic para seleccionarlos.</p>
                 </div>
                 {files.length > 0 && (
                     <div className="mb-6 space-y-2">
-                        {files.map((file, i) => <p key={i} className="text-sm">{file.name}</p>)}
+                        {files.map((file, i) => <p key={i} className="text-sm text-slate-800">{file.name}</p>)}
                     </div>
                 )}
                 <div className="flex space-x-4">
-                    <button onClick={onClose} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff]">Cancelar</button>
-                    <button onClick={handleUpload} disabled={isUploading || files.length === 0} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] disabled:opacity-50">
+                    <button onClick={onClose} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] text-slate-700 font-medium">Cancelar</button>
+                    <button onClick={handleUpload} disabled={isUploading || files.length === 0} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] disabled:opacity-50 text-slate-700 font-medium">
                         {isUploading ? 'Subiendo...' : `Subir ${files.length} Archivos`}
                     </button>
                 </div>
@@ -276,20 +276,20 @@ function CreateSolutionModal({ examId, onUploadSuccess, onClose }: { examId: num
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-            <div className="relative bg-gray-200/60 backdrop-blur-md rounded-xl p-8 shadow-lg max-w-2xl w-full mx-4">
-                <h2 className="text-center font-bold text-2xl mb-6">Subir Solucionario</h2>
+            <div className="relative bg-gray-200/60 backdrop-blur-md rounded-xl p-8 shadow-lg border border-white/20 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.3),inset_-1px_-1px_2px_rgba(0,0,0,0.1),8px_8px_16px_rgba(0,0,0,0.15)] max-w-2xl w-full mx-4">
+                <h2 className="text-center font-bold text-2xl mb-6 text-slate-800">Subir Solucionario</h2>
                 <div {...getRootProps()} className="mb-6 bg-gray-200/80 rounded-lg p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center">
                     <input {...getInputProps()} />
-                    <p>Arrastra el solucionario aquí, o haz clic para seleccionarlo.</p>
+                    <p className="text-slate-700">Arrastra el solucionario aquí, o haz clic para seleccionarlo.</p>
                 </div>
                 {file && (
                     <div className="mb-6">
-                        <p className="text-sm">{file.name}</p>
+                        <p className="text-sm text-slate-800">{file.name}</p>
                     </div>
                 )}
                 <div className="flex space-x-4">
-                    <button onClick={onClose} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff]">Cancelar</button>
-                    <button onClick={handleUpload} disabled={isUploading || !file} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] disabled:opacity-50">
+                    <button onClick={onClose} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] text-slate-700 font-medium">Cancelar</button>
+                    <button onClick={handleUpload} disabled={isUploading || !file} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] disabled:opacity-50 text-slate-700 font-medium">
                         {isUploading ? 'Subiendo...' : 'Subir Solucionario'}
                     </button>
                 </div>
