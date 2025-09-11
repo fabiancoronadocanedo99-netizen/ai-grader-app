@@ -59,13 +59,25 @@ export default function ExamManagementPage() {
 
     const handleGrade = async (submissionId: number) => {
       try {
-        const { error } = await supabase.functions.invoke('grade-submission', {
-          body: { submissionId }
-        });
+        // TEMPORAL: Simulación mientras no esté la Edge Function
+        // TODO: Reemplazar con la llamada real cuando esté lista la función de IA
+        
+        // Simular delay de procesamiento
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Actualizar submission con calificación temporal
+        const { error } = await supabase
+          .from('submissions')
+          .update({ 
+            grade: Math.floor(Math.random() * 31) + 70, // Calificación aleatoria 70-100
+            status: 'graded',
+            graded_at: new Date().toISOString()
+          })
+          .eq('id', submissionId);
 
         if (error) throw error;
 
-        alert('Calificación completada');
+        alert('Calificación completada (modo demo)');
         fetchData(); // Refrescar la lista
       } catch (error) {
         alert(`Error: ${(error as Error).message}`);
