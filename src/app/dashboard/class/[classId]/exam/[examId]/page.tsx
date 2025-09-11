@@ -132,23 +132,31 @@ function SolutionUploader({ examDetails, onUploadSuccess }: { examDetails: ExamD
     const { getRootProps, getInputProps } = useDropzone({ onDrop, multiple: false });
 
     const handleUpload = async () => {
+        console.log('Iniciando subida de solucionario...');
         if (!solutionFile) return;
         setUploading(true);
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('Usuario no autenticado.');
+            console.log('Obtenido usuario:', user.id);
 
             const filePath = `${user.id}/solutions/${examDetails.id}-${Date.now()}-${solutionFile.name}`;
             const { data, error } = await supabase.storage.from('exam_files').upload(filePath, solutionFile);
             if (error) throw error;
+            console.log('Archivo subido a Storage:', data.path);
 
             const { data: { publicUrl } } = supabase.storage.from('exam_files').getPublicUrl(data.path);
+            console.log('URL pública obtenida:', publicUrl);
+            
             const { error: updateError } = await supabase.from('exams').update({ solution_file_url: publicUrl }).eq('id', examDetails.id);
             if (updateError) throw updateError;
+            console.log('Registro actualizado en DB para examen:', examDetails.id);
 
             alert('Solucionario subido con éxito!');
+            console.log('Subida completada, llamando a refresco...');
             onUploadSuccess(); // Llama a la función de refresco del padre
         } catch (error) {
+            console.error('Error en subida de solucionario:', error);
             alert(`Error: ${(error as Error).message}`);
         } finally {
             setUploading(false);
