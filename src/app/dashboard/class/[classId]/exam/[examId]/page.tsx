@@ -58,40 +58,17 @@ export default function ExamManagementPage() {
     };
 
     const handleGrade = async (submissionId: number) => {
-      // Actualizar estado local para mostrar "processing"
-      setSubmissions(prev => 
-        prev.map(sub => 
-          sub.id === submissionId 
-            ? { ...sub, status: 'processing' }
-            : sub
-        )
-      );
-
       try {
-        // Llamar a la Edge Function de Supabase
-        const { data, error } = await supabase.functions.invoke('grade-submission', {
+        const { error } = await supabase.functions.invoke('grade-submission', {
           body: { submissionId }
         });
 
         if (error) throw error;
 
-        // Mostrar alerta de éxito
         alert('Calificación completada');
-        
-        // Refrescar los datos
-        await fetchData();
+        fetchData(); // Refrescar la lista
       } catch (error) {
-        // Mostrar error y revertir estado
         alert(`Error: ${(error as Error).message}`);
-        
-        // Revertir estado a "pending"
-        setSubmissions(prev => 
-          prev.map(sub => 
-            sub.id === submissionId 
-              ? { ...sub, status: 'pending' }
-              : sub
-          )
-        );
       }
     };
   // --- Renderizado ---
@@ -210,7 +187,7 @@ function SubmissionsManager({ submissions, examId, onUploadSuccess, onGrade }: {
                         <div key={sub.id} className="bg-gray-200/80 rounded-lg p-4 flex justify-between items-center">
                             <p>{sub.student_name}</p>
                             <button onClick={() => onGrade(sub.id)} className="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff]">
-                              {sub.status === 'processing' ? 'Procesando...' : 'Calificar'}
+                              Calificar
                             </button>
                         </div>
                     ))}
