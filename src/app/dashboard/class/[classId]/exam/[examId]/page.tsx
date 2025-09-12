@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabaseClient'
 
 // --- Tipos de Datos ---
 interface ExamDetails { id: number; name: string; class_id: number; solution_file_url?: string; }
-interface Submission { id: number; student_name: string; submission_file_url: string; status: string; grade?: number; feedback?: string; }
+interface Submission { id: number; student_name: string; submission_file_url: string; status: string; grade?: number; feedback?: string; ai_feedback?: any; }
 
 // --- Componente Principal ---
 export default function ExamManagementPage() {
@@ -18,6 +18,7 @@ export default function ExamManagementPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [viewingFeedback, setViewingFeedback] = useState<any>(null);
 
       // --- Funciones para Cargar Datos (Versión Corregida) ---
       const fetchData = useCallback(async () => {
