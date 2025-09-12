@@ -17,7 +17,6 @@ export default function ExamManagementPage() {
   const [examDetails, setExamDetails] = useState<ExamDetails | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingFeedback, setViewingFeedback] = useState<any>(null);
 
       // --- Funciones para Cargar Datos (Versión Corregida) ---
@@ -105,6 +104,12 @@ export default function ExamManagementPage() {
         <SolutionUploader examDetails={examDetails} onUploadSuccess={onUploadSuccess} />
         <SubmissionsManager submissions={submissions} examId={examId} onUploadSuccess={onUploadSuccess} onGrade={handleGrade} onViewFeedback={setViewingFeedback} />
       </div>
+      {viewingFeedback && (
+        <FeedbackModal 
+          feedback={viewingFeedback} 
+          onClose={() => setViewingFeedback(null)} 
+        />
+      )}
     </div>
   );
 }
@@ -164,8 +169,7 @@ function SubmissionsManager({ submissions, examId, onUploadSuccess, onGrade, onV
             )}
             {isModalOpen && (
                 <CreateSubmissionModal 
-                    isOpen={isModalOpen} 
-                    onClose={() => setIsModalOpen(false)} // <-- LA CORRECCIÓN CLAVE
+                    onClose={() => setIsModalOpen(false)}
                     examId={examId} 
                     onUploadSuccess={onUploadSuccess} 
                 />
@@ -321,4 +325,132 @@ function CreateSolutionModal({ examId, onUploadSuccess, onClose }: { examId: num
             </div>
         </div>
     );
+}
+
+// Componente Modal para mostrar el feedback de IA
+function FeedbackModal({ feedback, onClose }: { feedback: any; onClose: () => void }) {
+  // Parsear el feedback si es un string JSON (común en DBs)
+  let parsedFeedback = feedback;
+  if (typeof feedback === 'string') {
+    try {
+      parsedFeedback = JSON.parse(feedback);
+    } catch (e) {
+      console.warn('No se pudo parsear el feedback JSON:', e);
+      parsedFeedback = {};
+    }
+  }
+  
+  const feedbackData = parsedFeedback?.informe_evaluacion || parsedFeedback;
+  const resumen = feedbackData?.resumen_general || {};
+  const evaluaciones = feedbackData?.evaluacion_detallada || [];
+  const metadatos = feedbackData?.metadatos || {};
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-gray-200/60 backdrop-blur-md rounded-xl p-8 shadow-lg border border-white/20 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.3),inset_-1px_-1px_2px_rgba(0,0,0,0.1),8px_8px_16px_rgba(0,0,0,0.15)] max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold text-slate-800 mb-2">📊 Reporte de Calificación</h2>
+          {metadatos.nombre_alumno && (
+            <p className="text-lg text-slate-600">Estudiante: {metadatos.nombre_alumno}</p>
+          )}
+        </div>
+
+        {/* Resumen General */}
+        <div className="bg-gray-200/80 rounded-xl p-6 mb-6 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)]">
+          <h3 className="text-xl font-bold text-slate-700 mb-4">📈 Resumen General</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-gray-200 rounded-lg p-4 shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff]">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-blue-600 mb-1">
+                  {resumen.puntuacion_total_obtenida || 0}/{resumen.puntuacion_total_posible || 100}
+                </div>
+                <p className="text-slate-600">Puntuación Total</p>
+              </div>
+            </div>
+            <div className="bg-gray-200 rounded-lg p-4 shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff]">
+              <div className="flex justify-around text-center">
+                <div>
+                  <div className="text-lg font-bold text-green-600">✅ {resumen.preguntas_correctas || 0}</div>
+                  <p className="text-xs text-slate-600">Correctas</p>
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-yellow-600">⚠️ {resumen.preguntas_parciales || 0}</div>
+                  <p className="text-xs text-slate-600">Parciales</p>
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-red-600">❌ {resumen.preguntas_incorrectas || 0}</div>
+                  <p className="text-xs text-slate-600">Incorrectas</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Evaluación Detallada */}
+        <div className="space-y-4 mb-6">
+          <h3 className="text-xl font-bold text-slate-700">📝 Evaluación Detallada</h3>
+          {evaluaciones.map((pregunta: any, index: number) => (
+            <div key={index} className="bg-gray-200/80 rounded-xl p-5 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)]">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <h4 className="font-bold text-slate-800">
+                    {pregunta.evaluacion === 'CORRECTO' && '✅'}
+                    {pregunta.evaluacion === 'PARCIALMENTE_CORRECTO' && '⚠️'}
+                    {pregunta.evaluacion === 'INCORRECTO' && '❌'}
+                    {' '}{pregunta.pregunta_id || `Pregunta ${index + 1}`}
+                  </h4>
+                  <p className="text-sm text-slate-600">{pregunta.tema}</p>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold text-slate-700">
+                    {pregunta.puntuacion_obtenida}/{pregunta.puntuacion_posible}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {pregunta.evaluacion}
+                  </div>
+                </div>
+              </div>
+              
+              {pregunta.feedback && (
+                <div className="space-y-2">
+                  {pregunta.feedback.refuerzo_positivo && (
+                    <div className="bg-green-50 border-l-4 border-green-400 p-3 rounded">
+                      <p className="text-green-700 text-sm">💚 {pregunta.feedback.refuerzo_positivo}</p>
+                    </div>
+                  )}
+                  {pregunta.feedback.area_de_mejora && (
+                    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+                      <p className="text-yellow-700 text-sm">💡 <strong>Área de mejora:</strong> {pregunta.feedback.area_de_mejora}</p>
+                    </div>
+                  )}
+                  {pregunta.feedback.explicacion_del_error && (
+                    <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
+                      <p className="text-red-700 text-sm">🔍 <strong>Explicación:</strong> {pregunta.feedback.explicacion_del_error}</p>
+                    </div>
+                  )}
+                  {pregunta.feedback.sugerencia_de_estudio && (
+                    <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
+                      <p className="text-blue-700 text-sm">📚 <strong>Sugerencia:</strong> {pregunta.feedback.sugerencia_de_estudio}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Botón Cerrar */}
+        <div className="text-center">
+          <button 
+            onClick={onClose}
+            className="bg-gray-200 text-slate-700 font-semibold py-3 px-8 rounded-xl shadow-[6px_6px_12px_#d1d9e6,-6px_-6px_12px_#ffffff] hover:shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] transition-all duration-200"
+          >
+            Cerrar Reporte
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
