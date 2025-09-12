@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.15.0'
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { corsHeaders } from '../_shared/cors.ts'
+import { Buffer } from "https://deno.land/std@0.170.0/node/buffer.ts"
 
 // --- El Prompt Maestro ---
 const MASTER_PROMPT = `
@@ -122,13 +123,21 @@ serve(async (req) => {
       .replace('"YYYY-MM-DD"', `"${new Date().toISOString().split('T')[0]}"`)
       .replace('"ID_DEL_EXAMEN"', `"${submission.exams.name}"`)
 
-    const result = await model.generateContent([
-      finalPrompt,
-      { text: "solucionario.pdf" },
-      { inlineData: { data: btoa(String.fromCharCode(...new Uint8Array(await solutionBlob.arrayBuffer()))), mimeType: 'application/pdf' } },
-      { text: "entrega_alumno.pdf" },
-      { inlineData: { data: btoa(String.fromCharCode(...new Uint8Array(await submissionBlob.arrayBuffer()))), mimeType: 'application/pdf' } }
-    ])
+    // Convertir los blobs a arrays de bytes
+    const solutionBytes = new Uint8Array(await solutionBlob.arrayBuffer());
+    const submissionBytes = new Uint8Array(await submissionBlob.arrayBuffer());
+
+    // Crear las partes del prompt
+    const promptParts = [
+      { text: finalPrompt },
+      { text: "solucionario.pdf:" },
+      { inlineData: { mimeType: 'application/pdf', data: Buffer.from(solutionBytes).toString('base64') } },
+      { text: "entrega_alumno.pdf:" },
+      { inlineData: { mimeType: 'application/pdf', data: Buffer.from(submissionBytes).toString('base64') } },
+    ];
+
+    // Generar el contenido
+    const result = await model.generateContent({ contents: [{ role: "user", parts: promptParts }] });
 
     const responseText = result.response.text().replace(/```json|```/g, '').trim()
     const responseJson = JSON.parse(responseText)
