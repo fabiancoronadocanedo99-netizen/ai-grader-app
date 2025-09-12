@@ -103,7 +103,7 @@ export default function ExamManagementPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <SolutionUploader examDetails={examDetails} onUploadSuccess={onUploadSuccess} />
-        <SubmissionsManager submissions={submissions} examId={examId} onUploadSuccess={onUploadSuccess} onGrade={handleGrade} />
+        <SubmissionsManager submissions={submissions} examId={examId} onUploadSuccess={onUploadSuccess} onGrade={handleGrade} onViewFeedback={setViewingFeedback} />
       </div>
     </div>
   );
@@ -135,7 +135,7 @@ function SolutionUploader({ examDetails, onUploadSuccess }: { examDetails: ExamD
 }
 
 // Componente para gestionar las entregas
-function SubmissionsManager({ submissions, examId, onUploadSuccess, onGrade }: { submissions: Submission[]; examId: number; onUploadSuccess: () => void; onGrade: (submissionId: number) => Promise<void> }) {
+function SubmissionsManager({ submissions, examId, onUploadSuccess, onGrade, onViewFeedback }: { submissions: Submission[]; examId: number; onUploadSuccess: () => void; onGrade: (submissionId: number) => Promise<void>; onViewFeedback: (feedback: any) => void }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     return (
@@ -152,11 +152,11 @@ function SubmissionsManager({ submissions, examId, onUploadSuccess, onGrade }: {
                         <div key={sub.id} className="bg-gray-200/80 rounded-lg p-4 flex justify-between items-center">
                             <p>{sub.student_name}</p>
                             <button 
-                                onClick={() => onGrade(sub.id)} 
+                                onClick={() => sub.status === 'graded' ? onViewFeedback(sub.ai_feedback) : onGrade(sub.id)} 
                                 disabled={sub.status === 'processing'}
                                 className="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff] disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              {sub.status === 'processing' ? 'Procesando...' : 'Calificar'}
+                              {sub.status === 'processing' ? 'Procesando...' : sub.status === 'graded' ? 'Ver Resultado' : 'Calificar'}
                             </button>
                         </div>
                     ))}
