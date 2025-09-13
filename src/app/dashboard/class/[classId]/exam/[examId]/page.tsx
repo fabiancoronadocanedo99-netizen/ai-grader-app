@@ -203,7 +203,8 @@ function CreateSubmissionModal({ onClose, examId, onUploadSuccess }: {
             console.log('Obtenido usuario:', user.id);
 
             for (const file of files) {
-                const filePath = `${user.id}/submissions/${examId}-${Date.now()}-${file.name}`;
+                const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+                const filePath = `${user.id}/submissions/${examId}-${Date.now()}-${sanitizedFileName}`;
                 const { data, error } = await supabase.storage.from('exam_files').upload(filePath, file);
                 if (error) throw error;
                 console.log('Archivo subido a Storage:', data.path);
@@ -277,7 +278,8 @@ function CreateSolutionModal({ examId, onUploadSuccess, onClose }: { examId: num
             if (!user) throw new Error('Usuario no autenticado.');
             console.log('Obtenido usuario:', user.id);
 
-            const filePath = `${user.id}/solutions/${examId}-${Date.now()}-${file.name}`;
+            const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+            const filePath = `${user.id}/solutions/${examId}-${Date.now()}-${sanitizedFileName}`;
             const { data, error } = await supabase.storage.from('exam_files').upload(filePath, file);
             if (error) throw error;
             console.log('Archivo subido a Storage:', data.path);
