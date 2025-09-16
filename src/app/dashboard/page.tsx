@@ -50,7 +50,7 @@ export default function DashboardPage() {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', user.id)
+      .eq('id', user.id) // <-- LA CORRECCIÓN CLAVE
       .single()
     
     if (error) {
