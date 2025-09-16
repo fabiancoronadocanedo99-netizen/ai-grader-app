@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabaseClient'
 import CreateClassModal from '@/components/CreateClassModal' // Corregido: Usar el alias
 
@@ -13,8 +14,16 @@ interface Class {
   name?: string;
 }
 
+interface Profile {
+  id: string;
+  profile_completed?: boolean;
+  // Agregar otros campos del perfil según sea necesario
+}
+
 export default function DashboardPage() {
+  const router = useRouter()
   const [classes, setClasses] = useState<Class[]>([])
+  const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
@@ -32,12 +41,33 @@ export default function DashboardPage() {
     } else {
       setClasses(data || [])
     }
-    setLoading(false); // Mover setLoading al final de la función
   }, []); // El array de dependencias vacío significa que la función solo se crea una vez
 
+  const fetchProfile = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+    
+    if (error) {
+      console.error('Error al cargar el perfil:', error.message)
+    } else {
+      setProfile(data)
+    }
+  }, [])
+
   useEffect(() => {
-    fetchClasses()
-  }, [fetchClasses]) // Ejecutar el efecto cuando fetchClasses se define
+    const loadData = async () => {
+      await fetchClasses()
+      await fetchProfile()
+      setLoading(false)
+    }
+    loadData()
+  }, [fetchClasses, fetchProfile]) // Ejecutar el efecto cuando las funciones se definen
 
   return (
     <div className="p-8">
@@ -46,7 +76,13 @@ export default function DashboardPage() {
           Mis Clases
         </h1>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            if (profile?.profile_completed) {
+              setIsModalOpen(true)
+            } else {
+              router.push('/onboarding')
+            }
+          }}
           className="bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl shadow-[6px_6px_12px_#d1d9e6,-6px_-6px_12px_#ffffff] hover:shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] active:shadow-inner-[2px_2px_4px_#d1d9e6,-2px_-2px_4px_#ffffff] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           Crear Nueva Clase
