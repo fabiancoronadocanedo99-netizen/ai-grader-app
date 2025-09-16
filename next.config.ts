@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Configuración segura para Replit
   experimental: {
-    allowedDevOrigins: ["*.replit.dev", "*.replit.com"],
+    serverComponentsExternalPackages: ['@supabase/supabase-js'],
   },
 };
 

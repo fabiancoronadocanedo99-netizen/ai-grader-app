@@ -23,7 +23,8 @@ export default function OnboardingPage() {
 
       const { error } = await supabase
         .from('profiles')
-        .update({
+        .upsert({
+          id: user.id, // Asegurar que usamos el ID del usuario autenticado
           full_name: fullName,
           subject: subject,
           country: country,
@@ -31,7 +32,6 @@ export default function OnboardingPage() {
           years_experience: parseInt(yearsExperience) || 0,
           profile_completed: true
         })
-        .eq('id', user.id)
 
       if (error) throw error
 

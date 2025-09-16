@@ -50,13 +50,13 @@ export default function DashboardPage() {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', user.id) // <-- LA CORRECCIÓN CLAVE
-      .single()
+      .eq('id', user.id)
+      .maybeSingle() // Permite que no exista el perfil para usuarios nuevos
     
     if (error) {
       console.error('Error al cargar el perfil:', error.message)
     } else {
-      setProfile(data)
+      setProfile(data) // data será null si no existe el perfil
     }
   }, [])
 
