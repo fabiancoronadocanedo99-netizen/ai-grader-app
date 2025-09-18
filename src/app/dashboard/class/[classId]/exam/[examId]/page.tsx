@@ -120,7 +120,11 @@ export default function ExamManagementPage() {
 function SolutionUploader({ examDetails, onUploadSuccess }: { examDetails: ExamDetails; onUploadSuccess: () => void }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const hasSolution = examDetails.solution_file_url && examDetails.solution_file_url.trim() !== '';
+    // Validación robusta que cubre todos los casos posibles
+    const hasSolution = examDetails.solution_file_url && 
+                       examDetails.solution_file_url !== 'null' && 
+                       examDetails.solution_file_url !== 'undefined' &&
+                       examDetails.solution_file_url.trim() !== '';
 
     return (
         <div className="neu-card p-6">
