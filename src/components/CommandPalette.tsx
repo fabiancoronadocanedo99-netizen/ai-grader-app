@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Command } from 'cmdk'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabaseClient'
+import * as VisuallyHidden from '@radix-ui/react-visually-hidden'
 
 interface Class {
   id: number
@@ -109,6 +110,11 @@ export default function CommandPalette() {
       
       {/* Modal con diseño Neumórfico */}
       <div className="relative neu-card w-full max-w-lg mx-4 overflow-hidden">
+        {/* Título oculto para accesibilidad */}
+        <VisuallyHidden.Root>
+          <h2>Búsqueda Universal - Buscar clases y exámenes</h2>
+        </VisuallyHidden.Root>
+        
         {/* Barra de búsqueda */}
         <Command.Input
           placeholder="Buscar clases, exámenes..."
