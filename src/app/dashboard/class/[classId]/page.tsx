@@ -16,13 +16,13 @@ interface ClassDetails {
 interface Exam {
   id: number;
   name: string;
-  class_id: string; // UUID como string
+  class_id: number; // Revertir a number para compatibilidad
   created_at?: string;
 }
 
 export default function ClassDetailPage() {
   const params = useParams()
-  const classId = params.classId as string // Mantener como string para UUID
+  const classId = parseInt(params.classId as string, 10) // Revertir a number para compatibilidad
 
   const [classDetails, setClassDetails] = useState<ClassDetails | null>(null)
   const [exams, setExams] = useState<Exam[]>([])
@@ -40,7 +40,7 @@ export default function ClassDetailPage() {
 
   // Función para obtener los detalles de la clase
   const fetchClassDetails = useCallback(async () => {
-    if (!classId) return
+    if (isNaN(classId)) return
     const { data, error } = await supabase
       .from('classes')
       .select('*')
@@ -55,7 +55,7 @@ export default function ClassDetailPage() {
 
   // Función para obtener los exámenes de la clase
   const fetchExams = useCallback(async () => {
-    if (!classId) return
+    if (isNaN(classId)) return
     const { data, error } = await supabase
       .from('exams')
       .select('*')
@@ -76,7 +76,7 @@ export default function ClassDetailPage() {
       await fetchExams()
       setLoading(false)
     }
-    if (classId) {
+    if (!isNaN(classId)) {
       loadData()
     }
   }, [classId, fetchClassDetails, fetchExams])
@@ -101,7 +101,7 @@ export default function ClassDetailPage() {
   // Función para crear un nuevo examen
   const handleCreateExam = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newExamName.trim() || !classId) return;
+    if (!newExamName.trim() || isNaN(classId)) return;
 
     const { data, error } = await supabase
       .from('exams')
