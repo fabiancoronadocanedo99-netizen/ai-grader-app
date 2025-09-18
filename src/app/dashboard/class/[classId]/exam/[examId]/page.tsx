@@ -128,15 +128,8 @@ function SolutionUploader({ examDetails, onUploadSuccess }: { examDetails: ExamD
 
     return (
         <div className="neu-card p-6">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-700">Material de Referencia</h2>
-                {!hasSolution && (
-                    <button onClick={() => setIsModalOpen(true)} className="neu-button text-gray-700 font-semibold py-3 px-6">Añadir Solucionario</button>
-                )}
-            </div>
-            {!hasSolution ? (
-                <div className="text-center text-gray-600 py-8">Aún no hay solucionario para este examen</div>
-            ) : (
+            {/* Estado FINAL: Con solucionario subido - Solo botón hundido */}
+            {hasSolution ? (
                 <div className="text-center py-8">
                     <button 
                         disabled
@@ -145,6 +138,15 @@ function SolutionUploader({ examDetails, onUploadSuccess }: { examDetails: ExamD
                         Solucionario Subido ✅
                     </button>
                 </div>
+            ) : (
+                /* Estado INICIAL: Sin solucionario - Como imagen 2 */
+                <>
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-gray-700">Material de Referencia</h2>
+                        <button onClick={() => setIsModalOpen(true)} className="neu-button text-gray-700 font-semibold py-3 px-6">Añadir Solucionario</button>
+                    </div>
+                    <div className="text-center text-gray-600 py-8">Aún no hay solucionario para este examen</div>
+                </>
             )}
             {isModalOpen && <CreateSolutionModal examId={examDetails.id} onUploadSuccess={() => { onUploadSuccess(); setIsModalOpen(false); }} onClose={() => setIsModalOpen(false)} />}
         </div>
