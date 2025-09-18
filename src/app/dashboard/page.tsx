@@ -70,7 +70,7 @@ export default function DashboardPage() {
   }, [fetchClasses, fetchProfile]) // Ejecutar el efecto cuando las funciones se definen
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
+    <div className="min-h-screen transition-colors duration-300">
       <div className="p-8">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -89,7 +89,7 @@ export default function DashboardPage() {
                 router.push('/onboarding')
               }
             }}
-            className="btn-primary bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50"
+            className="btn-primary font-semibold py-3 px-6 rounded-xl"
           >
             Crear Nueva Clase
           </button>
@@ -109,7 +109,7 @@ export default function DashboardPage() {
             {classes.map((classItem) => (
               <div
                 key={classItem.id}
-                className="card bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-xl transition-all duration-300 flex flex-col justify-between group"
+                className="card p-6 transition-all duration-300 flex flex-col justify-between group"
               >
                 <div className="mb-6">
                   <h3 className="text-xl font-semibold text-gray-800 dark:text-white mb-3 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors duration-200">
@@ -134,7 +134,7 @@ export default function DashboardPage() {
                 </div>
                 <Link 
                   href={`/dashboard/class/${classItem.id}`}
-                  className="w-full btn-primary bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white font-medium py-3 px-4 rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 block text-center"
+                  className="w-full btn-primary font-medium py-3 px-4 rounded-lg block text-center"
                 >
                   Ver Exámenes
                 </Link>
@@ -158,7 +158,7 @@ export default function DashboardPage() {
                   router.push('/onboarding')
                 }
               }}
-              className="btn-primary bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+              className="btn-primary font-semibold py-3 px-6 rounded-xl"
             >
               Crear Primera Clase
             </button>

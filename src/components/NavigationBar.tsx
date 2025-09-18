@@ -87,7 +87,7 @@ export default function NavigationBar() {
           <div className="flex items-center">
             <button
               onClick={toggleTheme}
-              className="group p-2.5 rounded-lg bg-gradient-to-r from-purple-100 to-violet-100 dark:from-gray-800 dark:to-gray-700 border border-purple-200 dark:border-gray-600 text-purple-700 dark:text-purple-400 hover:from-purple-200 hover:to-violet-200 dark:hover:from-gray-700 dark:hover:to-gray-600 hover:border-purple-300 dark:hover:border-purple-500 transition-all duration-200 shadow-sm hover:shadow-md"
+              className="group neu-button p-2.5 rounded-lg"
               title={theme === 'light' ? 'Cambiar a modo nocturno' : 'Cambiar a modo día'}
             >
               {theme === 'light' ? (

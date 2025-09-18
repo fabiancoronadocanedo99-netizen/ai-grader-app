@@ -16,16 +16,18 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* Modo claro */
+/* Modo claro - Neumorphism */
 .light {
-  --background: #ffffff;
-  --foreground: #171717;
-  --card-bg: #f8fafc;
-  --card-border: #e2e8f0;
-  --primary: #8B5CF6;
-  --primary-dark: #7C3AED;
-  --secondary: #A855F7;
-  --accent: #C084FC;
+  --background: #e0e5ec;
+  --foreground: #4a5568;
+  --card-bg: #e0e5ec;
+  --card-border: #d1d9e6;
+  --primary: #667eea;
+  --primary-dark: #5a6fd8;
+  --secondary: #764ba2;
+  --accent: #f093fb;
+  --shadow-light: #ffffff;
+  --shadow-dark: #d1d9e6;
 }
 
 /* Modo oscuro - Inspirado en la imagen de referencia */
@@ -52,11 +54,112 @@
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
+
+/* Fondos específicos por modo */
+.light body {
+  background: #e0e5ec;
+  color: #4a5568;
+}
+
+.dark body {
+  background: #0D1117;
+  color: #f0f6fc;
+}
+
+/* ================================================= */
+/* NEUMORPHISM STYLES - SOLO MODO CLARO */
+/* ================================================= */
+
+/* Botones principales - Neumorphism en modo claro */
+.light .btn-primary {
+  background: #e0e5ec;
+  border: none;
+  color: #667eea;
+  font-weight: 600;
+  box-shadow: 8px 8px 16px #d1d9e6, -8px -8px 16px #ffffff;
+  transition: all 0.3s ease;
+  border-radius: 12px;
+}
+
+.light .btn-primary:hover {
+  box-shadow: 6px 6px 12px #d1d9e6, -6px -6px 12px #ffffff;
+  transform: translateY(-1px);
+}
+
+.light .btn-primary:active {
+  box-shadow: inset 2px 2px 5px #d1d9e6, inset -2px -2px 5px #ffffff;
+  transform: translateY(0);
+}
+
+/* Tarjetas - Neumorphism en modo claro */
+.light .card {
+  background: #e0e5ec;
+  border: none;
+  border-radius: 20px;
+  box-shadow: 12px 12px 24px #d1d9e6, -12px -12px 24px #ffffff;
+  transition: all 0.3s ease;
+}
+
+.light .card:hover {
+  box-shadow: 8px 8px 16px #d1d9e6, -8px -8px 16px #ffffff;
+  transform: translateY(-2px);
+}
+
+/* Inputs - Neumorphism en modo claro */
+.light input,
+.light textarea,
+.light select {
+  background: #e0e5ec;
+  border: none;
+  box-shadow: inset 4px 4px 8px #d1d9e6, inset -4px -4px 8px #ffffff;
+  border-radius: 10px;
+  color: #4a5568;
+  transition: all 0.2s ease;
+}
+
+.light input:focus,
+.light textarea:focus,
+.light select:focus {
+  box-shadow: inset 6px 6px 12px #d1d9e6, inset -6px -6px 12px #ffffff;
+  outline: none;
+}
+
+.light input::placeholder,
+.light textarea::placeholder {
+  color: #718096;
+}
+
+/* Barra de navegación - Neumorphism en modo claro */
+.light .nav-bg {
+  background: #e0e5ec;
+  border-bottom: none;
+  box-shadow: 0 4px 8px #d1d9e6, 0 -4px 8px #ffffff;
+}
+
+/* Botones generales neumorphism */
+.light .neu-button {
+  background: #e0e5ec;
+  border-radius: 12px;
+  box-shadow: 8px 8px 16px #d1d9e6, -8px -8px 16px #ffffff;
+  transition: all 0.3s ease;
+  border: none;
+  color: #4a5568;
+}
+
+.light .neu-button:hover {
+  box-shadow: 6px 6px 12px #d1d9e6, -6px -6px 12px #ffffff;
+}
+
+.light .neu-button:active {
+  box-shadow: inset 2px 2px 5px #d1d9e6, inset -2px -2px 5px #ffffff;
+}
+
+/* ================================================= */
+/* ESTILOS MODO OSCURO */
+/* ================================================= */
 
 /* Estilos mejorados para modo oscuro */
 .dark {
