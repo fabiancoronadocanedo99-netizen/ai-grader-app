@@ -38,16 +38,16 @@ export default function DashboardLayout({
   // Mostrar un estado de carga mientras se obtienen los datos del usuario
   if (loading) {
     return (
-      <div className="bg-gray-200 min-h-screen flex items-center justify-center">
-        <p className="text-gray-600">Cargando...</p>
+      <div className="neu-container min-h-screen flex items-center justify-center">
+        <p className="text-gray-700">Cargando...</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-200 min-h-screen">
+    <div className="neu-container min-h-screen">
       {/* Header con diseño Neumórfico */}
-      <header className="bg-gray-200 p-4 shadow-[6px_6px_12px_#d1d9e6,-6px_-6px_12px_#ffffff]">
+      <header className="neu-container p-4" style={{boxShadow: 'inset 0 2px 4px rgba(184, 193, 206, 0.3)'}}>
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="text-xl font-bold text-gray-700">
             AI Grader
@@ -60,7 +60,7 @@ export default function DashboardLayout({
             </span>
             <button
               onClick={handleLogout}
-              className="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] hover:shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff] active:shadow-inner-[2px_2px_4px_#d1d9e6,-2px_-2px_4px_#ffffff] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="neu-button text-gray-700 font-semibold py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               Cerrar Sesión
             </button>

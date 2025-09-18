@@ -44,7 +44,7 @@ export default function NavigationBar() {
   };
 
   return (
-    <div className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
+    <div className="sticky top-0 z-40 neu-container" style={{boxShadow: 'inset 0 -2px 4px rgba(184, 193, 206, 0.3)'}}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Navegación Back/Forward */}
@@ -52,7 +52,7 @@ export default function NavigationBar() {
             <button
               onClick={handleBack}
               disabled={!canGoBack}
-              className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 transition-colors duration-200"
+              className="neu-button p-2 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
               title="Regresar"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -62,7 +62,7 @@ export default function NavigationBar() {
             <button
               onClick={handleForward}
               disabled={!canGoForward}
-              className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 transition-colors duration-200"
+              className="neu-button p-2 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
               title="Avanzar"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,8 +78,8 @@ export default function NavigationBar() {
             </span>
           </div>
 
-          {/* Espacio vacío donde estaba el toggle */}
-          <div className="w-10"></div>
+          {/* Espacio vacío para equilibrar */}
+          <div className="w-24"></div>
         </div>
       </div>
     </div>

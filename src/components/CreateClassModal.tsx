@@ -61,7 +61,7 @@ export default function CreateClassModal({ isOpen, onClose, onClassCreated }: Cr
       />
       
       {/* Modal con diseño Glassmórfico */}
-      <div className="relative bg-gray-200/60 backdrop-blur-md rounded-xl p-8 shadow-lg max-w-md w-full mx-4">
+      <div className="relative neu-card p-8 max-w-md w-full mx-4">
         {/* Título del modal */}
         <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">
           Crear Nueva Clase
@@ -80,7 +80,7 @@ export default function CreateClassModal({ isOpen, onClose, onClassCreated }: Cr
               value={newClassName}
               onChange={(e) => setNewClassName(e.target.value)}
               required
-              className="w-full bg-gray-200 border border-gray-300/50 rounded-lg p-4 shadow-inner-[2px_2px_5px_#d1d9e6,-2px_-2px_5px_#ffffff] text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-300/50"
+              className="neu-input w-full p-4 text-gray-700 placeholder-gray-500"
               placeholder="Ej: Matemáticas 101"
               disabled={isSubmitting}
             />
@@ -93,7 +93,7 @@ export default function CreateClassModal({ isOpen, onClose, onClassCreated }: Cr
               type="button"
               onClick={handleCancel}
               disabled={isSubmitting}
-              className="flex-1 bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] hover:shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff] active:shadow-inner-[2px_2px_4px_#d1d9e6,-2px_-2px_4px_#ffffff] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 neu-button text-gray-700 font-semibold py-3 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancelar
             </button>
@@ -102,7 +102,7 @@ export default function CreateClassModal({ isOpen, onClose, onClassCreated }: Cr
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] hover:shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff] active:shadow-inner-[2px_2px_4px_#d1d9e6,-2px_-2px_4px_#ffffff] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 neu-button text-gray-700 font-semibold py-3 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Creando...' : 'Crear'}
             </button>

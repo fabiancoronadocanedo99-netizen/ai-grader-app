@@ -67,7 +67,7 @@ export default function DashboardPage() {
   }, [fetchClasses, fetchProfile])
 
   return (
-    <div className="min-h-screen bg-gray-200 p-8">
+    <div className="min-h-screen neu-container p-8">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-700 mb-2">
@@ -85,7 +85,7 @@ export default function DashboardPage() {
               router.push('/onboarding')
             }
           }}
-          className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg shadow-sm hover:shadow transition-all duration-200"
+          className="neu-button text-gray-700 font-semibold py-3 px-6"
         >
           Crear Nueva Clase
         </button>
@@ -94,7 +94,7 @@ export default function DashboardPage() {
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-500 mx-auto mb-4"></div>
             <p className="text-gray-600 text-lg">
               Cargando clases...
             </p>
@@ -105,7 +105,7 @@ export default function DashboardPage() {
           {classes.map((classItem) => (
             <div
               key={classItem.id}
-              className="bg-white rounded-xl p-6 shadow-md hover:shadow-lg transition-all duration-300 flex flex-col justify-between border"
+              className="neu-card p-6 transition-all duration-300 hover:transform hover:scale-105 flex flex-col justify-between"
             >
               <div className="mb-6">
                 <h3 className="text-xl font-semibold text-gray-800 mb-3">
@@ -130,7 +130,7 @@ export default function DashboardPage() {
               </div>
               <Link 
                 href={`/dashboard/class/${classItem.id}`}
-                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-lg shadow-sm hover:shadow transition-all duration-200 block text-center"
+                className="neu-button text-gray-700 font-medium py-3 px-4 text-center block"
               >
                 Ver Exámenes
               </Link>
@@ -154,7 +154,7 @@ export default function DashboardPage() {
                 router.push('/onboarding')
               }
             }}
-            className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg shadow-sm hover:shadow transition-all duration-200"
+            className="neu-button text-gray-700 font-semibold py-3 px-6"
           >
             Crear Primera Clase
           </button>
