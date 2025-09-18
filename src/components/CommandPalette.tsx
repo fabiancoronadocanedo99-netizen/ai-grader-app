@@ -101,6 +101,7 @@ export default function CommandPalette() {
     <Command.Dialog 
       open={open} 
       onOpenChange={setOpen}
+      label="Búsqueda Universal - Buscar clases y exámenes"
       className="fixed inset-0 z-50 flex items-start justify-center pt-20"
     >
       {/* Overlay semitransparente */}
