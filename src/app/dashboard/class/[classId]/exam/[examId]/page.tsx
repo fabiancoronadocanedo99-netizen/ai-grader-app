@@ -120,15 +120,17 @@ export default function ExamManagementPage() {
 function SolutionUploader({ examDetails, onUploadSuccess }: { examDetails: ExamDetails; onUploadSuccess: () => void }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
+    const hasSolution = examDetails.solution_file_url && examDetails.solution_file_url.trim() !== '';
+
     return (
         <div className="neu-card p-6">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-700">Material de Referencia</h2>
-                {!examDetails.solution_file_url && (
+                {!hasSolution && (
                     <button onClick={() => setIsModalOpen(true)} className="neu-button text-gray-700 font-semibold py-3 px-6">Añadir Solucionario</button>
                 )}
             </div>
-            {!examDetails.solution_file_url ? (
+            {!hasSolution ? (
                 <div className="text-center text-gray-600 py-8">Aún no hay solucionario para este examen</div>
             ) : (
                 <div className="text-center py-8">
