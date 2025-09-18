@@ -44,16 +44,16 @@ export default function DashboardPage() {
     }
 
     try {
-      // Intentar primero con filtro de teacher_id
+      // Intentar primero con filtro de user_id
       const { data, error } = await supabase
         .from('classes')
         .select('*')
-        .eq('teacher_id', user.id)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
       
       if (error) {
         // Si hay error de columna, usar fallback sin filtro (temporal)
-        console.warn('Error con teacher_id, usando fallback:', error.message)
+        console.warn('Error con user_id, usando fallback:', error.message)
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('classes')
           .select('*')
