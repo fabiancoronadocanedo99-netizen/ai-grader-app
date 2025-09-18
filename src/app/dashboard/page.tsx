@@ -25,6 +25,11 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  
+  // Estados para dropdown menu y eliminación
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [classToDelete, setClassToDelete] = useState<Class | null>(null)
 
   const fetchClasses = useCallback(async () => {
     const { data, error } = await supabase
