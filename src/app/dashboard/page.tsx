@@ -30,6 +30,11 @@ export default function DashboardPage() {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [classToDelete, setClassToDelete] = useState<Class | null>(null)
+  
+  // Estados para edición de nombre
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [classToEdit, setClassToEdit] = useState<Class | null>(null)
+  const [editingName, setEditingName] = useState('')
 
   const fetchClasses = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -98,6 +103,39 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Error al eliminar la clase:', error)
       alert('Error inesperado al eliminar la clase')
+    }
+  }
+
+  // Función para editar nombre de clase
+  const handleEditClassName = async () => {
+    if (!classToEdit || !editingName.trim()) return
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        alert('Usuario no autenticado')
+        return
+      }
+
+      const { error } = await supabase
+        .from('classes')
+        .update({ name: editingName.trim() })
+        .eq('id', classToEdit.id)
+        .eq('teacher_id', user.id)  // Verificar que sea el propietario
+
+      if (error) {
+        console.error('Error al editar la clase:', error.message)
+        alert(`Error al editar la clase: ${error.message}`)
+      } else {
+        // Actualizar la lista de clases
+        await fetchClasses()
+        setShowEditModal(false)
+        setClassToEdit(null)
+        setEditingName('')
+      }
+    } catch (error) {
+      console.error('Error al editar la clase:', error)
+      alert('Error inesperado al editar la clase')
     }
   }
 
@@ -187,7 +225,9 @@ export default function DashboardPage() {
                     <div className="absolute right-0 top-10 bg-white border border-gray-200 rounded-lg shadow-lg py-2 z-10 min-w-[140px]">
                       <button
                         onClick={() => {
-                          // TODO: Implementar edición
+                          setClassToEdit(classItem)
+                          setEditingName(classItem.name || '')
+                          setShowEditModal(true)
                           setOpenDropdownId(null)
                         }}
                         className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
@@ -267,6 +307,68 @@ export default function DashboardPage() {
           onClose={() => setIsModalOpen(false)} 
           onClassCreated={fetchClasses}
         />
+      )}
+
+      {/* Modal de edición de nombre */}
+      {showEditModal && classToEdit && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 m-4 max-w-md w-full neu-card">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
+                <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">
+                Editar nombre de clase
+              </h3>
+              <p className="text-sm text-gray-600 mb-6">
+                Ingresa el nuevo nombre para la clase
+              </p>
+              <input
+                type="text"
+                value={editingName}
+                onChange={(e) => setEditingName(e.target.value)}
+                className="w-full neu-input text-gray-700 py-3 px-4 mb-6"
+                placeholder="Nombre de la clase"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleEditClassName()
+                  }
+                  if (e.key === 'Escape') {
+                    setShowEditModal(false)
+                    setClassToEdit(null)
+                    setEditingName('')
+                  }
+                }}
+              />
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => {
+                    setShowEditModal(false)
+                    setClassToEdit(null)
+                    setEditingName('')
+                  }}
+                  className="flex-1 neu-button text-gray-700 font-medium py-3 px-4"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleEditClassName}
+                  disabled={!editingName.trim()}
+                  className={`flex-1 font-medium py-3 px-4 rounded-xl transition-colors duration-200 ${
+                    editingName.trim() 
+                      ? 'neu-button text-gray-700 hover:bg-blue-50' 
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal de confirmación de eliminación */}
