@@ -96,7 +96,7 @@ export default function ExamManagementPage() {
   if (!examDetails) return <div className="p-8 text-center">Examen no encontrado.</div>;
 
   return (
-    <div className="p-8">
+    <div className="neu-container min-h-screen p-8">
       <h1 className="text-4xl font-bold text-gray-700 mb-2">{examDetails.name}</h1>
       <p className="text-lg text-gray-600 mb-8">Gestión del Examen</p>
 
@@ -121,17 +121,17 @@ function SolutionUploader({ examDetails, onUploadSuccess }: { examDetails: ExamD
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     return (
-        <div className="bg-gray-200/60 backdrop-blur-sm rounded-xl p-6 shadow-[8px_8px_16px_#d1d9e6,-8px_-8px_16px_#ffffff]">
+        <div className="neu-card p-6">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-700">Material de Referencia</h2>
-                <button onClick={() => setIsModalOpen(true)} className="bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl shadow-[6px_6px_12px_#d1d9e6,-6px_-6px_12px_#ffffff]">Añadir Solucionario</button>
+                <button onClick={() => setIsModalOpen(true)} className="neu-button text-gray-700 font-semibold py-3 px-6">Añadir Solucionario</button>
             </div>
             {!examDetails.solution_file_url ? (
                 <div className="text-center text-gray-600 py-8">Aún no hay solucionario para este examen</div>
             ) : (
-                <div className="bg-gray-200/80 rounded-lg p-4 flex justify-between items-center">
+                <div className="neu-card p-4 flex justify-between items-center">
                     <p>Archivo actual</p>
-                    <a href={examDetails.solution_file_url} target="_blank" rel="noopener noreferrer" className="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff] no-underline hover:shadow-[1px_1px_3px_#d1d9e6,-1px_-1px_3px_#ffffff]">Ver Solucionario</a>
+                    <a href={examDetails.solution_file_url} target="_blank" rel="noopener noreferrer" className="neu-button text-gray-700 py-2 px-4 no-underline">Ver Solucionario</a>
                 </div>
             )}
             {isModalOpen && <CreateSolutionModal examId={examDetails.id} onUploadSuccess={() => { onUploadSuccess(); setIsModalOpen(false); }} onClose={() => setIsModalOpen(false)} />}
@@ -144,10 +144,10 @@ function SubmissionsManager({ submissions, examId, onUploadSuccess, onGrade, onV
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     return (
-        <div className="bg-gray-200/60 backdrop-blur-sm rounded-xl p-6 shadow-[8px_8px_16px_#d1d9e6,-8px_-8px_16px_#ffffff]">
+        <div className="neu-card p-6">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-700">Entregas de Alumnos</h2>
-                <button onClick={() => setIsModalOpen(true)} className="bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl shadow-[6px_6px_12px_#d1d9e6,-6px_-6px_12px_#ffffff]">Añadir Entregas</button>
+                <button onClick={() => setIsModalOpen(true)} className="neu-button text-gray-700 font-semibold py-3 px-6">Añadir Entregas</button>
             </div>
             {submissions.length === 0 ? (
                 <div className="text-center text-gray-600 py-8">Aún no hay entregas para este examen</div>
@@ -159,7 +159,7 @@ function SubmissionsManager({ submissions, examId, onUploadSuccess, onGrade, onV
                             <button 
                                 onClick={() => sub.status === 'graded' ? onViewFeedback(sub.ai_feedback) : onGrade(sub.id)} 
                                 disabled={sub.status === 'processing'}
-                                className="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff] disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="neu-button text-gray-700 py-2 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {sub.status === 'processing' ? 'Procesando...' : sub.status === 'graded' ? 'Ver Resultado' : 'Calificar'}
                             </button>
@@ -236,9 +236,9 @@ function CreateSubmissionModal({ onClose, examId, onUploadSuccess }: {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-            <div className="relative bg-gray-200/60 backdrop-blur-md rounded-xl p-8 shadow-lg border border-white/20 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.3),inset_-1px_-1px_2px_rgba(0,0,0,0.1),8px_8px_16px_rgba(0,0,0,0.15)] max-w-2xl w-full mx-4">
+            <div className="relative neu-card p-8 max-w-2xl w-full mx-4">
                 <h2 className="text-center font-bold text-2xl mb-6 text-slate-800">Subir Entregas</h2>
-                <div {...getRootProps()} className="mb-6 bg-gray-200/80 rounded-lg p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center">
+                <div {...getRootProps()} className="mb-6 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center">
                     <input {...getInputProps()} />
                     <p className="text-slate-700">Arrastra los archivos aquí, o haz clic para seleccionarlos.</p>
                 </div>
@@ -248,8 +248,8 @@ function CreateSubmissionModal({ onClose, examId, onUploadSuccess }: {
                     </div>
                 )}
                 <div className="flex space-x-4">
-                    <button onClick={onClose} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] text-slate-700 font-medium">Cancelar</button>
-                    <button onClick={handleUpload} disabled={isUploading || files.length === 0} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] disabled:opacity-50 text-slate-700 font-medium">
+                    <button onClick={onClose} className="flex-1 neu-button py-3 text-slate-700 font-medium">Cancelar</button>
+                    <button onClick={handleUpload} disabled={isUploading || files.length === 0} className="flex-1 neu-button py-3 disabled:opacity-50 text-slate-700 font-medium">
                         {isUploading ? 'Subiendo...' : `Subir ${files.length} Archivos`}
                     </button>
                 </div>
@@ -307,9 +307,9 @@ function CreateSolutionModal({ examId, onUploadSuccess, onClose }: { examId: num
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-            <div className="relative bg-gray-200/60 backdrop-blur-md rounded-xl p-8 shadow-lg border border-white/20 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.3),inset_-1px_-1px_2px_rgba(0,0,0,0.1),8px_8px_16px_rgba(0,0,0,0.15)] max-w-2xl w-full mx-4">
+            <div className="relative neu-card p-8 max-w-2xl w-full mx-4">
                 <h2 className="text-center font-bold text-2xl mb-6 text-slate-800">Subir Solucionario</h2>
-                <div {...getRootProps()} className="mb-6 bg-gray-200/80 rounded-lg p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center">
+                <div {...getRootProps()} className="mb-6 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center">
                     <input {...getInputProps()} />
                     <p className="text-slate-700">Arrastra el solucionario aquí, o haz clic para seleccionarlo.</p>
                 </div>
@@ -319,8 +319,8 @@ function CreateSolutionModal({ examId, onUploadSuccess, onClose }: { examId: num
                     </div>
                 )}
                 <div className="flex space-x-4">
-                    <button onClick={onClose} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] text-slate-700 font-medium">Cancelar</button>
-                    <button onClick={handleUpload} disabled={isUploading || !file} className="flex-1 bg-gray-200 py-3 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] disabled:opacity-50 text-slate-700 font-medium">
+                    <button onClick={onClose} className="flex-1 neu-button py-3 text-slate-700 font-medium">Cancelar</button>
+                    <button onClick={handleUpload} disabled={isUploading || !file} className="flex-1 neu-button py-3 disabled:opacity-50 text-slate-700 font-medium">
                         {isUploading ? 'Subiendo...' : 'Subir Solucionario'}
                     </button>
                 </div>
@@ -350,7 +350,7 @@ function FeedbackModal({ feedback, onClose }: { feedback: any; onClose: () => vo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-gray-200/60 backdrop-blur-md rounded-xl p-8 shadow-lg border border-white/20 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.3),inset_-1px_-1px_2px_rgba(0,0,0,0.1),8px_8px_16px_rgba(0,0,0,0.15)] max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="relative neu-card p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold text-slate-800 mb-2">📊 Reporte de Calificación</h2>
@@ -360,10 +360,10 @@ function FeedbackModal({ feedback, onClose }: { feedback: any; onClose: () => vo
         </div>
 
         {/* Resumen General */}
-        <div className="bg-gray-200/80 rounded-xl p-6 mb-6 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)]">
+        <div className="neu-card p-6 mb-6">
           <h3 className="text-xl font-bold text-slate-700 mb-4">📈 Resumen General</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-gray-200 rounded-lg p-4 shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff]">
+            <div className="neu-card p-4">
               <div className="text-center">
                 <div className="text-3xl font-bold text-blue-600 mb-1">
                   {resumen.puntuacion_total_obtenida || 0}/{resumen.puntuacion_total_posible || 100}
@@ -371,7 +371,7 @@ function FeedbackModal({ feedback, onClose }: { feedback: any; onClose: () => vo
                 <p className="text-slate-600">Puntuación Total</p>
               </div>
             </div>
-            <div className="bg-gray-200 rounded-lg p-4 shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff]">
+            <div className="neu-card p-4">
               <div className="flex justify-around text-center">
                 <div>
                   <div className="text-lg font-bold text-green-600">✅ {resumen.preguntas_correctas || 0}</div>
@@ -394,7 +394,7 @@ function FeedbackModal({ feedback, onClose }: { feedback: any; onClose: () => vo
         <div className="space-y-4 mb-6">
           <h3 className="text-xl font-bold text-slate-700">📝 Evaluación Detallada</h3>
           {evaluaciones.map((pregunta: any, index: number) => (
-            <div key={index} className="bg-gray-200/80 rounded-xl p-5 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)]">
+            <div key={index} className="neu-card p-5">
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <h4 className="font-bold text-slate-800">
@@ -447,7 +447,7 @@ function FeedbackModal({ feedback, onClose }: { feedback: any; onClose: () => vo
         <div className="text-center">
           <button 
             onClick={onClose}
-            className="bg-gray-200 text-slate-700 font-semibold py-3 px-8 rounded-xl shadow-[6px_6px_12px_#d1d9e6,-6px_-6px_12px_#ffffff] hover:shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] transition-all duration-200"
+            className="neu-button text-slate-700 font-semibold py-3 px-8"
           >
             Cerrar Reporte
           </button>
