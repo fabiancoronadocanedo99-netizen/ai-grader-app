@@ -70,73 +70,109 @@ export default function DashboardPage() {
   }, [fetchClasses, fetchProfile]) // Ejecutar el efecto cuando las funciones se definen
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-700">
-          Mis Clases
-        </h1>
-        <button 
-          onClick={() => {
-            if (profile?.profile_completed) {
-              setIsModalOpen(true)
-            } else {
-              router.push('/onboarding')
-            }
-          }}
-          className="bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl shadow-[6px_6px_12px_#d1d9e6,-6px_-6px_12px_#ffffff] hover:shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] active:shadow-inner-[2px_2px_4px_#d1d9e6,-2px_-2px_4px_#ffffff] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          Crear Nueva Clase
-        </button>
-      </div>
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
+      <div className="p-8">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-700 dark:text-white mb-2">
+              Mis Clases
+            </h1>
+            <p className="text-gray-600 dark:text-gray-300">
+              Gestiona tus clases y exámenes
+            </p>
+          </div>
+          <button 
+            onClick={() => {
+              if (profile?.profile_completed) {
+                setIsModalOpen(true)
+              } else {
+                router.push('/onboarding')
+              }
+            }}
+            className="btn-primary bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50"
+          >
+            Crear Nueva Clase
+          </button>
+        </div>
 
-      {loading ? (
-        <div className="text-center text-gray-600 text-lg">
-          Cargando clases...
-        </div>
-      ) : classes.length > 0 ? ( // Lógica de renderizado mejorada
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {classes.map((classItem) => (
-            <div
-              key={classItem.id}
-              className="bg-gray-200/60 backdrop-blur-sm rounded-xl p-6 shadow-[8px_8px_16px_#d1d9e6,-8px_-8px_16px_#ffffff] hover:shadow-[6px_6px_12px_#d1d9e6,-6px_-6px_12px_#ffffff] transition-all duration-200 flex flex-col justify-between"
-            >
-              <div className="mb-4">
-                <h3 className="text-xl font-semibold text-gray-700 mb-2">
-                  {classItem.name || 'Clase sin nombre'}
-                </h3>
-                {classItem.subject && (
-                  <p className="text-gray-600 mb-1 text-sm">
-                    <span className="font-medium">Materia:</span> {classItem.subject}
-                  </p>
-                )}
-                {classItem.grade_level && (
-                  <p className="text-gray-600 text-sm">
-                    <span className="font-medium">Nivel:</span> {classItem.grade_level}
-                  </p>
-                )}
-              </div>
-              <Link 
-                href={`/dashboard/class/${classItem.id}`}
-                className="w-full bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] hover:shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff] active:shadow-inner-[2px_2px_4px_#d1d9e6,-2px_-2px_4px_#ffffff] transition-all duration-200 block text-center"
-              >
-                Ver Exámenes
-              </Link>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+              <p className="text-gray-600 dark:text-gray-300 text-lg">
+                Cargando clases...
+              </p>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center text-gray-600 text-lg mt-8">
-          No tienes clases creadas aún. ¡Crea tu primera clase!
-        </div>
-      )}
-      
-      {isModalOpen && ( // Renderizar el modal solo si está abierto
-        <CreateClassModal 
-          isOpen={isModalOpen} 
-          onClose={() => setIsModalOpen(false)} 
-          onClassCreated={fetchClasses} // Pasamos la función para refrescar la lista
-        />
-      )}
+          </div>
+        ) : classes.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {classes.map((classItem) => (
+              <div
+                key={classItem.id}
+                className="card bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-xl transition-all duration-300 flex flex-col justify-between group"
+              >
+                <div className="mb-6">
+                  <h3 className="text-xl font-semibold text-gray-800 dark:text-white mb-3 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors duration-200">
+                    {classItem.name || 'Clase sin nombre'}
+                  </h3>
+                  {classItem.subject && (
+                    <div className="flex items-center mb-2">
+                      <div className="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
+                      <p className="text-gray-600 dark:text-gray-300 text-sm">
+                        <span className="font-medium">Materia:</span> {classItem.subject}
+                      </p>
+                    </div>
+                  )}
+                  {classItem.grade_level && (
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 bg-violet-500 rounded-full mr-3"></div>
+                      <p className="text-gray-600 dark:text-gray-300 text-sm">
+                        <span className="font-medium">Nivel:</span> {classItem.grade_level}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <Link 
+                  href={`/dashboard/class/${classItem.id}`}
+                  className="w-full btn-primary bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white font-medium py-3 px-4 rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 block text-center"
+                >
+                  Ver Exámenes
+                </Link>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">📚</div>
+            <h3 className="text-xl font-semibold text-gray-700 dark:text-white mb-2">
+              No tienes clases creadas aún
+            </h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              ¡Crea tu primera clase para comenzar!
+            </p>
+            <button
+              onClick={() => {
+                if (profile?.profile_completed) {
+                  setIsModalOpen(true)
+                } else {
+                  router.push('/onboarding')
+                }
+              }}
+              className="btn-primary bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+            >
+              Crear Primera Clase
+            </button>
+          </div>
+        )}
+        
+        {isModalOpen && (
+          <CreateClassModal 
+            isOpen={isModalOpen} 
+            onClose={() => setIsModalOpen(false)} 
+            onClassCreated={fetchClasses}
+          />
+        )}
+      </div>
     </div>
   )
 }
