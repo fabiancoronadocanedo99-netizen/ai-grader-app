@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from '@/contexts/ThemeContext';
 import { NavigationProvider } from '@/contexts/NavigationContext';
 import NavigationBar from '@/components/NavigationBar';
 
@@ -28,16 +27,14 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-100 dark:bg-gray-900 transition-colors duration-200`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ThemeProvider>
-          <NavigationProvider>
-            <NavigationBar />
-            <main className="min-h-[calc(100vh-4rem)]">
-              {children}
-            </main>
-          </NavigationProvider>
-        </ThemeProvider>
+        <NavigationProvider>
+          <NavigationBar />
+          <main className="min-h-[calc(100vh-4rem)]">
+            {children}
+          </main>
+        </NavigationProvider>
       </body>
     </html>
   );

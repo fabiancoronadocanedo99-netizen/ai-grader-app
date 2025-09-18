@@ -47,15 +47,15 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-200 dark:bg-gray-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-xl p-8 shadow-lg">
-        <h2 className="text-3xl font-bold text-gray-700 dark:text-white mb-8 text-center">
+    <div className="min-h-screen bg-gray-200 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-xl p-8 shadow-lg">
+        <h2 className="text-3xl font-bold text-gray-700 mb-8 text-center">
           Iniciar Sesión
         </h2>
         
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
               Email
             </label>
             <input
@@ -64,13 +64,13 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full bg-blue-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-4 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-300 transition-all"
+              className="w-full bg-blue-50 border border-gray-300 rounded-lg p-4 text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-300 transition-all"
               placeholder="tu@email.com"
             />
           </div>
           
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
               Contraseña
             </label>
             <input
@@ -79,7 +79,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full bg-blue-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-4 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-300 transition-all"
+              className="w-full bg-blue-50 border border-gray-300 rounded-lg p-4 text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-300 transition-all"
               placeholder="••••••••"
             />
           </div>
@@ -87,24 +87,24 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-700 text-gray-700 dark:text-white font-semibold py-4 px-6 rounded-lg shadow-sm hover:shadow transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 px-6 rounded-lg shadow-sm hover:shadow transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Iniciando...' : 'Iniciar Sesión'}
           </button>
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+              <div className="w-full border-t border-gray-300"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white dark:bg-gray-800 text-gray-500">o</span>
+              <span className="px-4 bg-white text-gray-500">o</span>
             </div>
           </div>
 
           <button
             type="button"
             onClick={handleLoginWithGoogle}
-            className="w-full bg-white hover:bg-gray-50 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white font-semibold py-4 px-6 rounded-lg border border-gray-300 dark:border-gray-600 shadow-sm hover:shadow transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 flex items-center justify-center space-x-3"
+            className="w-full bg-white hover:bg-gray-50 text-gray-700 font-semibold py-4 px-6 rounded-lg border border-gray-300 shadow-sm hover:shadow transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 flex items-center justify-center space-x-3"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>

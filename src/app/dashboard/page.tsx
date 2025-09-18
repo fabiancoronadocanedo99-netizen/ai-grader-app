@@ -67,13 +67,13 @@ export default function DashboardPage() {
   }, [fetchClasses, fetchProfile])
 
   return (
-    <div className="min-h-screen bg-gray-200 dark:bg-gray-900 p-8">
+    <div className="min-h-screen bg-gray-200 p-8">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-700 dark:text-white mb-2">
+          <h1 className="text-3xl font-bold text-gray-700 mb-2">
             Mis Clases
           </h1>
-          <p className="text-gray-600 dark:text-gray-300">
+          <p className="text-gray-600">
             Gestiona tus clases y exámenes
           </p>
         </div>
@@ -95,7 +95,7 @@ export default function DashboardPage() {
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className="text-gray-600 dark:text-gray-300 text-lg">
+            <p className="text-gray-600 text-lg">
               Cargando clases...
             </p>
           </div>
@@ -105,16 +105,16 @@ export default function DashboardPage() {
           {classes.map((classItem) => (
             <div
               key={classItem.id}
-              className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md hover:shadow-lg transition-all duration-300 flex flex-col justify-between border dark:border-gray-700"
+              className="bg-white rounded-xl p-6 shadow-md hover:shadow-lg transition-all duration-300 flex flex-col justify-between border"
             >
               <div className="mb-6">
-                <h3 className="text-xl font-semibold text-gray-800 dark:text-white mb-3">
+                <h3 className="text-xl font-semibold text-gray-800 mb-3">
                   {classItem.name || 'Clase sin nombre'}
                 </h3>
                 {classItem.subject && (
                   <div className="flex items-center mb-2">
                     <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                    <p className="text-gray-600 dark:text-gray-300 text-sm">
+                    <p className="text-gray-600 text-sm">
                       <span className="font-medium">Materia:</span> {classItem.subject}
                     </p>
                   </div>
@@ -122,7 +122,7 @@ export default function DashboardPage() {
                 {classItem.grade_level && (
                   <div className="flex items-center">
                     <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                    <p className="text-gray-600 dark:text-gray-300 text-sm">
+                    <p className="text-gray-600 text-sm">
                       <span className="font-medium">Nivel:</span> {classItem.grade_level}
                     </p>
                   </div>
@@ -130,7 +130,7 @@ export default function DashboardPage() {
               </div>
               <Link 
                 href={`/dashboard/class/${classItem.id}`}
-                className="w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white font-medium py-3 px-4 rounded-lg shadow-sm hover:shadow transition-all duration-200 block text-center"
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-lg shadow-sm hover:shadow transition-all duration-200 block text-center"
               >
                 Ver Exámenes
               </Link>
@@ -140,10 +140,10 @@ export default function DashboardPage() {
       ) : (
         <div className="text-center py-12">
           <div className="text-6xl mb-4">📚</div>
-          <h3 className="text-xl font-semibold text-gray-700 dark:text-white mb-2">
+          <h3 className="text-xl font-semibold text-gray-700 mb-2">
             No tienes clases creadas aún
           </h3>
-          <p className="text-gray-600 dark:text-gray-300 mb-6">
+          <p className="text-gray-600 mb-6">
             ¡Crea tu primera clase para comenzar!
           </p>
           <button
