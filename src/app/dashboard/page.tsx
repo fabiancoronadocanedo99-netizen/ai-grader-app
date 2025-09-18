@@ -32,9 +32,16 @@ export default function DashboardPage() {
   const [classToDelete, setClassToDelete] = useState<Class | null>(null)
 
   const fetchClasses = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      console.error('Usuario no autenticado')
+      return
+    }
+
     const { data, error } = await supabase
       .from('classes')
       .select('*')
+      .eq('teacher_id', user.id)  // Filtrar por el usuario actual
       .order('created_at', { ascending: false })
     
     if (error) {
@@ -67,10 +74,17 @@ export default function DashboardPage() {
     if (!classToDelete) return
 
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        alert('Usuario no autenticado')
+        return
+      }
+
       const { error } = await supabase
         .from('classes')
         .delete()
         .eq('id', classToDelete.id)
+        .eq('teacher_id', user.id)  // Verificar que sea el propietario
 
       if (error) {
         console.error('Error al eliminar la clase:', error.message)
