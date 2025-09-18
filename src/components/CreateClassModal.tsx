@@ -24,9 +24,19 @@ export default function CreateClassModal({ isOpen, onClose, onClassCreated }: Cr
     setIsSubmitting(true)
     
     try {
+      // Obtener el usuario actual
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        alert('Usuario no autenticado')
+        return
+      }
+
       const { error } = await supabase
         .from('classes')
-        .insert([{ name: newClassName.trim() }])
+        .insert([{ 
+          name: newClassName.trim(),
+          teacher_id: user.id
+        }])
       
       if (error) {
         alert(`Error al crear la clase: ${error.message}`)
