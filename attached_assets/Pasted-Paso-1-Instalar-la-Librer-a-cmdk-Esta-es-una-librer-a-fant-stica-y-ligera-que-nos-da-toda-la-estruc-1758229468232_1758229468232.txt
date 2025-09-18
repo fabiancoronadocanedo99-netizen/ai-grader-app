@@ -1,0 +1,28 @@
+Paso 1: Instalar la Librería cmdk
+Esta es una librería fantástica y ligera que nos da toda la estructura de un "Command Palette" (como el de VS Code, Cursor o Replit).
+Abre la Shell en Replit.
+Ejecuta el comando: npm install cmdk
+Paso 2: Crear el Componente de la Barra de Búsqueda
+Aquí es donde construiremos la interfaz y la lógica de la búsqueda.
+Crea un nuevo componente:
+En src/components, crea un nuevo archivo llamado CommandPalette.tsx.
+Genera el Código del Componente con la IA:
+Abre el nuevo archivo src/components/CommandPalette.tsx.
+Usa este prompt en el Agente de IA de Replit:
+Crea un componente de React llamado CommandPalette usando la librería cmdk. Este componente será nuestra barra de búsqueda universal.
+Funcionalidad:
+Debe ser un componente 'use client'.
+Debe usar los hooks useState (para el input de búsqueda) y useEffect (para cargar los datos y escuchar el atajo de teclado).
+Debe tener un estado para controlar su visibilidad: const [open, setOpen] = useState(false);.
+Usa un useEffect para añadir un evento de teclado al document. Si el usuario presiona Cmd+K (en Mac) o Ctrl+K (en Windows), debe abrir la paleta (setOpen(true)).
+Cuando la paleta se abre, debe hacer una llamada a Supabase para obtener todas las clases y todos los exámenes del usuario actual.
+Debe usar el componente Command.Dialog de cmdk para que funcione como un modal.
+Estructura dentro de cmdk:
+Usa Command.Input para la barra de búsqueda.
+Usa Command.List para mostrar los resultados.
+Usa Command.Empty para mostrar un mensaje de "No se encontraron resultados".
+Crea dos Command.Group, uno con el heading "Clases" y otro con "Exámenes".
+Dentro de cada grupo, mapea los resultados de la base de datos para mostrar un Command.Item por cada clase y examen.
+Cada Command.Item debe mostrar el nombre del elemento (ej. "Salón 101 Español") y, al hacerle clic (onSelect), debe usar router.push(...) para navegar a la página correspondiente (ej. /dashboard/class/[id]) y cerrar la paleta (setOpen(false)).
+Estilo:
+Aplica estilos de Tailwind CSS para que el modal y los elementos de la lista tengan nuestro diseño Neumórfico/Glassmórfico.
