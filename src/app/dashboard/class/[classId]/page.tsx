@@ -16,13 +16,13 @@ interface ClassDetails {
 interface Exam {
   id: number;
   name: string;
-  class_id: number;
+  class_id: string; // UUID como string
   created_at?: string;
 }
 
 export default function ClassDetailPage() {
   const params = useParams()
-  const classId = parseInt(params.classId as string, 10)
+  const classId = params.classId as string // Mantener como string para UUID
 
   const [classDetails, setClassDetails] = useState<ClassDetails | null>(null)
   const [exams, setExams] = useState<Exam[]>([])
@@ -40,7 +40,7 @@ export default function ClassDetailPage() {
 
   // Función para obtener los detalles de la clase
   const fetchClassDetails = useCallback(async () => {
-    if (isNaN(classId)) return
+    if (!classId) return
     const { data, error } = await supabase
       .from('classes')
       .select('*')
@@ -55,7 +55,7 @@ export default function ClassDetailPage() {
 
   // Función para obtener los exámenes de la clase
   const fetchExams = useCallback(async () => {
-    if (isNaN(classId)) return
+    if (!classId) return
     const { data, error } = await supabase
       .from('exams')
       .select('*')
@@ -76,15 +76,32 @@ export default function ClassDetailPage() {
       await fetchExams()
       setLoading(false)
     }
-    if (!isNaN(classId)) {
+    if (classId) {
       loadData()
     }
   }, [classId, fetchClassDetails, fetchExams])
+
+  // useEffect para cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (openDropdown !== null) {
+        setOpenDropdown(null)
+      }
+    }
+    
+    if (openDropdown !== null) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [openDropdown])
   
   // Función para crear un nuevo examen
   const handleCreateExam = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newExamName.trim() || isNaN(classId)) return;
+    if (!newExamName.trim() || !classId) return;
 
     const { data, error } = await supabase
       .from('exams')
