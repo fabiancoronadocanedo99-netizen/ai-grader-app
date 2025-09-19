@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabaseClient'
 
 // --- Tipos de Datos ---
 interface ExamDetails { id: number; name: string; class_id: number; solution_file_url?: string; }
-interface Submission { id: number; student_name: string; submission_file_url: string; status: string; grade?: number; feedback?: string; ai_feedback?: any; }
+interface Submission { id: number; student_name: string; submission_file_url: string; status: string; grade?: number; feedback?: string; ai_feedback?: any; student_id?: number; }
 interface Student { id: number; full_name: string; student_email: string; tutor_email: string; }
 
 // --- Componente Principal ---
@@ -103,7 +103,7 @@ export default function ExamManagementPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <SolutionUploader examDetails={examDetails} onUploadSuccess={onUploadSuccess} />
-        <SubmissionsManager submissions={submissions} examId={examId} onUploadSuccess={onUploadSuccess} onGrade={handleGrade} onViewFeedback={setViewingFeedback} />
+        <SubmissionsManager submissions={submissions} examId={examId} classId={examDetails.class_id} onUploadSuccess={onUploadSuccess} onGrade={handleGrade} onViewFeedback={setViewingFeedback} />
       </div>
       {viewingFeedback && (
         <FeedbackModal 
@@ -141,7 +141,7 @@ function SolutionUploader({ examDetails, onUploadSuccess }: { examDetails: ExamD
 }
 
 // Componente para gestionar las entregas
-function SubmissionsManager({ submissions, examId, onUploadSuccess, onGrade, onViewFeedback }: { submissions: Submission[]; examId: number; onUploadSuccess: () => void; onGrade: (submissionId: number) => Promise<void>; onViewFeedback: (feedback: any) => void }) {
+function SubmissionsManager({ submissions, examId, classId, onUploadSuccess, onGrade, onViewFeedback }: { submissions: Submission[]; examId: number; classId: number; onUploadSuccess: () => void; onGrade: (submissionId: number) => Promise<void>; onViewFeedback: (feedback: any) => void }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     return (
@@ -172,7 +172,8 @@ function SubmissionsManager({ submissions, examId, onUploadSuccess, onGrade, onV
                 <CreateSubmissionModal 
                     onClose={() => setIsModalOpen(false)}
                     examId={examId} 
-                    onUploadSuccess={onUploadSuccess} 
+                    onUploadSuccess={onUploadSuccess}
+                    classId={classId} 
                 />
             )}
         </div>
@@ -190,16 +191,62 @@ function CreateSubmissionModal({ onClose, examId, onUploadSuccess, classId }: {
     const [isUploading, setIsUploading] = useState(false);
     const [students, setStudents] = useState<Student[]>([]);
     const [fileStudentMap, setFileStudentMap] = useState<Record<string, number>>({});
+    
+    // Función helper para generar clave única del archivo
+    const getFileKey = (file: FileWithPath) => `${file.name}__${file.lastModified}__${file.size}`;
+
+    // Función para cargar estudiantes de la clase
+    const fetchStudents = useCallback(async () => {
+        try {
+            const { data, error } = await supabase
+                .from('students')
+                .select('*')
+                .eq('class_id', classId)
+                .order('full_name');
+            
+            if (error) throw error;
+            setStudents(data || []);
+        } catch (error) {
+            console.error('Error al cargar estudiantes:', error);
+        }
+    }, [classId]);
+
+    useEffect(() => {
+        fetchStudents();
+    }, [fetchStudents]);
 
     const onDrop = useCallback((acceptedFiles: FileWithPath[]) => {
-        setFiles(prev => [...prev, ...acceptedFiles]);
-    }, []);
+        setFiles(prev => {
+            const newFiles = [...prev, ...acceptedFiles];
+            // Inicializar el mapa de archivos-estudiantes para los nuevos archivos
+            const newMap = { ...fileStudentMap };
+            acceptedFiles.forEach(file => {
+                const fileKey = getFileKey(file);
+                if (!newMap[fileKey]) {
+                    newMap[fileKey] = 0; // 0 significa sin seleccionar
+                }
+            });
+            setFileStudentMap(newMap);
+            return newFiles;
+        });
+    }, [fileStudentMap]);
 
     const { getRootProps, getInputProps } = useDropzone({ onDrop, multiple: true });
 
     const handleUpload = async () => {
         console.log('Iniciando subida de entregas...');
         if (files.length === 0) return;
+        
+        // Verificar que todos los archivos tengan un estudiante asignado
+        const unassignedFiles = files.filter(file => {
+            const fileKey = getFileKey(file);
+            return !fileStudentMap[fileKey] || fileStudentMap[fileKey] === 0;
+        });
+        if (unassignedFiles.length > 0) {
+            alert(`Por favor asigna un estudiante a los siguientes archivos: ${unassignedFiles.map(f => f.name).join(', ')}`);
+            return;
+        }
+        
         setIsUploading(true);
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -207,6 +254,14 @@ function CreateSubmissionModal({ onClose, examId, onUploadSuccess, classId }: {
             console.log('Obtenido usuario:', user.id);
 
             for (const file of files) {
+                const fileKey = getFileKey(file);
+                const studentId = fileStudentMap[fileKey];
+                const selectedStudent = students.find(s => s.id === studentId);
+                
+                if (!selectedStudent) {
+                    throw new Error(`Estudiante no encontrado para el archivo ${file.name}`);
+                }
+                
                 const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
                 const filePath = `${user.id}/submissions/${examId}-${Date.now()}-${sanitizedFileName}`;
                 const { data, error } = await supabase.storage.from('exam_files').upload(filePath, file);
@@ -218,12 +273,13 @@ function CreateSubmissionModal({ onClose, examId, onUploadSuccess, classId }: {
                 const newSubmission = { 
                     exam_id: examId,
                     submission_file_url: publicUrl, 
-                    student_name: file.name.split('.').slice(0, -1).join('.'),
+                    student_id: studentId,
+                    student_name: selectedStudent.full_name,
                     user_id: user.id
                 };
                 const { error: insertError } = await supabase.from('submissions').insert([newSubmission]).select();
                 if (insertError) throw insertError;
-                console.log('Registro insertado en DB para:', file.name);
+                console.log('Registro insertado en DB para:', file.name, 'Estudiante:', selectedStudent.full_name);
             }
             alert('Entregas subidas exitosamente!');
             console.log('Subida completada, llamando a refresco...');
@@ -232,6 +288,7 @@ function CreateSubmissionModal({ onClose, examId, onUploadSuccess, classId }: {
         } finally {
             setIsUploading(false);
             setFiles([]);
+            setFileStudentMap({});
             onClose();
             onUploadSuccess();
         }
@@ -247,8 +304,45 @@ function CreateSubmissionModal({ onClose, examId, onUploadSuccess, classId }: {
                     <p className="text-slate-700">Arrastra los archivos aquí, o haz clic para seleccionarlos.</p>
                 </div>
                 {files.length > 0 && (
-                    <div className="mb-6 space-y-2">
-                        {files.map((file, i) => <p key={i} className="text-sm text-slate-800">{file.name}</p>)}
+                    <div className="mb-6 space-y-3">
+                        <h3 className="font-semibold text-slate-800 mb-3">Archivos seleccionados:</h3>
+                        {files.map((file, i) => {
+                            const fileKey = getFileKey(file);
+                            return (
+                                <div key={fileKey} className="flex items-center justify-between p-3 neu-card bg-gray-50">
+                                    <span className="text-sm text-slate-800 flex-1">{file.name}</span>
+                                    <select
+                                        value={fileStudentMap[fileKey] || 0}
+                                        onChange={(e) => setFileStudentMap(prev => ({
+                                            ...prev,
+                                            [fileKey]: parseInt(e.target.value)
+                                        }))}
+                                        className="ml-3 neu-input px-3 py-2 text-sm min-w-[200px]"
+                                    >
+                                        <option value={0}>Seleccionar estudiante</option>
+                                        {students.map(student => (
+                                            <option key={student.id} value={student.id}>
+                                                {student.full_name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        onClick={() => {
+                                            setFiles(prev => prev.filter((_, index) => index !== i));
+                                            setFileStudentMap(prev => {
+                                                const newMap = { ...prev };
+                                                delete newMap[fileKey];
+                                                return newMap;
+                                            });
+                                        }}
+                                        className="ml-2 p-1 text-red-600 hover:text-red-800 text-sm"
+                                        title="Eliminar archivo"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
                 <div className="flex space-x-4">
