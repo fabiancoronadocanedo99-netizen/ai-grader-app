@@ -94,7 +94,7 @@ serve(async (req) => {
 
     const { data: submission, error: subError } = await supabaseAdmin
       .from('submissions')
-      .select('submission_file_url, exams!inner(solution_file_url, name)')
+      .select('submission_file_url, exam_id, exams!inner(id, solution_file_url, name)')
       .eq('id', submissionId)
       .single()
 
@@ -152,6 +152,19 @@ serve(async (req) => {
       .eq('id', submissionId)
 
     if (updateError) throw new Error(`Error al guardar la calificación: ${updateError.message}`)
+
+    // Insertar la calificación en la tabla grades
+    const { error: gradeError } = await supabaseAdmin
+      .from('grades')
+      .insert({
+        student_id: 1, // Placeholder temporal
+        exam_id: submission.exam_id,
+        score_obtained: responseJson.informe_evaluacion.resumen_general.puntuacion_total_obtenida,
+        score_possible: responseJson.informe_evaluacion.resumen_general.puntuacion_total_posible,
+        ai_feedback: responseJson
+      })
+
+    if (gradeError) throw new Error(`Error al guardar la calificación en grades: ${gradeError.message}`)
 
     console.log('¡Calificación completada con éxito!')
     return new Response(JSON.stringify({ success: true, feedback: responseJson }), {
