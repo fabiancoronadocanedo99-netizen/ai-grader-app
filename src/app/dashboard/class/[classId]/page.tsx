@@ -40,7 +40,7 @@ export default function ClassDetailPage() {
   const [editingExamName, setEditingExamName] = useState('')
   
   // Estado para el sistema de pestañas
-  const [activeTab, setActiveTab] = useState<'exams' | 'students'>('exams')
+  const [activeTab, setActiveTab] = useState<'exams' | 'students'>('students')
   
   // Estados para el modal de importar CSV
   const [isCSVModalOpen, setIsCSVModalOpen] = useState(false)
@@ -181,7 +181,7 @@ export default function ClassDetailPage() {
 
   // Función para generar y descargar plantilla CSV
   const generateCSVTemplate = () => {
-    const csvContent = 'Nombre Completo,Email Alumno,Email Tutor\n' +
+    const csvContent = 'full_name,student_email,tutor_email\n' +
                       'Juan Pérez,juan.perez@estudiante.com,maria.perez@tutor.com\n' +
                       'Ana García,ana.garcia@estudiante.com,carlos.garcia@tutor.com';
     
@@ -372,14 +372,14 @@ export default function ClassDetailPage() {
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-gray-700">Alumnos</h2>
               <div className="flex space-x-4">
+                <button className="neu-button text-gray-700 font-semibold py-3 px-6">
+                  Añadir Alumno Manualmente
+                </button>
                 <button 
                   onClick={() => setIsCSVModalOpen(true)}
                   className="neu-button text-gray-700 font-semibold py-3 px-6"
                 >
                   Importar CSV
-                </button>
-                <button className="neu-button text-gray-700 font-semibold py-3 px-6">
-                  Añadir Alumno
                 </button>
               </div>
             </div>
