@@ -31,12 +31,12 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    // Validate classId is a positive integer
-    const parsedClassId = parseInt(classId)
-    if (isNaN(parsedClassId) || parsedClassId <= 0) {
+    // Validate classId is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(classId)) {
       return new Response(
         JSON.stringify({ 
-          error: 'classId must be a valid positive integer' 
+          error: 'classId must be a valid UUID' 
         }),
         { 
           status: 400,
@@ -77,8 +77,8 @@ Deno.serve(async (req: Request) => {
     const { data: classData, error: classError } = await supabase
       .from('classes')
       .select('id')
-      .eq('id', parsedClassId)
-      .eq('user_id', user.id)
+      .eq('id', classId)
+      .eq('teacher_id', user.id)
       .single()
 
     if (classError || !classData) {
@@ -156,7 +156,7 @@ Deno.serve(async (req: Request) => {
           full_name: student.full_name,
           student_email: student.student_email,
           tutor_email: student.tutor_email || null,
-          class_id: parsedClassId
+          class_id: classId
         })
       }
     }

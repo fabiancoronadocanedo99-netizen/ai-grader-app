@@ -264,7 +264,7 @@ export default function ClassDetailPage() {
             full_name: student.full_name,
             student_email: student.student_email,
             tutor_email: student.tutor_email || null,
-            class_id: parseInt(classId)
+            class_id: classId
           });
         }
       }
