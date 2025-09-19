@@ -37,6 +37,9 @@ export default function ClassDetailPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [examToEdit, setExamToEdit] = useState<Exam | null>(null)
   const [editingExamName, setEditingExamName] = useState('')
+  
+  // Estado para el sistema de pestañas
+  const [activeTab, setActiveTab] = useState<'exams' | 'students'>('exams')
 
   // Función para obtener los detalles de la clase
   const fetchClassDetails = useCallback(async () => {
@@ -190,68 +193,146 @@ export default function ClassDetailPage() {
         )}
       </div>
 
-      {/* Sección de Exámenes */}
+      {/* Sistema de Pestañas */}
       <div className="neu-card p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-700">Exámenes</h2>
+        {/* Navegación de Pestañas */}
+        <div className="flex space-x-1 mb-8">
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="neu-button text-gray-700 font-semibold py-3 px-6"
+            onClick={() => setActiveTab('exams')}
+            className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
+              activeTab === 'exams'
+                ? 'neu-button-active text-gray-700 shadow-inner'
+                : 'neu-button text-gray-600 hover:text-gray-700'
+            }`}
           >
-            Crear Nuevo Examen
+            Exámenes
+          </button>
+          <button
+            onClick={() => setActiveTab('students')}
+            className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
+              activeTab === 'students'
+                ? 'neu-button-active text-gray-700 shadow-inner'
+                : 'neu-button text-gray-600 hover:text-gray-700'
+            }`}
+          >
+            Alumnos
           </button>
         </div>
 
-        {/* Lista de Exámenes */}
-        {exams.length === 0 ? (
-          <p className="text-center text-gray-600">Aún no hay exámenes para esta clase</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {exams.map((exam) => (
-              <div key={exam.id} className="neu-card p-4 flex flex-col justify-between relative">
-                {/* Menú de tres puntos */}
-                <div className="absolute top-2 right-2">
-                  <button
-                    onClick={() => setOpenDropdown(openDropdown === exam.id ? null : exam.id)}
-                    className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
-                    title="Opciones"
-                  >
-                    <div className="flex flex-col space-y-1">
-                      <div className="w-1 h-1 bg-gray-500 rounded-full"></div>
-                      <div className="w-1 h-1 bg-gray-500 rounded-full"></div>
-                      <div className="w-1 h-1 bg-gray-500 rounded-full"></div>
-                    </div>
-                  </button>
-                  
-                  {/* Menú desplegable */}
-                  {openDropdown === exam.id && (
-                    <div className="absolute right-0 top-10 neu-card p-2 min-w-[150px] z-20">
-                      <button
-                        onClick={() => openEditModal(exam)}
-                        className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded transition-colors duration-200"
-                      >
-                        Editar Nombre
-                      </button>
-                      <button
-                        onClick={() => openDeleteModal(exam)}
-                        className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded transition-colors duration-200"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  )}
-                </div>
+        {/* Contenido de la Pestaña Exámenes */}
+        {activeTab === 'exams' && (
+          <>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-700">Exámenes</h2>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="neu-button text-gray-700 font-semibold py-3 px-6"
+              >
+                Crear Nuevo Examen
+              </button>
+            </div>
 
-                <h3 className="font-semibold text-gray-800 mb-4 pr-8">{exam.name}</h3>
-                <Link
-                  href={`/dashboard/class/${classId}/exam/${exam.id}`}
-                  className="w-full text-center neu-button text-gray-700 font-medium py-2 px-4"
-                >
-                  Gestionar
-                </Link>
+            {/* Lista de Exámenes */}
+            {exams.length === 0 ? (
+              <p className="text-center text-gray-600">Aún no hay exámenes para esta clase</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {exams.map((exam) => (
+                  <div key={exam.id} className="neu-card p-4 flex flex-col justify-between relative">
+                    {/* Menú de tres puntos */}
+                    <div className="absolute top-2 right-2">
+                      <button
+                        onClick={() => setOpenDropdown(openDropdown === exam.id ? null : exam.id)}
+                        className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
+                        title="Opciones"
+                      >
+                        <div className="flex flex-col space-y-1">
+                          <div className="w-1 h-1 bg-gray-500 rounded-full"></div>
+                          <div className="w-1 h-1 bg-gray-500 rounded-full"></div>
+                          <div className="w-1 h-1 bg-gray-500 rounded-full"></div>
+                        </div>
+                      </button>
+                      
+                      {/* Menú desplegable */}
+                      {openDropdown === exam.id && (
+                        <div className="absolute right-0 top-10 neu-card p-2 min-w-[150px] z-20">
+                          <button
+                            onClick={() => openEditModal(exam)}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded transition-colors duration-200"
+                          >
+                            Editar Nombre
+                          </button>
+                          <button
+                            onClick={() => openDeleteModal(exam)}
+                            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded transition-colors duration-200"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <h3 className="font-semibold text-gray-800 mb-4 pr-8">{exam.name}</h3>
+                    <Link
+                      href={`/dashboard/class/${classId}/exam/${exam.id}`}
+                      className="w-full text-center neu-button text-gray-700 font-medium py-2 px-4"
+                    >
+                      Gestionar
+                    </Link>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
+          </>
+        )}
+
+        {/* Contenido de la Pestaña Alumnos */}
+        {activeTab === 'students' && (
+          <>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-700">Alumnos</h2>
+              <div className="flex space-x-4">
+                <button className="neu-button text-gray-700 font-semibold py-3 px-6">
+                  Importar CSV
+                </button>
+                <button className="neu-button text-gray-700 font-semibold py-3 px-6">
+                  Añadir Alumno
+                </button>
+              </div>
+            </div>
+
+            {/* Tabla de Alumnos */}
+            <div className="neu-card p-4">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-4 px-4 font-semibold text-gray-700">
+                        Nombre Completo
+                      </th>
+                      <th className="text-left py-4 px-4 font-semibold text-gray-700">
+                        Email Alumno
+                      </th>
+                      <th className="text-left py-4 px-4 font-semibold text-gray-700">
+                        Email Tutor
+                      </th>
+                      <th className="text-left py-4 px-4 font-semibold text-gray-700">
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Mensaje cuando no hay alumnos */}
+                    <tr>
+                      <td colSpan={4} className="text-center py-12 text-gray-600">
+                        Aún no hay alumnos en esta clase
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
