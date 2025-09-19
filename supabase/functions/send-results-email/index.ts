@@ -7,12 +7,12 @@ console.log("Send Results Email Function started")
 Deno.serve(async (req: Request) => {
   try {
     // Parse request body
-    const { gradeId } = await req.json()
+    const { submissionId } = await req.json()
     
-    if (!gradeId) {
+    if (!submissionId) {
       return new Response(
         JSON.stringify({ 
-          error: 'Missing required field: gradeId' 
+          error: 'Missing required field: submissionId' 
         }),
         { 
           status: 400,
@@ -21,12 +21,12 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    // Validate gradeId is a positive integer
-    const parsedGradeId = parseInt(gradeId)
-    if (isNaN(parsedGradeId) || parsedGradeId <= 0) {
+    // Validate submissionId is a positive integer
+    const parsedSubmissionId = parseInt(submissionId)
+    if (isNaN(parsedSubmissionId) || parsedSubmissionId <= 0) {
       return new Response(
         JSON.stringify({ 
-          error: 'gradeId must be a valid positive integer' 
+          error: 'submissionId must be a valid positive integer' 
         }),
         { 
           status: 400,
@@ -63,31 +63,24 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    // Get complete grade data with student and class information using RLS
-    // This will only return data if the authenticated user owns the class
-    const { data: gradeData, error: gradeError } = await supabase
-      .from('grades')
+    // Get submission data first to find the corresponding grade
+    const { data: submissionData, error: submissionError } = await supabase
+      .from('submissions')
       .select(`
-        *,
-        students (
-          id,
-          full_name,
-          student_email,
-          tutor_email,
-          class_id,
-          classes (
-            id,
-            user_id
-          )
-        )
+        id,
+        exam_id,
+        student_id,
+        student_name,
+        ai_feedback,
+        grade
       `)
-      .eq('id', parsedGradeId)
+      .eq('id', parsedSubmissionId)
       .single()
 
-    if (gradeError || !gradeData) {
+    if (submissionError || !submissionData) {
       return new Response(
         JSON.stringify({ 
-          error: 'Grade not found or access denied' 
+          error: 'Submission not found or access denied' 
         }),
         { 
           status: 404,
@@ -96,15 +89,43 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    // Verify student data exists
-    const studentData = gradeData.students
-    if (!studentData) {
+    // Get student information for email sending
+    const { data: studentData, error: studentError } = await supabase
+      .from('students')
+      .select(`
+        id,
+        full_name,
+        student_email,
+        tutor_email,
+        class_id,
+        classes (
+          id,
+          user_id
+        )
+      `)
+      .eq('id', submissionData.student_id)
+      .single()
+
+    if (studentError || !studentData) {
       return new Response(
         JSON.stringify({ 
-          error: 'Student data not found for this grade' 
+          error: 'Student data not found or access denied' 
         }),
         { 
           status: 404,
+          headers: { "Content-Type": "application/json" } 
+        }
+      )
+    }
+
+    // Verify user authorization - user must own the class
+    if (!studentData.classes || studentData.classes.user_id !== user.id) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Access denied - you do not have permission to send this report' 
+        }),
+        { 
+          status: 403,
           headers: { "Content-Type": "application/json" } 
         }
       )
@@ -112,7 +133,7 @@ Deno.serve(async (req: Request) => {
 
 
     // Parse AI feedback
-    let aiReport = gradeData.ai_feedback
+    let aiReport = submissionData.ai_feedback
     if (typeof aiReport === 'string') {
       try {
         aiReport = JSON.parse(aiReport)
@@ -129,8 +150,8 @@ Deno.serve(async (req: Request) => {
     // Build professional HTML email template
     const emailHTML = buildEmailTemplate({
       studentName: studentData.full_name,
-      grade: gradeData.grade,
-      maxGrade: gradeData.max_grade || 100,
+      grade: submissionData.grade || resumen.puntuacion_total_obtenida || 0,
+      maxGrade: resumen.puntuacion_total_posible || 100,
       feedback: feedbackData,
       resumen: resumen,
       evaluaciones: evaluaciones
@@ -181,7 +202,7 @@ Deno.serve(async (req: Request) => {
         to: recipients,
         subject: `📊 Reporte de Calificación - ${studentData.full_name}`,
         html: emailHTML,
-        text: `Reporte de Calificación para ${studentData.full_name}\n\nCalificación: ${gradeData.grade}/${gradeData.max_grade || 100}\n\nRevisa tu correo para ver el reporte completo.`
+        text: `Reporte de Calificación para ${studentData.full_name}\n\nCalificación: ${submissionData.grade || resumen.puntuacion_total_obtenida || 0}/${resumen.puntuacion_total_posible || 100}\n\nRevisa tu correo para ver el reporte completo.`
       })
     })
 

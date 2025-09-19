@@ -436,7 +436,7 @@ function FeedbackModal({ feedback, submissionId, onClose }: { feedback: any; sub
     setIsSendingEmail(true);
     try {
       const { data, error } = await supabase.functions.invoke('send-results-email', {
-        body: { gradeId: submissionId }
+        body: { submissionId: submissionId }
       });
 
       if (error) throw error;
