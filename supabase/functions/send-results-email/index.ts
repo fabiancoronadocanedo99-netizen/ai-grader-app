@@ -35,19 +35,36 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    // Create Supabase Admin client
+    // Create Supabase client for auth check
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
+        global: {
+          headers: {
+            Authorization: req.headers.get('Authorization')!
+          }
         }
       }
     )
 
-    // Get complete grade data with student information
+    // Verify user authentication
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Authentication required' 
+        }),
+        { 
+          status: 401,
+          headers: { "Content-Type": "application/json" } 
+        }
+      )
+    }
+
+    // Get complete grade data with student and class information using RLS
+    // This will only return data if the authenticated user owns the class
     const { data: gradeData, error: gradeError } = await supabase
       .from('grades')
       .select(`
@@ -56,7 +73,12 @@ Deno.serve(async (req: Request) => {
           id,
           full_name,
           student_email,
-          tutor_email
+          tutor_email,
+          class_id,
+          classes (
+            id,
+            user_id
+          )
         )
       `)
       .eq('id', parsedGradeId)
@@ -74,8 +96,9 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    const student = gradeData.students
-    if (!student) {
+    // Verify student data exists
+    const studentData = gradeData.students
+    if (!studentData) {
       return new Response(
         JSON.stringify({ 
           error: 'Student data not found for this grade' 
@@ -86,6 +109,7 @@ Deno.serve(async (req: Request) => {
         }
       )
     }
+
 
     // Parse AI feedback
     let aiReport = gradeData.ai_feedback
@@ -104,7 +128,7 @@ Deno.serve(async (req: Request) => {
 
     // Build professional HTML email template
     const emailHTML = buildEmailTemplate({
-      studentName: student.full_name,
+      studentName: studentData.full_name,
       grade: gradeData.grade,
       maxGrade: gradeData.max_grade || 100,
       feedback: feedbackData,
@@ -112,7 +136,7 @@ Deno.serve(async (req: Request) => {
       evaluaciones: evaluaciones
     })
 
-    // Get Resend API key
+    // Get Resend API key and from address
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
     if (!resendApiKey) {
       return new Response(
@@ -126,10 +150,12 @@ Deno.serve(async (req: Request) => {
       )
     }
 
+    const fromAddress = Deno.env.get('EMAIL_FROM_ADDRESS') || 'AI Grader <onboarding@resend.dev>'
+
     // Prepare email recipients
     const recipients = []
-    if (student.student_email) recipients.push(student.student_email)
-    if (student.tutor_email) recipients.push(student.tutor_email)
+    if (studentData.student_email) recipients.push(studentData.student_email)
+    if (studentData.tutor_email) recipients.push(studentData.tutor_email)
 
     if (recipients.length === 0) {
       return new Response(
@@ -151,11 +177,11 @@ Deno.serve(async (req: Request) => {
         'Authorization': `Bearer ${resendApiKey}`
       },
       body: JSON.stringify({
-        from: 'AI Grader <noreply@aigrader.com>',
+        from: fromAddress,
         to: recipients,
-        subject: `📊 Reporte de Calificación - ${student.full_name}`,
+        subject: `📊 Reporte de Calificación - ${studentData.full_name}`,
         html: emailHTML,
-        text: `Reporte de Calificación para ${student.full_name}\n\nCalificación: ${gradeData.grade}/${gradeData.max_grade || 100}\n\nRevisa tu correo para ver el reporte completo.`
+        text: `Reporte de Calificación para ${studentData.full_name}\n\nCalificación: ${gradeData.grade}/${gradeData.max_grade || 100}\n\nRevisa tu correo para ver el reporte completo.`
       })
     })
 
