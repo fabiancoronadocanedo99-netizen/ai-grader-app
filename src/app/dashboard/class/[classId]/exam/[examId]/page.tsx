@@ -1,4 +1,4 @@
-'use client'
+src/app/dashboard/class/[classId]/exam/[examId]/page.tsx'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
