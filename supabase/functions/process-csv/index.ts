@@ -5,10 +5,16 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { corsHeaders } from '../_shared/cors.ts'
 
 console.log("Process CSV Function started")
 
 Deno.serve(async (req: Request) => {
+  // Handle CORS
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
   try {
     // Parse request body
     const { csvData, classId } = await req.json()
@@ -20,7 +26,7 @@ Deno.serve(async (req: Request) => {
         }),
         { 
           status: 400,
-          headers: { "Content-Type": "application/json" } 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       )
     }
@@ -34,7 +40,7 @@ Deno.serve(async (req: Request) => {
         }),
         { 
           status: 400,
-          headers: { "Content-Type": "application/json" } 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       )
     }
@@ -62,7 +68,7 @@ Deno.serve(async (req: Request) => {
         }),
         { 
           status: 401,
-          headers: { "Content-Type": "application/json" } 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       )
     }
@@ -82,7 +88,7 @@ Deno.serve(async (req: Request) => {
         }),
         { 
           status: 403,
-          headers: { "Content-Type": "application/json" } 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       )
     }
@@ -109,7 +115,7 @@ Deno.serve(async (req: Request) => {
         }),
         { 
           status: 400,
-          headers: { "Content-Type": "application/json" } 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       )
     }
@@ -125,7 +131,7 @@ Deno.serve(async (req: Request) => {
         }),
         { 
           status: 400,
-          headers: { "Content-Type": "application/json" } 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       )
     }
@@ -162,7 +168,7 @@ Deno.serve(async (req: Request) => {
         }),
         { 
           status: 400,
-          headers: { "Content-Type": "application/json" } 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       )
     }
@@ -197,7 +203,7 @@ Deno.serve(async (req: Request) => {
         }),
         { 
           status: 500,
-          headers: { "Content-Type": "application/json" } 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       )
     }
@@ -212,7 +218,7 @@ Deno.serve(async (req: Request) => {
       }),
       { 
         status: 200,
-        headers: { "Content-Type": "application/json" } 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
       }
     )
 
@@ -225,7 +231,7 @@ Deno.serve(async (req: Request) => {
       }),
       { 
         status: 500,
-        headers: { "Content-Type": "application/json" } 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
       }
     )
   }
