@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabaseClient'
 // --- Tipos de Datos ---
 interface ExamDetails { id: number; name: string; class_id: number; solution_file_url?: string; }
 interface Submission { id: number; student_name: string; submission_file_url: string; status: string; grade?: number; feedback?: string; ai_feedback?: any; }
+interface Student { id: number; full_name: string; student_email: string; tutor_email: string; }
 
 // --- Componente Principal ---
 export default function ExamManagementPage() {
@@ -179,13 +180,16 @@ function SubmissionsManager({ submissions, examId, onUploadSuccess, onGrade, onV
 }
 
 // Componente Modal para subir entregas
-function CreateSubmissionModal({ onClose, examId, onUploadSuccess }: {
+function CreateSubmissionModal({ onClose, examId, onUploadSuccess, classId }: {
     onClose: () => void;
     examId: number;
     onUploadSuccess: () => void;
+    classId: number;
 }) {
     const [files, setFiles] = useState<FileWithPath[]>([]);
     const [isUploading, setIsUploading] = useState(false);
+    const [students, setStudents] = useState<Student[]>([]);
+    const [fileStudentMap, setFileStudentMap] = useState<Record<string, number>>({});
 
     const onDrop = useCallback((acceptedFiles: FileWithPath[]) => {
         setFiles(prev => [...prev, ...acceptedFiles]);
