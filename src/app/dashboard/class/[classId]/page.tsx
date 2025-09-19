@@ -199,22 +199,27 @@ export default function ClassDetailPage() {
     }
   };
 
-  // Función para procesar el archivo CSV
+  // Función para procesar el archivo CSV usando Edge Function optimizada
   const processCSVFile = async (file: File) => {
     setIsProcessingCSV(true);
     
     try {
       const text = await file.text();
       
-      // Implementación temporal: procesar CSV localmente
-      const result = await processCSVLocally(text, classId);
-      
-      if (result.error) {
-        console.error('Error al procesar CSV:', result.error);
-        alert(`Error al procesar el archivo CSV: ${result.error}`);
+      // Llamar a la Edge Function optimizada process-csv
+      const { data, error } = await supabase.functions.invoke('process-csv', {
+        body: {
+          csvData: text,
+          classId: classId
+        }
+      });
+
+      if (error) {
+        console.error('Error al procesar CSV:', error);
+        alert(`Error al procesar el archivo CSV: ${error.message}`);
       } else {
-        console.log('CSV procesado exitosamente:', result);
-        alert(`CSV procesado exitosamente. Se agregaron ${result.studentsAdded || 0} alumnos.`);
+        console.log('CSV procesado exitosamente:', data);
+        alert(`CSV procesado exitosamente. Se agregaron ${data.studentsAdded || 0} alumnos.`);
         setIsCSVModalOpen(false);
         setCSVFile(null);
       }
@@ -223,96 +228,6 @@ export default function ClassDetailPage() {
       alert('Error al leer el archivo CSV. Por favor, asegúrate de que el archivo sea válido.');
     } finally {
       setIsProcessingCSV(false);
-    }
-  };
-
-  // Función temporal para procesar CSV localmente
-  const processCSVLocally = async (csvData: string, classId: string) => {
-    try {
-      // Parse CSV data
-      const lines = csvData.trim().split('\n');
-      
-      if (lines.length < 2) {
-        return { error: 'CSV debe contener al menos una fila de encabezados y una de datos' };
-      }
-
-      // Get headers and validate
-      const headers = lines[0].split(',').map((h: string) => h.trim().toLowerCase());
-      const expectedHeaders = ['full_name', 'student_email', 'tutor_email'];
-      
-      if (!expectedHeaders.every(header => headers.includes(header))) {
-        return { error: `CSV debe contener los encabezados: ${expectedHeaders.join(', ')}` };
-      }
-
-      // Parse data rows
-      const students: any[] = [];
-      for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map((v: string) => v.trim());
-        
-        if (values.length !== headers.length) {
-          continue; // Skip invalid rows
-        }
-
-        const student: any = {};
-        headers.forEach((header: string, index: number) => {
-          student[header] = values[index];
-        });
-
-        // Validate required fields
-        if (student.full_name && student.student_email) {
-          students.push({
-            full_name: student.full_name,
-            student_email: student.student_email,
-            tutor_email: student.tutor_email || null,
-            class_id: classId
-          });
-        }
-      }
-
-      if (students.length === 0) {
-        return { error: 'No se encontraron filas válidas en el CSV' };
-      }
-
-      // Insert students using Supabase client
-      let studentsAdded = 0;
-      const errors: string[] = [];
-      
-      for (const student of students) {
-        const { data, error } = await supabase
-          .from('students')
-          .insert([student])
-          .select();
-
-        if (error) {
-          console.error('Error inserting student:', error);
-          errors.push(`${student.full_name}: ${error.message}`);
-          continue;
-        }
-
-        if (data && data.length > 0) {
-          studentsAdded++;
-        }
-      }
-
-      // Check if operation was successful
-      if (studentsAdded === 0) {
-        return { 
-          error: 'No se pudieron insertar alumnos en la base de datos',
-          details: errors.slice(0, 3) // Show first 3 errors
-        };
-      }
-
-      // Return success response
-      return {
-        success: true,
-        studentsAdded: studentsAdded,
-        totalProcessed: students.length,
-        errors: errors.length > 0 ? `${errors.length} estudiantes no se pudieron procesar` : undefined
-      };
-
-    } catch (error) {
-      console.error('Error procesando CSV:', error);
-      return { error: 'Error interno al procesar el CSV' };
     }
   };
 
