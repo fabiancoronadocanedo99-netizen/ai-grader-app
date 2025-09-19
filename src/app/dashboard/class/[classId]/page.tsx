@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import { useDropzone } from 'react-dropzone'
 import { supabase } from '../../../../lib/supabaseClient'
 
 // Interfaces para los tipos de datos
@@ -40,6 +41,11 @@ export default function ClassDetailPage() {
   
   // Estado para el sistema de pestañas
   const [activeTab, setActiveTab] = useState<'exams' | 'students'>('exams')
+  
+  // Estados para el modal de importar CSV
+  const [isCSVModalOpen, setIsCSVModalOpen] = useState(false)
+  const [isProcessingCSV, setIsProcessingCSV] = useState(false)
+  const [csvFile, setCSVFile] = useState<File | null>(null)
 
   // Función para obtener los detalles de la clase
   const fetchClassDetails = useCallback(async () => {
@@ -171,6 +177,80 @@ export default function ClassDetailPage() {
     setEditingExamName(exam.name);
     setIsEditModalOpen(true);
     setOpenDropdown(null);
+  };
+
+  // Función para generar y descargar plantilla CSV
+  const generateCSVTemplate = () => {
+    const csvContent = 'Nombre Completo,Email Alumno,Email Tutor\n' +
+                      'Juan Pérez,juan.perez@estudiante.com,maria.perez@tutor.com\n' +
+                      'Ana García,ana.garcia@estudiante.com,carlos.garcia@tutor.com';
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'plantilla_alumnos.csv');
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  // Función para procesar el archivo CSV
+  const processCSVFile = async (file: File) => {
+    setIsProcessingCSV(true);
+    
+    try {
+      const text = await file.text();
+      
+      // Llamar a la Edge Function process-csv
+      const { data, error } = await supabase.functions.invoke('process-csv', {
+        body: {
+          csvData: text,
+          classId: classId
+        }
+      });
+
+      if (error) {
+        console.error('Error al procesar CSV:', error);
+        alert(`Error al procesar el archivo CSV: ${error.message}`);
+      } else {
+        console.log('CSV procesado exitosamente:', data);
+        alert(`CSV procesado exitosamente. Se agregaron ${data.studentsAdded || 0} alumnos.`);
+        // Aquí podrías refrescar la lista de alumnos cuando la implementes
+        setIsCSVModalOpen(false);
+        setCSVFile(null);
+      }
+    } catch (error) {
+      console.error('Error al leer el archivo:', error);
+      alert('Error al leer el archivo CSV. Por favor, asegúrate de que el archivo sea válido.');
+    } finally {
+      setIsProcessingCSV(false);
+    }
+  };
+
+  // Configuración del dropzone
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    accept: {
+      'text/csv': ['.csv']
+    },
+    maxFiles: 1,
+    onDrop: (acceptedFiles) => {
+      if (acceptedFiles.length > 0) {
+        const file = acceptedFiles[0];
+        setCSVFile(file);
+      }
+    }
+  });
+
+  // Función para manejar la subida del CSV
+  const handleCSVUpload = () => {
+    if (csvFile) {
+      processCSVFile(csvFile);
+    }
   };
 
   if (loading) {
