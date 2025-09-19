@@ -107,7 +107,8 @@ export default function ExamManagementPage() {
       </div>
       {viewingFeedback && (
         <FeedbackModal 
-          feedback={viewingFeedback} 
+          feedback={viewingFeedback.feedback}
+          submissionId={viewingFeedback.submissionId}
           onClose={() => setViewingFeedback(null)} 
         />
       )}
@@ -158,7 +159,7 @@ function SubmissionsManager({ submissions, examId, classId, onUploadSuccess, onG
                         <div key={sub.id} className="bg-gray-200/80 rounded-lg p-4 flex justify-between items-center">
                             <p>{sub.student_name}</p>
                             <button 
-                                onClick={() => sub.status === 'graded' ? onViewFeedback(sub.ai_feedback) : onGrade(sub.id)} 
+                                onClick={() => sub.status === 'graded' ? onViewFeedback({ feedback: sub.ai_feedback, submissionId: sub.id }) : onGrade(sub.id)} 
                                 disabled={sub.status === 'processing'}
                                 className="neu-button text-gray-700 py-2 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
@@ -428,7 +429,30 @@ function CreateSolutionModal({ examId, onUploadSuccess, onClose }: { examId: num
 }
 
 // Componente Modal para mostrar el feedback de IA
-function FeedbackModal({ feedback, onClose }: { feedback: any; onClose: () => void }) {
+function FeedbackModal({ feedback, submissionId, onClose }: { feedback: any; submissionId: number; onClose: () => void }) {
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+  const handleSendEmail = async () => {
+    setIsSendingEmail(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-results-email', {
+        body: { gradeId: submissionId }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        alert('¡Correo enviado con éxito!');
+      } else {
+        throw new Error(data.error || 'Error desconocido al enviar el correo');
+      }
+    } catch (error) {
+      console.error('Error al enviar correo:', error);
+      alert(`Error al enviar correo: ${(error as Error).message}`);
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
   // Parsear el feedback si es un string JSON (común en DBs)
   let parsedFeedback = feedback;
   if (typeof feedback === 'string') {
@@ -541,8 +565,15 @@ function FeedbackModal({ feedback, onClose }: { feedback: any; onClose: () => vo
           ))}
         </div>
 
-        {/* Botón Cerrar */}
-        <div className="text-center">
+        {/* Botones de Acción */}
+        <div className="flex justify-center space-x-4">
+          <button 
+            onClick={handleSendEmail}
+            disabled={isSendingEmail}
+            className="neu-button text-slate-700 font-semibold py-3 px-8 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSendingEmail ? 'Enviando...' : '📧 Enviar por Correo'}
+          </button>
           <button 
             onClick={onClose}
             className="neu-button text-slate-700 font-semibold py-3 px-8"
