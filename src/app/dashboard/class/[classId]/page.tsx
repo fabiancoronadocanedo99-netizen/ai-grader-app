@@ -8,22 +8,22 @@ import { supabase } from '../../../../lib/supabaseClient'
 
 // Interfaces para los tipos de datos
 interface ClassDetails {
-  id: number;
+  id: string;
   name: string;
   subject?: string;
   grade_level?: string;
 }
 
 interface Exam {
-  id: number;
+  id: string;
   name: string;
-  class_id: number; // Revertir a number para compatibilidad
+  class_id: string; // Usar string para UUIDs
   created_at?: string;
 }
 
 export default function ClassDetailPage() {
   const params = useParams()
-  const classId = parseInt(params.classId as string, 10) // Revertir a number para compatibilidad
+  const classId = params.classId as string // Mantener como UUID string
 
   const [classDetails, setClassDetails] = useState<ClassDetails | null>(null)
   const [exams, setExams] = useState<Exam[]>([])
@@ -32,7 +32,7 @@ export default function ClassDetailPage() {
   const [newExamName, setNewExamName] = useState('')
 
   // Estados para funcionalidad de editar/eliminar exámenes
-  const [openDropdown, setOpenDropdown] = useState<number | null>(null)
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [examToDelete, setExamToDelete] = useState<Exam | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -49,7 +49,7 @@ export default function ClassDetailPage() {
 
   // Función para obtener los detalles de la clase
   const fetchClassDetails = useCallback(async () => {
-    if (isNaN(classId)) return
+    if (!classId) return
     const { data, error } = await supabase
       .from('classes')
       .select('*')
@@ -64,7 +64,7 @@ export default function ClassDetailPage() {
 
   // Función para obtener los exámenes de la clase
   const fetchExams = useCallback(async () => {
-    if (isNaN(classId)) return
+    if (!classId) return
     const { data, error } = await supabase
       .from('exams')
       .select('*')
