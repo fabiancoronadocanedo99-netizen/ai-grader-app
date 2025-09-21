@@ -108,7 +108,7 @@ export default function ExamManagementPage() {
       {viewingFeedback && (
         <FeedbackModal 
           feedback={viewingFeedback.feedback}
-          submissionId={viewingFeedback.submissionId}
+          viewingFeedback={viewingFeedback}
           onClose={() => setViewingFeedback(null)} 
         />
       )}
@@ -429,14 +429,14 @@ function CreateSolutionModal({ examId, onUploadSuccess, onClose }: { examId: num
 }
 
 // Componente Modal para mostrar el feedback de IA
-function FeedbackModal({ feedback, submissionId, onClose }: { feedback: any; submissionId: number; onClose: () => void }) {
+function FeedbackModal({ feedback, viewingFeedback, onClose }: { feedback: any; viewingFeedback: any; onClose: () => void }) {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const handleSendEmail = async () => {
     setIsSendingEmail(true);
     try {
-      const { data, error } = await supabase.functions.invoke('send-results-email', {
-        body: { submissionId: submissionId }
+      const { error } = await supabase.functions.invoke('send-results-email', {
+        body: { gradeId: viewingFeedback.id }
       });
 
       if (error) throw error;
