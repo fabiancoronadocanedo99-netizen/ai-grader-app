@@ -36,9 +36,6 @@ export async function POST(request: NextRequest) {
     // Verificar el token y obtener el usuario
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
-    console.log('🔍 Debug auth - userError:', userError);
-    console.log('🔍 Debug auth - user exists:', !!user);
-    
     if (userError) {
       console.log('❌ Error de autenticación:', userError);
       return NextResponse.json(
@@ -54,8 +51,6 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
-    
-    console.log('✅ Usuario autenticado:', user.id);
 
     const body = await request.json();
     const { gradeId } = body;
