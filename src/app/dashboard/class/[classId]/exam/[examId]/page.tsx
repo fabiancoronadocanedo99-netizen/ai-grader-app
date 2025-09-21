@@ -435,14 +435,20 @@ function FeedbackModal({ feedback, viewingFeedback, onClose }: { feedback: any; 
   const handleSendEmail = async () => {
     setIsSendingEmail(true);
     try {
-      const { data, error } = await supabase.functions.invoke('send-results-email', {
-        body: { gradeId: viewingFeedback.submissionId }
+      const response = await fetch('/api/send-results-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gradeId: viewingFeedback.submissionId })
       });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Error ${response.status}`);
+      }
 
+      const data = await response.json();
       if (data.success) {
-        alert('¡Correo enviado con éxito!');
+        alert(`¡Correo enviado con éxito! (${data.emailsSent} destinatarios)`);
       } else {
         throw new Error(data.error || 'Error desconocido al enviar el correo');
       }
