@@ -20,20 +20,20 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // Paso 1: Obtener la calificación
-    const { data: grade, error: gradeError } = await supabaseAdmin
-      .from('grades')
-      .select('*, submissions!inner(*)')
+    // Paso 1: Obtener la submission (que contiene la calificación)
+    const { data: submission, error: submissionError } = await supabaseAdmin
+      .from('submissions')
+      .select('*')
       .eq('id', gradeId)
       .single()
-    if (gradeError) throw new Error(`Error al buscar la calificación: ${gradeError.message}`)
-    if (!grade) throw new Error('Calificación no encontrada.')
+    if (submissionError) throw new Error(`Error al buscar la submission: ${submissionError.message}`)
+    if (!submission) throw new Error('Submission no encontrada.')
 
     // Paso 2: Obtener los datos del alumno
     const { data: student, error: studentError } = await supabaseAdmin
       .from('students')
       .select('*')
-      .eq('id', grade.submissions.student_id)
+      .eq('id', submission.student_id)
       .single()
     if (studentError) throw new Error(`Error al buscar al estudiante: ${studentError.message}`)
     if (!student) throw new Error('Estudiante no encontrado.')
