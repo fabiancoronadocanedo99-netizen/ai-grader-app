@@ -5,256 +5,54 @@ import { corsHeaders } from '../_shared/cors.ts'
 
 console.log("Send Results Email Function started")
 
-Deno.serve(async (req: Request) => {
-  // Handle CORS
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // Parse request body
-    const { submissionId } = await req.json()
-    
-    if (!submissionId) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Missing required field: submissionId' 
-        }),
-        { 
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      )
-    }
+    const { gradeId } = await req.json()
+    if (!gradeId) throw new Error('No se proporcionó gradeId.')
 
-    // Validate submissionId is a positive integer
-    const parsedSubmissionId = parseInt(submissionId)
-    if (isNaN(parsedSubmissionId) || parsedSubmissionId <= 0) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'submissionId must be a valid positive integer' 
-        }),
-        { 
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      )
-    }
-
-    // Create Supabase client for auth check
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      {
-        global: {
-          headers: {
-            Authorization: req.headers.get('Authorization')!
-          }
-        }
-      }
+    console.log(`Buscando datos para la calificación ID: ${gradeId}`)
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // Verify user authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Authentication required' 
-        }),
-        { 
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      )
-    }
-
-    // Get submission data first to find the corresponding grade
-    const { data: submissionData, error: submissionError } = await supabase
-      .from('submissions')
-      .select(`
-        id,
-        exam_id,
-        student_id,
-        student_name,
-        ai_feedback,
-        grade
-      `)
-      .eq('id', parsedSubmissionId)
+    // Paso 1: Obtener la calificación
+    const { data: grade, error: gradeError } = await supabaseAdmin
+      .from('grades')
+      .select('*, submissions!inner(*)')
+      .eq('id', gradeId)
       .single()
+    if (gradeError) throw new Error(`Error al buscar la calificación: ${gradeError.message}`)
+    if (!grade) throw new Error('Calificación no encontrada.')
 
-    if (submissionError || !submissionData) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Submission not found or access denied' 
-        }),
-        { 
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      )
-    }
-
-    // Get student information for email sending
-    const { data: studentData, error: studentError } = await supabase
+    // Paso 2: Obtener los datos del alumno
+    const { data: student, error: studentError } = await supabaseAdmin
       .from('students')
-      .select(`
-        id,
-        full_name,
-        student_email,
-        tutor_email,
-        class_id,
-        classes (
-          id,
-          user_id
-        )
-      `)
-      .eq('id', submissionData.student_id)
+      .select('*')
+      .eq('id', grade.submissions.student_id)
       .single()
+    if (studentError) throw new Error(`Error al buscar al estudiante: ${studentError.message}`)
+    if (!student) throw new Error('Estudiante no encontrado.')
 
-    if (studentError || !studentData) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Student data not found or access denied' 
-        }),
-        { 
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      )
-    }
+    // (Aquí iría la lógica para construir el HTML y enviar con Resend)
+    // Por ahora, solo devolveremos éxito para probar la conexión de datos
 
-    // Verify user authorization - user must own the class
-    if (!studentData.classes || studentData.classes.user_id !== user.id) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Access denied - you do not have permission to send this report' 
-        }),
-        { 
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      )
-    }
+    console.log('Todos los datos encontrados exitosamente. Simulación de envío de correo.')
 
-
-    // Parse AI feedback
-    let aiReport = submissionData.ai_feedback
-    if (typeof aiReport === 'string') {
-      try {
-        aiReport = JSON.parse(aiReport)
-      } catch (e) {
-        console.warn('Could not parse AI feedback JSON:', e)
-        aiReport = {}
-      }
-    }
-
-    const feedbackData = aiReport?.informe_evaluacion || aiReport || {}
-    const resumen = feedbackData?.resumen_general || {}
-    const evaluaciones = feedbackData?.evaluacion_detallada || []
-
-    // Build professional HTML email template
-    const emailHTML = buildEmailTemplate({
-      studentName: studentData.full_name,
-      grade: submissionData.grade || resumen.puntuacion_total_obtenida || 0,
-      maxGrade: resumen.puntuacion_total_posible || 100,
-      feedback: feedbackData,
-      resumen: resumen,
-      evaluaciones: evaluaciones
+    return new Response(JSON.stringify({ success: true, message: "Simulación de correo exitosa" }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
-
-    // Get Resend API key and from address
-    const resendApiKey = Deno.env.get('RESEND_API_KEY')
-    if (!resendApiKey) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Resend API key not configured' 
-        }),
-        { 
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      )
-    }
-
-    const fromAddress = Deno.env.get('EMAIL_FROM_ADDRESS') || 'AI Grader <onboarding@resend.dev>'
-
-    // Prepare email recipients
-    const recipients = []
-    if (studentData.student_email) recipients.push(studentData.student_email)
-    if (studentData.tutor_email) recipients.push(studentData.tutor_email)
-
-    if (recipients.length === 0) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'No email addresses found for student or tutor' 
-        }),
-        { 
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      )
-    }
-
-    // Send email using Resend API
-    const emailResponse = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${resendApiKey}`
-      },
-      body: JSON.stringify({
-        from: fromAddress,
-        to: recipients,
-        subject: `📊 Reporte de Calificación - ${studentData.full_name}`,
-        html: emailHTML,
-        text: `Reporte de Calificación para ${studentData.full_name}\n\nCalificación: ${submissionData.grade || resumen.puntuacion_total_obtenida || 0}/${resumen.puntuacion_total_posible || 100}\n\nRevisa tu correo para ver el reporte completo.`
-      })
-    })
-
-    if (!emailResponse.ok) {
-      const errorData = await emailResponse.json()
-      console.error('Resend API Error:', errorData)
-      return new Response(
-        JSON.stringify({ 
-          error: 'Failed to send email',
-          details: errorData
-        }),
-        { 
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      )
-    }
-
-    const emailData = await emailResponse.json()
-    console.log('Email sent successfully:', emailData)
-
-    return new Response(
-      JSON.stringify({ 
-        success: true,
-        message: 'Report sent successfully',
-        emailId: emailData.id,
-        sentTo: recipients
-      }),
-      { 
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      }
-    )
 
   } catch (error) {
-    console.error('Error in send-results-email function:', error)
-    
-    return new Response(
-      JSON.stringify({ 
-        error: 'Internal server error while sending email' 
-      }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      }
-    )
+    console.error('Error fatal en la función send-results-email:', (error as Error).message)
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
   }
 })
 
