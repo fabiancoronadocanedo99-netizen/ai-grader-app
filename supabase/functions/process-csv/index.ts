@@ -31,12 +31,14 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    // Validate classId is a valid UUID
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(classId)) {
+    // Validate classId is either a number or a valid UUID
+    const isNumber = /^\d+$/.test(classId)
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(classId)
+    
+    if (!isNumber && !isUUID) {
       return new Response(
         JSON.stringify({ 
-          error: 'classId must be a valid UUID' 
+          error: 'classId must be a valid number or UUID' 
         }),
         { 
           status: 400,
