@@ -216,7 +216,8 @@ export default function ClassDetailPage() {
 
       if (error) {
         console.error('Error al procesar CSV:', error);
-        alert(`Error al procesar el archivo CSV: ${error.message}`);
+        // Mostrar el error REAL del servidor para debugging
+        alert(`Error al procesar el archivo CSV: ${error.message}\n\nDetalle: ${JSON.stringify(error, null, 2)}`);
       } else {
         console.log('CSV procesado exitosamente:', data);
         alert(`CSV procesado exitosamente. Se agregaron ${data.studentsAdded || 0} alumnos.`);

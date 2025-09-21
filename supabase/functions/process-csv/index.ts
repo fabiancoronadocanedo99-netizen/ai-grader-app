@@ -17,35 +17,48 @@ Deno.serve(async (req: Request) => {
 
   try {
     // Parse request body
-    const { csvData, classId } = await req.json()
+    const body = await req.json()
+    const { csvData } = body
+    const raw = String(body.classId ?? "").trim()
     
-    if (!csvData || !classId) {
+    // Enhanced logging for debugging
+    console.log("classId_received", {raw, type: typeof body.classId, body: body})
+    
+    if (!csvData || !raw) {
       return new Response(
         JSON.stringify({ 
-          error: 'Missing required fields: csvData and classId' 
+          error: 'Missing required fields: csvData and classId',
+          received: { csvData: !!csvData, classId: raw }
         }),
         { 
           status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          headers: { ...corsHeaders, "Content-Type": "application/json", "X-Function-Version": "v2" } 
         }
       )
     }
 
     // Validate classId is either a number or a valid UUID
-    const isNumber = /^\d+$/.test(classId)
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(classId)
+    const isNumber = /^\d+$/.test(raw)
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw)
+    
+    console.log("classId_validation", {raw, isNumber, isUUID})
     
     if (!isNumber && !isUUID) {
       return new Response(
         JSON.stringify({ 
-          error: 'classId must be a valid number or UUID' 
+          error: 'classId must be a valid number or UUID',
+          received: raw,
+          validation: { isNumber, isUUID }
         }),
         { 
           status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          headers: { ...corsHeaders, "Content-Type": "application/json", "X-Function-Version": "v2" } 
         }
       )
     }
+    
+    // Normalize classId for database query
+    const classIdForQuery = isNumber ? parseInt(raw, 10) : raw
 
     // Create Supabase client for auth check
     const supabase = createClient(
@@ -79,7 +92,7 @@ Deno.serve(async (req: Request) => {
     const { data: classData, error: classError } = await supabase
       .from('classes')
       .select('id')
-      .eq('id', classId)
+      .eq('id', classIdForQuery)  // Use normalized classId
       .eq('teacher_id', user.id)
       .single()
 
@@ -152,7 +165,7 @@ Deno.serve(async (req: Request) => {
           full_name: student.full_name,
           student_email: student.student_email,
           tutor_email: student.tutor_email || null,
-          class_id: classId
+          class_id: classIdForQuery  // Use normalized classId
         })
       }
     }
