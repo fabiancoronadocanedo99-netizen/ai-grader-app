@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const fromAddress = process.env.EMAIL_FROM_ADDRESS || 'AI Grader <onboarding@resend.dev>';
+    const fromAddress = 'AI Grader <onboarding@resend.dev>'; // Usar dominio verificado de Resend
 
     // Paso 6: Preparar destinatarios
     const recipients = [];
