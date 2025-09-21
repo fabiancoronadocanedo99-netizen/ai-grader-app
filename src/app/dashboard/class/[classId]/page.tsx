@@ -8,22 +8,22 @@ import { supabase } from '../../../../lib/supabaseClient'
 
 // Interfaces para los tipos de datos
 interface ClassDetails {
-  id: string;
+  id: number;
   name: string;
   subject?: string;
   grade_level?: string;
 }
 
 interface Exam {
-  id: string;
+  id: number;
   name: string;
-  class_id: string; // Usar string para UUIDs
+  class_id: number; // Volver a number para compatibilidad
   created_at?: string;
 }
 
 export default function ClassDetailPage() {
   const params = useParams()
-  const classId = params.classId as string // Mantener como UUID string
+  const classId = parseInt(params.classId as string, 10) // Volver a number para compatibilidad
 
   const [classDetails, setClassDetails] = useState<ClassDetails | null>(null)
   const [exams, setExams] = useState<Exam[]>([])
@@ -210,7 +210,7 @@ export default function ClassDetailPage() {
       const { data, error } = await supabase.functions.invoke('process-csv', {
         body: {
           csvData: text,
-          classId: classId
+          classId: classId.toString()  // Enviar como string para compatibilidad
         }
       });
 
