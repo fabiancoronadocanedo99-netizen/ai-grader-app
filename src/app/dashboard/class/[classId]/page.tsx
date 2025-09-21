@@ -446,7 +446,7 @@ export default function ClassDetailPage() {
                     {students.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="text-center py-12 text-gray-600">
-                          Aún no hay alumnos en esta clase
+                          Aun no hay alumnos en esta clase
                         </td>
                       </tr>
                     ) : (
