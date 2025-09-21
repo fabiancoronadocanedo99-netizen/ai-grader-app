@@ -435,30 +435,20 @@ function FeedbackModal({ feedback, viewingFeedback, onClose }: { feedback: any; 
   const handleSendEmail = async () => {
     setIsSendingEmail(true);
     try {
-      console.log('🔄 Probando API Route de Next.js primero...');
-      
-      // Probar API Route de Next.js
-      const response = await fetch('/api/send-email-test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gradeId: viewingFeedback.id })
+      const { data, error } = await supabase.functions.invoke('send-results-email', {
+        body: { gradeId: viewingFeedback.submissionId }
       });
 
-      if (!response.ok) {
-        throw new Error(`API Route falló: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('✅ API Route response:', data);
+      if (error) throw error;
 
       if (data.success) {
-        alert('¡Prueba de API Route exitosa!');
+        alert('¡Correo enviado con éxito!');
       } else {
-        throw new Error(data.error || 'Error en API Route');
+        throw new Error(data.error || 'Error desconocido al enviar el correo');
       }
     } catch (error) {
-      console.error('Error al probar API Route:', error);
-      alert(`Error en API Route: ${(error as Error).message}`);
+      console.error('Error al enviar correo:', error);
+      alert(`Error al enviar correo: ${(error as Error).message}`);
     } finally {
       setIsSendingEmail(false);
     }
