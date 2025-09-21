@@ -6,14 +6,14 @@ import { useDropzone, FileWithPath } from 'react-dropzone'
 import { supabase } from '@/lib/supabaseClient'
 
 // --- Tipos de Datos ---
-interface ExamDetails { id: number; name: string; class_id: number; solution_file_url?: string; }
-interface Submission { id: number; student_name: string; submission_file_url: string; status: string; grade?: number; feedback?: string; ai_feedback?: any; student_id?: number; }
-interface Student { id: number; full_name: string; student_email: string; tutor_email: string; }
+interface ExamDetails { id: string; name: string; class_id: string; solution_file_url?: string; }
+interface Submission { id: string; student_name: string; submission_file_url: string; status: string; grade?: number; feedback?: string; ai_feedback?: any; student_id?: string; }
+interface Student { id: string; full_name: string; student_email: string; tutor_email: string; }
 
 // --- Componente Principal ---
 export default function ExamManagementPage() {
   const params = useParams();
-  const examId = parseInt(params.examId as string, 10);
+  const examId = params.examId as string;
 
   const [examDetails, setExamDetails] = useState<ExamDetails | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -22,7 +22,7 @@ export default function ExamManagementPage() {
 
       // --- Funciones para Cargar Datos (Versión Corregida) ---
       const fetchData = useCallback(async () => {
-        if (isNaN(examId)) {
+        if (!examId) {
           setLoading(false);
           return;
         }
@@ -58,7 +58,7 @@ export default function ExamManagementPage() {
       fetchData(); // Llama a la función principal para recargar todo
     };
 
-    const handleGrade = async (submissionId: number) => {
+    const handleGrade = async (submissionId: string) => {
       // Actualizar el estado local para mostrar "processing"
       setSubmissions(prev => 
         prev.map(sub => 

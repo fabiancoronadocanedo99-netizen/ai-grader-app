@@ -7,16 +7,16 @@ import { supabase } from '../lib/supabaseClient'
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden'
 
 interface Class {
-  id: number
+  id: string
   name: string
   subject?: string
   grade_level?: string
 }
 
 interface Exam {
-  id: number
+  id: string
   title: string
-  class_id: number
+  class_id: string
 }
 
 export default function CommandPalette() {
@@ -88,12 +88,12 @@ export default function CommandPalette() {
     }
   }
 
-  const handleSelectClass = (classId: number) => {
+  const handleSelectClass = (classId: string) => {
     router.push(`/dashboard/class/${classId}`)
     setOpen(false)
   }
 
-  const handleSelectExam = (examId: number, classId: number) => {
+  const handleSelectExam = (examId: string, classId: string) => {
     router.push(`/dashboard/class/${classId}/exam/${examId}`)
     setOpen(false)
   }
