@@ -1,55 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request: NextRequest) {
   try {
     console.log('📧 Iniciando envío de correo...');
     
-    // Crear cliente de Supabase con autenticación del servidor
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
+    // Obtener el token de autorización del header
+    const authHeader = request.headers.get('authorization');
+    const accessToken = authHeader?.replace('Bearer ', '');
+    
+    if (!accessToken) {
+      console.log('❌ No se encontró token de autorización en el header');
+      return NextResponse.json(
+        { error: 'Token de autenticación requerido en el header Authorization' }, 
+        { status: 401 }
+      );
+    }
+
+    // Crear cliente de Supabase con el token del usuario
+    const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-          set(name: string, value: string, options?: any) {
-            cookieStore.set(name, value, options);
-          },
-          remove(name: string, options?: any) {
-            cookieStore.delete(name);
+        auth: {
+          persistSession: false, // No persistir sesión en API Routes
+        },
+        global: {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
           },
         },
       }
     );
 
-    // Verificar autenticación del usuario
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    // Verificar el token y obtener el usuario
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
     
-    console.log('🔍 Debug auth - authError:', authError);
-    console.log('🔍 Debug auth - session exists:', !!session);
-    console.log('🔍 Debug auth - user exists:', !!session?.user);
+    console.log('🔍 Debug auth - userError:', userError);
+    console.log('🔍 Debug auth - user exists:', !!user);
     
-    if (authError) {
-      console.log('❌ Error de autenticación:', authError);
+    if (userError) {
+      console.log('❌ Error de autenticación:', userError);
       return NextResponse.json(
-        { error: 'Error de autenticación: ' + authError.message }, 
+        { error: 'Error de autenticación: ' + userError.message }, 
         { status: 401 }
       );
     }
     
-    if (!session?.user) {
-      console.log('❌ No hay sesión de usuario');
+    if (!user) {
+      console.log('❌ No hay usuario válido');
       return NextResponse.json(
-        { error: 'No hay sesión activa. Por favor, inicia sesión nuevamente.' }, 
+        { error: 'Usuario no válido. Por favor, inicia sesión nuevamente.' }, 
         { status: 401 }
       );
     }
     
-    console.log('✅ Usuario autenticado:', session.user.id);
+    console.log('✅ Usuario autenticado:', user.id);
 
     const body = await request.json();
     const { gradeId } = body;
@@ -68,7 +74,7 @@ export async function POST(request: NextRequest) {
       .from('submissions')
       .select('*')
       .eq('id', gradeId)
-      .eq('user_id', session.user.id)  // Solo submissions del usuario autenticado
+      .eq('user_id', user.id)  // Solo submissions del usuario autenticado
       .single();
 
     if (submissionError || !submission) {

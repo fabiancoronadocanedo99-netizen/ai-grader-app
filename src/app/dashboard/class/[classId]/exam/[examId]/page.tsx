@@ -435,9 +435,19 @@ function FeedbackModal({ feedback, viewingFeedback, onClose }: { feedback: any; 
   const handleSendEmail = async () => {
     setIsSendingEmail(true);
     try {
+      // Obtener el token de acceso del usuario actual
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('No se pudo obtener el token de autenticación');
+      }
+
       const response = await fetch('/api/send-results-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
         body: JSON.stringify({ gradeId: viewingFeedback.submissionId })
       });
 
