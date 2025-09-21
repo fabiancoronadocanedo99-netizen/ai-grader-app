@@ -6,60 +6,44 @@ import { corsHeaders } from '../_shared/cors.ts'
 console.log("Send Results Email Function started")
 
 Deno.serve(async (req) => {
+  console.log('📧 Edge Function iniciada - método:', req.method)
+  
   if (req.method === 'OPTIONS') {
+    console.log('✅ Manejo de CORS OPTIONS')
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { gradeId } = await req.json()
-    if (!gradeId) throw new Error('No se proporcionó gradeId.')
+    console.log('📝 Parseando body de la petición...')
+    const body = await req.json()
+    console.log('📋 Body recibido:', body)
+    
+    const { gradeId } = body
+    if (!gradeId) {
+      console.log('❌ No se proporcionó gradeId')
+      throw new Error('No se proporcionó gradeId.')
+    }
 
-    console.log(`Buscando datos para la submission ID: ${gradeId}`)
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
+    console.log(`🔍 gradeId recibido: ${gradeId}`)
 
-    // Paso 1: Obtener la submission
-    const { data: submission, error: submissionError } = await supabaseAdmin
-      .from('submissions')
-      .select('*')
-      .eq('id', gradeId)
-      .single()
-    if (submissionError) throw new Error(`Error al buscar la submission: ${submissionError.message}`)
-    if (!submission) throw new Error('Submission no encontrada.')
+    // Test básico sin base de datos por ahora
+    console.log('✅ Función ejecutada correctamente, devolviendo éxito')
 
-    // Paso 2: Obtener la grade correspondiente a esta submission
-    const { data: grade, error: gradeError } = await supabaseAdmin
-      .from('grades')
-      .select('*')
-      .eq('student_id', submission.student_id)
-      .eq('exam_id', submission.exam_id)
-      .single()
-    if (gradeError) throw new Error(`Error al buscar la calificación: ${gradeError.message}`)
-    if (!grade) throw new Error('Calificación no encontrada para esta submission.')
-
-    // Paso 3: Obtener los datos del alumno
-    const { data: student, error: studentError } = await supabaseAdmin
-      .from('students')
-      .select('*')
-      .eq('id', submission.student_id)
-      .single()
-    if (studentError) throw new Error(`Error al buscar al estudiante: ${studentError.message}`)
-    if (!student) throw new Error('Estudiante no encontrado.')
-
-    // (Aquí iría la lógica para construir el HTML y enviar con Resend)
-    // Por ahora, solo devolveremos éxito para probar la conexión de datos
-
-    console.log('Todos los datos encontrados exitosamente. Simulación de envío de correo.')
-
-    return new Response(JSON.stringify({ success: true, message: "Simulación de correo exitosa" }), {
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: "Función básica funcionando", 
+      receivedId: gradeId 
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200
     })
 
   } catch (error) {
-    console.error('Error fatal en la función send-results-email:', (error as Error).message)
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
+    console.error('❌ Error en la función:', error)
+    return new Response(JSON.stringify({ 
+      error: (error as Error).message,
+      details: 'Error en función básica'
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
