@@ -14,13 +14,13 @@ Deno.serve(async (req) => {
     const { gradeId } = await req.json()
     if (!gradeId) throw new Error('No se proporcionó gradeId.')
 
-    console.log(`Buscando datos para la calificación ID: ${gradeId}`)
+    console.log(`Buscando datos para la submission ID: ${gradeId}`)
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // Paso 1: Obtener la submission (que contiene la calificación)
+    // Paso 1: Obtener la submission
     const { data: submission, error: submissionError } = await supabaseAdmin
       .from('submissions')
       .select('*')
@@ -29,7 +29,17 @@ Deno.serve(async (req) => {
     if (submissionError) throw new Error(`Error al buscar la submission: ${submissionError.message}`)
     if (!submission) throw new Error('Submission no encontrada.')
 
-    // Paso 2: Obtener los datos del alumno
+    // Paso 2: Obtener la grade correspondiente a esta submission
+    const { data: grade, error: gradeError } = await supabaseAdmin
+      .from('grades')
+      .select('*')
+      .eq('student_id', submission.student_id)
+      .eq('exam_id', submission.exam_id)
+      .single()
+    if (gradeError) throw new Error(`Error al buscar la calificación: ${gradeError.message}`)
+    if (!grade) throw new Error('Calificación no encontrada para esta submission.')
+
+    // Paso 3: Obtener los datos del alumno
     const { data: student, error: studentError } = await supabaseAdmin
       .from('students')
       .select('*')
