@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
       .from('classes')
       .select('id')
       .eq('id', classIdForQuery)  // Use normalized classId
-      .eq('teacher_id', user.id)
+      .eq('user_id', user.id)  // Fixed: usar user_id en lugar de teacher_id
       .single()
 
     if (classError || !classData) {
