@@ -259,6 +259,8 @@ export default function ClassDetailPage() {
         alert(`CSV procesado exitosamente. Se agregaron ${data.studentsAdded || 0} alumnos.`);
         setIsCSVModalOpen(false);
         setCSVFile(null);
+        // Refrescar la lista de estudiantes después de importar CSV
+        await fetchStudents();
       }
     } catch (error) {
       console.error('Error al leer el archivo:', error);
@@ -441,12 +443,37 @@ export default function ClassDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Mensaje cuando no hay alumnos */}
-                    <tr>
-                      <td colSpan={4} className="text-center py-12 text-gray-600">
-                        Aún no hay alumnos en esta clase
-                      </td>
-                    </tr>
+                    {students.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="text-center py-12 text-gray-600">
+                          Aún no hay alumnos en esta clase
+                        </td>
+                      </tr>
+                    ) : (
+                      students.map((student) => (
+                        <tr key={student.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                          <td className="py-4 px-4 text-gray-700">
+                            {student.full_name}
+                          </td>
+                          <td className="py-4 px-4 text-gray-600">
+                            {student.student_email}
+                          </td>
+                          <td className="py-4 px-4 text-gray-600">
+                            {student.tutor_email || 'No especificado'}
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="flex space-x-2">
+                              <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                Editar
+                              </button>
+                              <button className="text-red-600 hover:text-red-800 text-sm font-medium">
+                                Eliminar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
