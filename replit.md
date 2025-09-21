@@ -48,6 +48,13 @@ The application expects the following Supabase tables:
   - Fixed import paths and module resolution
   - Configured deployment for autoscale hosting
 
+- **2025-09-21**: CSV Import Functionality Fixed
+  - Resolved persistent "Edge Function returned a non-2xx status code" error
+  - Implemented Next.js API Route (`/api/process-csv/route.ts`) as bypass for problematic Edge Functions
+  - Fixed database schema mismatch: `teacher_id` → `user_id` 
+  - Added comprehensive error logging and debugging
+  - CSV import now successfully processes students data into Supabase database
+
 ## Development Notes
 - The application is configured to run on port 5000 for Replit compatibility
 - Supabase credentials must be properly configured for authentication to work
