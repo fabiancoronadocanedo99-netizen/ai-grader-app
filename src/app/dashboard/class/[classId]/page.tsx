@@ -21,12 +21,22 @@ interface Exam {
   created_at?: string;
 }
 
+interface Student {
+  id: number;
+  full_name: string;
+  student_email: string;
+  tutor_email?: string;
+  class_id: number;
+  created_at?: string;
+}
+
 export default function ClassDetailPage() {
   const params = useParams()
   const classId = parseInt(params.classId as string, 10) // Volver a number para compatibilidad
 
   const [classDetails, setClassDetails] = useState<ClassDetails | null>(null)
   const [exams, setExams] = useState<Exam[]>([])
+  const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [newExamName, setNewExamName] = useState('')
@@ -77,18 +87,34 @@ export default function ClassDetailPage() {
     }
   }, [classId])
 
+  // Función para obtener los estudiantes de la clase
+  const fetchStudents = useCallback(async () => {
+    if (!classId) return
+    const { data, error } = await supabase
+      .from('students')
+      .select('*')
+      .eq('class_id', classId)
+      .order('created_at', { ascending: false })
+    if (error) {
+      console.error("Error al cargar los estudiantes:", error)
+    } else {
+      setStudents(data || [])
+    }
+  }, [classId])
+
   // useEffect para cargar todos los datos al inicio
   useEffect(() => {
     const loadData = async () => {
       setLoading(true)
       await fetchClassDetails()
       await fetchExams()
+      await fetchStudents()
       setLoading(false)
     }
     if (!isNaN(classId)) {
       loadData()
     }
-  }, [classId, fetchClassDetails, fetchExams])
+  }, [classId, fetchClassDetails, fetchExams, fetchStudents])
 
   // useEffect para cerrar dropdown al hacer click fuera
   useEffect(() => {
