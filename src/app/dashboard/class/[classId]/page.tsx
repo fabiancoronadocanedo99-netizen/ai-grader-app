@@ -206,13 +206,23 @@ export default function ClassDetailPage() {
     try {
       const text = await file.text();
       
-      // Llamar a la Edge Function optimizada process-csv
-      const { data, error } = await supabase.functions.invoke('process-csv', {
-        body: {
+      // Llamar a la API Route de Next.js (bypass Edge Function)
+      const session = await supabase.auth.getSession()
+      const response = await fetch('/api/process-csv', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.data.session?.access_token}`
+        },
+        body: JSON.stringify({
           csvData: text,
           classId: classId.toString()  // Enviar como string para compatibilidad
-        }
-      });
+        })
+      })
+      
+      const result = await response.json()
+      const data = response.ok ? result : null
+      const error = response.ok ? null : { message: result.error, details: result.details }
 
       if (error) {
         console.error('Error al procesar CSV:', error);
