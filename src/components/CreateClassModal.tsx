@@ -35,7 +35,7 @@ export default function CreateClassModal({ isOpen, onClose, onClassCreated }: Cr
         .from('classes')
         .insert([{ 
           name: newClassName.trim(),
-          user_id: user.id
+          teacher_id: user.id
         }])
       
       if (error) {
