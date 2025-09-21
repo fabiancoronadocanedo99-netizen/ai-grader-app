@@ -29,12 +29,27 @@ export async function POST(request: NextRequest) {
     // Verificar autenticación del usuario
     const { data: { session }, error: authError } = await supabase.auth.getSession();
     
-    if (authError || !session?.user) {
+    console.log('🔍 Debug auth - authError:', authError);
+    console.log('🔍 Debug auth - session exists:', !!session);
+    console.log('🔍 Debug auth - user exists:', !!session?.user);
+    
+    if (authError) {
+      console.log('❌ Error de autenticación:', authError);
       return NextResponse.json(
-        { error: 'Autenticación requerida' }, 
+        { error: 'Error de autenticación: ' + authError.message }, 
         { status: 401 }
       );
     }
+    
+    if (!session?.user) {
+      console.log('❌ No hay sesión de usuario');
+      return NextResponse.json(
+        { error: 'No hay sesión activa. Por favor, inicia sesión nuevamente.' }, 
+        { status: 401 }
+      );
+    }
+    
+    console.log('✅ Usuario autenticado:', session.user.id);
 
     const body = await request.json();
     const { gradeId } = body;
