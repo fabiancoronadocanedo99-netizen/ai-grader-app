@@ -31,6 +31,24 @@ export default function CreateClassModal({ isOpen, onClose, onClassCreated }: Cr
         return
       }
 
+      // Asegurar que existe el perfil del usuario (crear si no existe)
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({ 
+          id: user.id,
+          full_name: user.email || 'Usuario',
+          profile_completed: false
+        }, { 
+          onConflict: 'id',
+          ignoreDuplicates: true 
+        })
+      
+      if (profileError) {
+        alert(`Error al crear el perfil: ${profileError.message}`)
+        return
+      }
+
+      // Ahora crear la clase
       const { error } = await supabase
         .from('classes')
         .insert([{ 
