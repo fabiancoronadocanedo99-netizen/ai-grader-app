@@ -171,12 +171,10 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
 
-  } catch (error) {
-    console.error('Error fatal en la Edge Function:', error)
-    // Corregido: Usamos backticks y un tipado seguro para el error
-    return new Response(JSON.stringify({ error: `Error en la función: ${(error as Error).message}` }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  }
-})
+    } catch (error) {
+      console.error('Error fatal DETALLADO en la Edge Function:', error); // <-- CAMBIO CLAVE
+      return new Response(JSON.stringify({ error: `Error en la función: ${(error as Error).message}` }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }

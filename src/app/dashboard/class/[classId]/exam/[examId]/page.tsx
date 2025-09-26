@@ -6,93 +6,69 @@ import { useDropzone, FileWithPath } from 'react-dropzone'
 import { supabase } from '@/lib/supabaseClient'
 
 // --- Tipos de Datos ---
-interface ExamDetails { id: number; name: string; class_id: number; solution_file_url?: string; }
-interface Submission { id: number; student_name: string; submission_file_url: string; status: string; grade?: number; feedback?: string; ai_feedback?: any; student_id?: number; }
-interface Student { id: number; full_name: string; student_email: string; tutor_email: string; }
+interface ExamDetails { id: string; name: string; class_id: string; solution_file_url?: string; }
+interface Submission { id: string; student_name: string; submission_file_url: string; status: string; grade?: number; feedback?: string; ai_feedback?: any; student_id?: string; }
+interface Student { id: string; full_name: string; student_email: string; tutor_email: string; }
+interface Grade { id: string; submission_id: string; }
 
 // --- Componente Principal ---
 export default function ExamManagementPage() {
   const params = useParams();
-  const examId = parseInt(params.examId as string, 10);
+  const examId = params.examId as string;
 
   const [examDetails, setExamDetails] = useState<ExamDetails | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewingFeedback, setViewingFeedback] = useState<any>(null);
+  const [viewingFeedback, setViewingFeedback] = useState<{ feedback: any; grade: Grade | null } | null>(null);
 
-      // --- Funciones para Cargar Datos (Versión Corregida) ---
-      const fetchData = useCallback(async () => {
-        if (isNaN(examId)) {
-          setLoading(false);
-          return;
-        }
-        // Limpiamos los estados para evitar "datos fantasma"
-        setExamDetails(null);
-        setSubmissions([]);
-        setLoading(true);
+  const fetchData = useCallback(async () => {
+    if (!examId) { setLoading(false); return; }
+    setExamDetails(null);
+    setSubmissions([]);
+    setLoading(true);
 
-        try {
-          const examPromise = supabase.from('exams').select('*').eq('id', examId).single();
-          const submissionsPromise = supabase.from('submissions').select('*').eq('exam_id', examId).order('created_at', { ascending: false });
+    try {
+      const examPromise = supabase.from('exams').select('*').eq('id', examId).single();
+      const submissionsPromise = supabase.from('submissions').select('*').eq('exam_id', examId).order('created_at', { ascending: false });
+      const [examResult, submissionsResult] = await Promise.all([examPromise, submissionsPromise]);
 
-          const [examResult, submissionsResult] = await Promise.all([examPromise, submissionsPromise]);
+      if (examResult.error) throw examResult.error;
+      setExamDetails(examResult.data);
 
-          if (examResult.error) throw examResult.error;
-          setExamDetails(examResult.data);
+      if (submissionsResult.error) throw submissionsResult.error;
+      setSubmissions(submissionsResult.data || []);
+    } catch (error) {
+      console.error("Error al cargar los datos de la página:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [examId]);
 
-          if (submissionsResult.error) throw submissionsResult.error;
-          setSubmissions(submissionsResult.data || []);
-        } catch (error) {
-          console.error("Error al cargar los datos de la página:", error);
-        } finally {
-          setLoading(false);
-        }
-      }, [examId]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-      useEffect(() => {
-        fetchData();
-      }, [fetchData]);
+  const onUploadSuccess = () => fetchData();
 
-    const onUploadSuccess = () => {
-      console.log("Upload exitoso, refrescando datos...");
-      fetchData(); // Llama a la función principal para recargar todo
-    };
+  const handleGrade = async (submissionId: string) => {
+    setSubmissions(prev => prev.map(sub => sub.id === submissionId ? { ...sub, status: 'processing' } : sub));
+    try {
+      const { data, error } = await supabase.functions.invoke('grade-submission', { body: { submissionId } });
+      if (error) throw error;
+      alert('¡Calificación completada!');
+      fetchData();
+    } catch (error) {
+      setSubmissions(prev => prev.map(sub => sub.id === submissionId ? { ...sub, status: 'pending' } : sub));
+      alert(`Error: ${(error as Error).message}`);
+    }
+  };
 
-    const handleGrade = async (submissionId: number) => {
-      // Actualizar el estado local para mostrar "processing"
-      setSubmissions(prev => 
-        prev.map(sub => 
-          sub.id === submissionId 
-            ? { ...sub, status: 'processing' } 
-            : sub
-        )
-      );
+  const handleViewFeedback = async (submission: Submission) => {
+    const { data: grade, error } = await supabase.from('grades').select('id').eq('submission_id', submission.id).single();
+    if (error) console.error("No se encontró la calificación correspondiente:", error);
+    setViewingFeedback({ feedback: submission.ai_feedback, grade: grade || null });
+  };
 
-      try {
-        // Llamar a la Edge Function de Supabase
-        const { data, error } = await supabase.functions.invoke('grade-submission', {
-          body: { submissionId }
-        });
-
-        if (error) throw error;
-
-        if (data.success) {
-          alert('¡Calificación completada!');
-          fetchData(); // Refrescar toda la lista con el nuevo estado "graded"
-        }
-      } catch (error) {
-        // Revertir el estado a "pending" en caso de error
-        setSubmissions(prev => 
-          prev.map(sub => 
-            sub.id === submissionId 
-              ? { ...sub, status: 'pending' } 
-              : sub
-          )
-        );
-        alert(`Error: ${(error as Error).message}`);
-      }
-    };
-  // --- Renderizado ---
   if (loading) return <div className="p-8 text-center">Cargando...</div>;
   if (!examDetails) return <div className="p-8 text-center">Examen no encontrado.</div>;
 
@@ -100,368 +76,242 @@ export default function ExamManagementPage() {
     <div className="neu-container min-h-screen p-8">
       <h1 className="text-4xl font-bold text-gray-700 mb-2">{examDetails.name}</h1>
       <p className="text-lg text-gray-600 mb-8">Gestión del Examen</p>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <SolutionUploader examDetails={examDetails} onUploadSuccess={onUploadSuccess} />
-        <SubmissionsManager submissions={submissions} examId={examId} classId={examDetails.class_id} onUploadSuccess={onUploadSuccess} onGrade={handleGrade} onViewFeedback={setViewingFeedback} />
+        <SubmissionsManager submissions={submissions} examId={examId} classId={examDetails.class_id} onUploadSuccess={onUploadSuccess} onGrade={handleGrade} onViewFeedback={handleViewFeedback} />
       </div>
-      {viewingFeedback && (
-        <FeedbackModal 
-          feedback={viewingFeedback.feedback}
-          viewingFeedback={viewingFeedback}
-          onClose={() => setViewingFeedback(null)} 
-        />
-      )}
+      {viewingFeedback && <FeedbackModal viewingFeedback={viewingFeedback} onClose={() => setViewingFeedback(null)} />}
     </div>
   );
 }
 
 // --- Componentes Hijos ---
 
-// Componente para subir el solucionario
 function SolutionUploader({ examDetails, onUploadSuccess }: { examDetails: ExamDetails; onUploadSuccess: () => void }) {
-    const [isModalOpen, setIsModalOpen] = useState(false);
-
-    return (
-        <div className="neu-card p-6">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-700">Material de Referencia</h2>
-                <button onClick={() => setIsModalOpen(true)} className="neu-button text-gray-700 font-semibold py-3 px-6">Añadir Solucionario</button>
-            </div>
-            {!examDetails.solution_file_url ? (
-                <div className="text-center text-gray-600 py-8">Aún no hay solucionario para este examen</div>
-            ) : (
-                <div className="neu-card p-4 flex justify-between items-center">
-                    <p>Archivo actual</p>
-                    <a href={examDetails.solution_file_url} target="_blank" rel="noopener noreferrer" className="neu-button text-gray-700 py-2 px-4 no-underline">Ver Solucionario</a>
-                </div>
-            )}
-            {isModalOpen && <CreateSolutionModal examId={examDetails.id} onUploadSuccess={() => { onUploadSuccess(); setIsModalOpen(false); }} onClose={() => setIsModalOpen(false)} />}
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  return (
+    <div className="neu-card p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-700">Material de Referencia</h2>
+        {!examDetails.solution_file_url && <button onClick={() => setIsModalOpen(true)} className="neu-button text-gray-700 font-semibold py-3 px-6">Añadir Solucionario</button>}
+      </div>
+      {!examDetails.solution_file_url ? (
+        <div className="text-center text-gray-600 py-8">Aún no hay solucionario para este examen</div>
+      ) : (
+        <div className="neu-card p-4 flex justify-between items-center shadow-inner">
+           <p className="font-semibold text-green-600">✅ Solucionario Subido</p>
+           <a href={examDetails.solution_file_url} target="_blank" rel="noopener noreferrer" className="neu-button text-gray-700 py-2 px-4 no-underline">Ver Solucionario</a>
         </div>
-    );
+      )}
+      {isModalOpen && <CreateSolutionModal examId={examDetails.id} onUploadSuccess={onUploadSuccess} onClose={() => setIsModalOpen(false)} />}
+    </div>
+  );
 }
 
-// Componente para gestionar las entregas
-function SubmissionsManager({ submissions, examId, classId, onUploadSuccess, onGrade, onViewFeedback }: { submissions: Submission[]; examId: number; classId: number; onUploadSuccess: () => void; onGrade: (submissionId: number) => Promise<void>; onViewFeedback: (feedback: any) => void }) {
-    const [isModalOpen, setIsModalOpen] = useState(false);
-
-    return (
-        <div className="neu-card p-6">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-700">Entregas de Alumnos</h2>
-                <button onClick={() => setIsModalOpen(true)} className="neu-button text-gray-700 font-semibold py-3 px-6">Añadir Entregas</button>
+function SubmissionsManager({ submissions, onUploadSuccess, onGrade, onViewFeedback, examId, classId }: { submissions: Submission[]; onUploadSuccess: () => void; onGrade: (id: string) => void; onViewFeedback: (submission: Submission) => void; examId: string; classId: string; }) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  return (
+    <div className="neu-card p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-700">Entregas de Alumnos</h2>
+        <button onClick={() => setIsModalOpen(true)} className="neu-button text-gray-700 font-semibold py-3 px-6">Añadir Entregas</button>
+      </div>
+      {submissions.length === 0 ? (
+        <div className="text-center text-gray-600 py-8">Aún no hay entregas para este examen</div>
+      ) : (
+        <div className="space-y-3">
+          {submissions.map(sub => (
+            <div key={sub.id} className="bg-gray-200/80 rounded-lg p-4 flex justify-between items-center">
+              <p>{sub.student_name}</p>
+              <button 
+                onClick={() => sub.status === 'graded' ? onViewFeedback(sub) : onGrade(sub.id)} 
+                disabled={sub.status === 'processing'}
+                className="neu-button text-gray-700 py-2 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {sub.status === 'processing' ? 'Procesando...' : sub.status === 'graded' ? 'Ver Resultado' : 'Calificar'}
+              </button>
             </div>
-            {submissions.length === 0 ? (
-                <div className="text-center text-gray-600 py-8">Aún no hay entregas para este examen</div>
-            ) : (
-                <div className="space-y-3">
-                    {submissions.map(sub => (
-                        <div key={sub.id} className="bg-gray-200/80 rounded-lg p-4 flex justify-between items-center">
-                            <p>{sub.student_name}</p>
-                            <button 
-                                onClick={() => sub.status === 'graded' ? onViewFeedback({ feedback: sub.ai_feedback, submissionId: sub.id }) : onGrade(sub.id)} 
-                                disabled={sub.status === 'processing'}
-                                className="neu-button text-gray-700 py-2 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {sub.status === 'processing' ? 'Procesando...' : sub.status === 'graded' ? 'Ver Resultado' : 'Calificar'}
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
-            {isModalOpen && (
-                <CreateSubmissionModal 
-                    onClose={() => setIsModalOpen(false)}
-                    examId={examId} 
-                    onUploadSuccess={onUploadSuccess}
-                    classId={classId} 
-                />
-            )}
+          ))}
         </div>
-    );
+      )}
+      {isModalOpen && <CreateSubmissionModal onClose={() => setIsModalOpen(false)} examId={examId} onUploadSuccess={onUploadSuccess} classId={classId} />}
+    </div>
+  );
 }
 
-// Componente Modal para subir entregas
-function CreateSubmissionModal({ onClose, examId, onUploadSuccess, classId }: {
-    onClose: () => void;
-    examId: number;
-    onUploadSuccess: () => void;
-    classId: number;
-}) {
-    const [files, setFiles] = useState<FileWithPath[]>([]);
-    const [isUploading, setIsUploading] = useState(false);
-    const [students, setStudents] = useState<Student[]>([]);
-    const [fileStudentMap, setFileStudentMap] = useState<Record<string, number>>({});
-    
-    // Función helper para generar clave única del archivo
-    const getFileKey = (file: FileWithPath) => `${file.name}__${file.lastModified}__${file.size}`;
+function CreateSubmissionModal({ onClose, examId, onUploadSuccess, classId }: { onClose: () => void; examId: string; onUploadSuccess: () => void; classId: string; }) {
+  const [filesWithStudents, setFilesWithStudents] = useState<{ file: FileWithPath; studentId: string | null }[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [students, setStudents] = useState<Student[]>([]);
 
-    // Función para cargar estudiantes de la clase
-    const fetchStudents = useCallback(async () => {
-        try {
-            const { data, error } = await supabase
-                .from('students')
-                .select('*')
-                .eq('class_id', classId)
-                .order('full_name');
-            
-            if (error) throw error;
-            setStudents(data || []);
-        } catch (error) {
-            console.error('Error al cargar estudiantes:', error);
-        }
-    }, [classId]);
-
-    useEffect(() => {
-        fetchStudents();
-    }, [fetchStudents]);
-
-    const onDrop = useCallback((acceptedFiles: FileWithPath[]) => {
-        setFiles(prev => {
-            const newFiles = [...prev, ...acceptedFiles];
-            // Inicializar el mapa de archivos-estudiantes para los nuevos archivos
-            const newMap = { ...fileStudentMap };
-            acceptedFiles.forEach(file => {
-                const fileKey = getFileKey(file);
-                if (!newMap[fileKey]) {
-                    newMap[fileKey] = 0; // 0 significa sin seleccionar
-                }
-            });
-            setFileStudentMap(newMap);
-            return newFiles;
-        });
-    }, [fileStudentMap]);
-
-    const { getRootProps, getInputProps } = useDropzone({ onDrop, multiple: true });
-
-    const handleUpload = async () => {
-        console.log('Iniciando subida de entregas...');
-        if (files.length === 0) return;
-        
-        // Verificar que todos los archivos tengan un estudiante asignado
-        const unassignedFiles = files.filter(file => {
-            const fileKey = getFileKey(file);
-            return !fileStudentMap[fileKey] || fileStudentMap[fileKey] === 0;
-        });
-        if (unassignedFiles.length > 0) {
-            alert(`Por favor asigna un estudiante a los siguientes archivos: ${unassignedFiles.map(f => f.name).join(', ')}`);
-            return;
-        }
-        
-        setIsUploading(true);
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Usuario no autenticado.');
-            console.log('Obtenido usuario:', user.id);
-
-            for (const file of files) {
-                const fileKey = getFileKey(file);
-                const studentId = fileStudentMap[fileKey];
-                const selectedStudent = students.find(s => s.id === studentId);
-                
-                if (!selectedStudent) {
-                    throw new Error(`Estudiante no encontrado para el archivo ${file.name}`);
-                }
-                
-                const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-                const filePath = `${user.id}/submissions/${examId}-${Date.now()}-${sanitizedFileName}`;
-                const { data, error } = await supabase.storage.from('exam_files').upload(filePath, file);
-                if (error) throw error;
-                console.log('Archivo subido a Storage:', data.path);
-
-                const { data: { publicUrl } } = supabase.storage.from('exam_files').getPublicUrl(data.path);
-                console.log('URL pública obtenida:', publicUrl);
-                const newSubmission = { 
-                    exam_id: examId,
-                    submission_file_url: publicUrl, 
-                    student_id: studentId,
-                    student_name: selectedStudent.full_name,
-                    user_id: user.id
-                };
-                const { error: insertError } = await supabase.from('submissions').insert([newSubmission]).select();
-                if (insertError) throw insertError;
-                console.log('Registro insertado en DB para:', file.name, 'Estudiante:', selectedStudent.full_name);
-            }
-            alert('Entregas subidas exitosamente!');
-            console.log('Subida completada, llamando a refresco...');
-        } catch (error) {
-            alert(`Error: ${(error as Error).message}`);
-        } finally {
-            setIsUploading(false);
-            setFiles([]);
-            setFileStudentMap({});
-            onClose();
-            onUploadSuccess();
-        }
+  useEffect(() => {
+    const fetchStudents = async () => {
+      const { data, error } = await supabase.from('students').select('*').eq('class_id', classId).order('full_name');
+      if (error) console.error('Error al cargar estudiantes:', error);
+      else setStudents(data || []);
     };
+    fetchStudents();
+  }, [classId]);
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-            <div className="relative neu-card p-8 max-w-2xl w-full mx-4">
-                <h2 className="text-center font-bold text-2xl mb-6 text-slate-800">Subir Entregas</h2>
-                <div {...getRootProps()} className="mb-6 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center">
-                    <input {...getInputProps()} />
-                    <p className="text-slate-700">Arrastra los archivos aquí, o haz clic para seleccionarlos.</p>
-                </div>
-                {files.length > 0 && (
-                    <div className="mb-6 space-y-3">
-                        <h3 className="font-semibold text-slate-800 mb-3">Archivos seleccionados:</h3>
-                        {files.map((file, i) => {
-                            const fileKey = getFileKey(file);
-                            return (
-                                <div key={fileKey} className="flex items-center justify-between p-3 neu-card bg-gray-50">
-                                    <span className="text-sm text-slate-800 flex-1">{file.name}</span>
-                                    <select
-                                        value={fileStudentMap[fileKey] || 0}
-                                        onChange={(e) => setFileStudentMap(prev => ({
-                                            ...prev,
-                                            [fileKey]: parseInt(e.target.value)
-                                        }))}
-                                        className="ml-3 neu-input px-3 py-2 text-sm min-w-[200px]"
-                                    >
-                                        <option value={0}>Seleccionar estudiante</option>
-                                        {students.map(student => (
-                                            <option key={student.id} value={student.id}>
-                                                {student.full_name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <button
-                                        onClick={() => {
-                                            setFiles(prev => prev.filter((_, index) => index !== i));
-                                            setFileStudentMap(prev => {
-                                                const newMap = { ...prev };
-                                                delete newMap[fileKey];
-                                                return newMap;
-                                            });
-                                        }}
-                                        className="ml-2 p-1 text-red-600 hover:text-red-800 text-sm"
-                                        title="Eliminar archivo"
-                                    >
-                                        ✕
-                                    </button>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-                <div className="flex space-x-4">
-                    <button onClick={onClose} className="flex-1 neu-button py-3 text-slate-700 font-medium">Cancelar</button>
-                    <button onClick={handleUpload} disabled={isUploading || files.length === 0} className="flex-1 neu-button py-3 disabled:opacity-50 text-slate-700 font-medium">
-                        {isUploading ? 'Subiendo...' : `Subir ${files.length} Archivos`}
-                    </button>
-                </div>
-            </div>
+  const onDrop = useCallback((acceptedFiles: FileWithPath[]) => {
+    const newFiles = acceptedFiles.map(file => ({ file, studentId: null }));
+    setFilesWithStudents(prev => [...prev, ...newFiles]);
+  }, []);
+
+  const { getRootProps, getInputProps } = useDropzone({ onDrop, multiple: true, accept: { 'application/pdf': ['.pdf'] } });
+
+  const handleStudentSelect = (fileIndex: number, studentId: string) => {
+    setFilesWithStudents(prev => prev.map((item, index) => index === fileIndex ? { ...item, studentId } : item));
+  };
+
+  const handleUpload = async () => {
+    const filesToUpload = filesWithStudents.filter(f => f.studentId);
+    if (filesToUpload.length !== filesWithStudents.length) {
+      alert('Por favor, asigna un estudiante a cada archivo.');
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuario no autenticado.');
+
+      for (const item of filesToUpload) {
+        const { file, studentId } = item;
+        const selectedStudent = students.find(s => s.id === studentId);
+        if (!file || !studentId || !selectedStudent) continue;
+
+        const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const filePath = `${user.id}/submissions/${examId}-${Date.now()}-${sanitizedFileName}`;
+
+        const { error: uploadError } = await supabase.storage.from('exam_files').upload(filePath, file);
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage.from('exam_files').getPublicUrl(filePath);
+        const publicUrl = urlData.publicUrl;
+
+        await supabase.from('submissions').insert({
+          exam_id: examId,
+          submission_file_url: publicUrl,
+          student_id: studentId,
+          student_name: selectedStudent.full_name,
+          user_id: user.id
+        });
+      }
+      alert('Entregas subidas exitosamente!');
+      onClose();
+      onUploadSuccess();
+    } catch (error) {
+      alert(`Error: ${(error as Error).message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative neu-card p-8 max-w-2xl w-full mx-4">
+        <h2 className="text-center font-bold text-2xl mb-6 text-slate-800">Subir Entregas</h2>
+        <div {...getRootProps()} className="mb-6 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center">
+          <input {...getInputProps()} />
+          <p className="text-slate-700">Arrastra los archivos aquí, o haz clic para seleccionarlos.</p>
         </div>
-    );
+        {filesWithStudents.length > 0 && (
+          <div className="mb-6 space-y-3">
+            <h3 className="font-semibold text-slate-800 mb-3">Archivos seleccionados:</h3>
+            {filesWithStudents.map((item, index) => (
+              <div key={`${item.file.name}-${index}`} className="flex items-center justify-between p-3 neu-card bg-gray-50">
+                <span className="text-sm text-slate-800 flex-1">{item.file.name}</span>
+                <select value={item.studentId || ''} onChange={(e) => handleStudentSelect(index, e.target.value)} className="ml-3 neu-input px-3 py-2 text-sm min-w-[200px]">
+                  <option value="">Seleccionar estudiante</option>
+                  {students.map(student => ( <option key={student.id} value={student.id}>{student.full_name}</option> ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex space-x-4">
+          <button onClick={onClose} className="flex-1 neu-button py-3 text-slate-700 font-medium">Cancelar</button>
+          <button onClick={handleUpload} disabled={isUploading || filesWithStudents.length === 0} className="flex-1 neu-button py-3 disabled:opacity-50 text-slate-700 font-medium">
+            {isUploading ? 'Subiendo...' : `Subir ${filesWithStudents.length} Archivos`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-// Modal para subir solucionario
-function CreateSolutionModal({ examId, onUploadSuccess, onClose }: { examId: number; onUploadSuccess: () => void; onClose: () => void }) {
-    const [file, setFile] = useState<File | null>(null);
-    const [isUploading, setIsUploading] = useState(false);
+function CreateSolutionModal({ examId, onUploadSuccess, onClose }: { examId: string; onUploadSuccess: () => void; onClose: () => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const { getRootProps, getInputProps } = useDropzone({ onDrop: (files) => setFile(files[0] || null), multiple: false });
 
-    const onDrop = useCallback((acceptedFiles: File[]) => {
-        setFile(acceptedFiles[0] || null);
-    }, []);
+  const handleUpload = async () => {
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuario no autenticado.');
 
-    const { getRootProps, getInputProps } = useDropzone({ onDrop, multiple: false });
+      const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const filePath = `${user.id}/solutions/${examId}-${Date.now()}-${sanitizedFileName}`;
 
-    const handleUpload = async () => {
-        console.log('Iniciando subida de solucionario...');
-        if (!file) return;
-        setIsUploading(true);
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Usuario no autenticado.');
-            console.log('Obtenido usuario:', user.id);
+      const { error: uploadError } = await supabase.storage.from('exam_files').upload(filePath, file);
+      if (uploadError) throw uploadError;
 
-            const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-            const filePath = `${user.id}/solutions/${examId}-${Date.now()}-${sanitizedFileName}`;
-            const { data, error } = await supabase.storage.from('exam_files').upload(filePath, file);
-            if (error) throw error;
-            console.log('Archivo subido a Storage:', data.path);
+      const { data: urlData } = supabase.storage.from('exam_files').getPublicUrl(filePath);
+      const publicUrl = urlData.publicUrl;
 
-            const { data: { publicUrl } } = supabase.storage.from('exam_files').getPublicUrl(data.path);
-            console.log('URL pública obtenida:', publicUrl);
-            
-            const { error: updateError } = await supabase.from('exams').update({ solution_file_url: publicUrl }).eq('id', examId);
-            if (updateError) throw updateError;
-            console.log('Registro actualizado en DB para examen:', examId);
+      const { error: updateError } = await supabase.from('exams').update({ solution_file_url: publicUrl }).eq('id', examId);
+      if (updateError) throw updateError;
 
-            alert('Solucionario subido con éxito!');
-            console.log('Subida completada, llamando a refresco...');
-        } catch (error) {
-            console.error('Error en subida de solucionario:', error);
-            alert(`Error: ${(error as Error).message}`);
-        } finally {
-            setIsUploading(false);
-            setFile(null);
-            onClose();
-            onUploadSuccess();
-        }
-    };
+      alert('Solucionario subido con éxito!');
+      onUploadSuccess();
+    } catch (error) {
+      console.error('Error en subida de solucionario:', error);
+      alert(`Error: ${(error as Error).message}`);
+    } finally {
+      setIsUploading(false);
+      onClose();
+    }
+  };
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-            <div className="relative neu-card p-8 max-w-2xl w-full mx-4">
-                <h2 className="text-center font-bold text-2xl mb-6 text-slate-800">Subir Solucionario</h2>
-                <div {...getRootProps()} className="mb-6 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center">
-                    <input {...getInputProps()} />
-                    <p className="text-slate-700">Arrastra el solucionario aquí, o haz clic para seleccionarlo.</p>
-                </div>
-                {file && (
-                    <div className="mb-6">
-                        <p className="text-sm text-slate-800">{file.name}</p>
-                    </div>
-                )}
-                <div className="flex space-x-4">
-                    <button onClick={onClose} className="flex-1 neu-button py-3 text-slate-700 font-medium">Cancelar</button>
-                    <button onClick={handleUpload} disabled={isUploading || !file} className="flex-1 neu-button py-3 disabled:opacity-50 text-slate-700 font-medium">
-                        {isUploading ? 'Subiendo...' : 'Subir Solucionario'}
-                    </button>
-                </div>
-            </div>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative neu-card p-8 max-w-2xl w-full mx-4">
+        <h2 className="text-center font-bold text-2xl mb-6 text-slate-800">Subir Solucionario</h2>
+        <div {...getRootProps()} className="mb-6 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center">
+          <input {...getInputProps()} />
+          <p className="text-slate-700">Arrastra el solucionario aquí, o haz clic para seleccionarlo.</p>
         </div>
-    );
+        {file && (<div className="mb-6"><p className="text-sm text-slate-800">{file.name}</p></div>)}
+        <div className="flex space-x-4">
+          <button onClick={onClose} className="flex-1 neu-button py-3 text-slate-700 font-medium">Cancelar</button>
+          <button onClick={handleUpload} disabled={isUploading || !file} className="flex-1 neu-button py-3 disabled:opacity-50 text-slate-700 font-medium">
+            {isUploading ? 'Subiendo...' : 'Subir Solucionario'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-// Componente Modal para mostrar el feedback de IA
-function FeedbackModal({ feedback, viewingFeedback, onClose }: { feedback: any; viewingFeedback: any; onClose: () => void }) {
+function FeedbackModal({ viewingFeedback, onClose }: { viewingFeedback: { feedback: any; grade: Grade | null }; onClose: () => void }) {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const handleSendEmail = async () => {
+    if (!viewingFeedback.grade) {
+      alert("No se puede enviar el correo, no se encontró el ID de la calificación.");
+      return;
+    }
     setIsSendingEmail(true);
     try {
-      // Obtener el token de acceso del usuario actual
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        throw new Error('No se pudo obtener el token de autenticación');
-      }
-
-      const response = await fetch('/api/send-results-email', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ gradeId: viewingFeedback.submissionId })
+      const { error } = await supabase.functions.invoke('send-results-email', {
+        body: { gradeId: viewingFeedback.grade.id }
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Error ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.success) {
-        alert(`¡Correo enviado con éxito! (${data.emailsSent} destinatarios)`);
-      } else {
-        throw new Error(data.error || 'Error desconocido al enviar el correo');
-      }
+      if (error) throw error;
+      alert(`¡Correo enviado con éxito!`);
     } catch (error) {
       console.error('Error al enviar correo:', error);
       alert(`Error al enviar correo: ${(error as Error).message}`);
@@ -469,133 +319,54 @@ function FeedbackModal({ feedback, viewingFeedback, onClose }: { feedback: any; 
       setIsSendingEmail(false);
     }
   };
-  // Parsear el feedback si es un string JSON (común en DBs)
-  let parsedFeedback = feedback;
-  if (typeof feedback === 'string') {
-    try {
-      parsedFeedback = JSON.parse(feedback);
-    } catch (e) {
-      console.warn('No se pudo parsear el feedback JSON:', e);
-      parsedFeedback = {};
-    }
-  }
-  
-  const feedbackData = parsedFeedback?.informe_evaluacion || parsedFeedback;
-  const resumen = feedbackData?.resumen_general || {};
-  const evaluaciones = feedbackData?.evaluacion_detallada || [];
-  const metadatos = feedbackData?.metadatos || {};
+
+  const feedbackData = viewingFeedback.feedback?.informe_evaluacion || viewingFeedback.feedback || {};
+  const resumen = feedbackData.resumen_general || {};
+  const evaluaciones = feedbackData.evaluacion_detallada || [];
+  const metadatos = feedbackData.metadatos || {};
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative neu-card p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold text-slate-800 mb-2">📊 Reporte de Calificación</h2>
-          {metadatos.nombre_alumno && (
-            <p className="text-lg text-slate-600">Estudiante: {metadatos.nombre_alumno}</p>
-          )}
+          {metadatos.nombre_alumno && (<p className="text-lg text-slate-600">Estudiante: {metadatos.nombre_alumno}</p>)}
         </div>
-
-        {/* Resumen General */}
         <div className="neu-card p-6 mb-6">
           <h3 className="text-xl font-bold text-slate-700 mb-4">📈 Resumen General</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="neu-card p-4">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-blue-600 mb-1">
-                  {resumen.puntuacion_total_obtenida || 0}/{resumen.puntuacion_total_posible || 100}
-                </div>
-                <p className="text-slate-600">Puntuación Total</p>
-              </div>
-            </div>
-            <div className="neu-card p-4">
-              <div className="flex justify-around text-center">
-                <div>
-                  <div className="text-lg font-bold text-green-600">✅ {resumen.preguntas_correctas || 0}</div>
-                  <p className="text-xs text-slate-600">Correctas</p>
-                </div>
-                <div>
-                  <div className="text-lg font-bold text-yellow-600">⚠️ {resumen.preguntas_parciales || 0}</div>
-                  <p className="text-xs text-slate-600">Parciales</p>
-                </div>
-                <div>
-                  <div className="text-lg font-bold text-red-600">❌ {resumen.preguntas_incorrectas || 0}</div>
-                  <p className="text-xs text-slate-600">Incorrectas</p>
-                </div>
-              </div>
-            </div>
+            <div className="neu-card p-4"><div className="text-center"><div className="text-3xl font-bold text-blue-600 mb-1">{resumen.puntuacion_total_obtenida || 0}/{resumen.puntuacion_total_posible || 100}</div><p className="text-slate-600">Puntuación Total</p></div></div>
+            <div className="neu-card p-4"><div className="flex justify-around text-center"><div><div className="text-lg font-bold text-green-600">✅ {resumen.preguntas_correctas || 0}</div><p className="text-xs text-slate-600">Correctas</p></div><div><div className="text-lg font-bold text-yellow-600">⚠️ {resumen.preguntas_parciales || 0}</div><p className="text-xs text-slate-600">Parciales</p></div><div><div className="text-lg font-bold text-red-600">❌ {resumen.preguntas_incorrectas || 0}</div><p className="text-xs text-slate-600">Incorrectas</p></div></div></div>
           </div>
         </div>
-
-        {/* Evaluación Detallada */}
         <div className="space-y-4 mb-6">
           <h3 className="text-xl font-bold text-slate-700">📝 Evaluación Detallada</h3>
           {evaluaciones.map((pregunta: any, index: number) => (
             <div key={index} className="neu-card p-5">
               <div className="flex justify-between items-start mb-3">
                 <div>
-                  <h4 className="font-bold text-slate-800">
-                    {pregunta.evaluacion === 'CORRECTO' && '✅'}
-                    {pregunta.evaluacion === 'PARCIALMENTE_CORRECTO' && '⚠️'}
-                    {pregunta.evaluacion === 'INCORRECTO' && '❌'}
-                    {' '}{pregunta.pregunta_id || `Pregunta ${index + 1}`}
-                  </h4>
+                  <h4 className="font-bold text-slate-800">{pregunta.evaluacion === 'CORRECTO' && '✅'}{pregunta.evaluacion === 'PARCIALMENTE_CORRECTO' && '⚠️'}{pregunta.evaluacion === 'INCORRECTO' && '❌'}{' '}{pregunta.pregunta_id || `Pregunta ${index + 1}`}</h4>
                   <p className="text-sm text-slate-600">{pregunta.tema}</p>
                 </div>
-                <div className="text-right">
-                  <div className="font-bold text-slate-700">
-                    {pregunta.puntuacion_obtenida}/{pregunta.puntuacion_posible}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {pregunta.evaluacion}
-                  </div>
-                </div>
+                <div className="text-right"><div className="font-bold text-slate-700">{pregunta.puntuacion_obtenida}/{pregunta.puntuacion_posible}</div><div className="text-xs text-slate-500">{pregunta.evaluacion}</div></div>
               </div>
-              
               {pregunta.feedback && (
                 <div className="space-y-2">
-                  {pregunta.feedback.refuerzo_positivo && (
-                    <div className="bg-green-50 border-l-4 border-green-400 p-3 rounded">
-                      <p className="text-green-700 text-sm">💚 {pregunta.feedback.refuerzo_positivo}</p>
-                    </div>
-                  )}
-                  {pregunta.feedback.area_de_mejora && (
-                    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
-                      <p className="text-yellow-700 text-sm">💡 <strong>Área de mejora:</strong> {pregunta.feedback.area_de_mejora}</p>
-                    </div>
-                  )}
-                  {pregunta.feedback.explicacion_del_error && (
-                    <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
-                      <p className="text-red-700 text-sm">🔍 <strong>Explicación:</strong> {pregunta.feedback.explicacion_del_error}</p>
-                    </div>
-                  )}
-                  {pregunta.feedback.sugerencia_de_estudio && (
-                    <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
-                      <p className="text-blue-700 text-sm">📚 <strong>Sugerencia:</strong> {pregunta.feedback.sugerencia_de_estudio}</p>
-                    </div>
-                  )}
+                  {pregunta.feedback.refuerzo_positivo && (<div className="bg-green-50 border-l-4 border-green-400 p-3 rounded"><p className="text-green-700 text-sm">💚 {pregunta.feedback.refuerzo_positivo}</p></div>)}
+                  {pregunta.feedback.area_de_mejora && (<div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded"><p className="text-yellow-700 text-sm">💡 <strong>Área de mejora:</strong> {pregunta.feedback.area_de_mejora}</p></div>)}
+                  {pregunta.feedback.explicacion_del_error && (<div className="bg-red-50 border-l-4 border-red-400 p-3 rounded"><p className="text-red-700 text-sm">🔍 <strong>Explicación:</strong> {pregunta.feedback.explicacion_del_error}</p></div>)}
+                  {pregunta.feedback.sugerencia_de_estudio && (<div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded"><p className="text-blue-700 text-sm">📚 <strong>Sugerencia:</strong> {pregunta.feedback.sugerencia_de_estudio}</p></div>)}
                 </div>
               )}
             </div>
           ))}
         </div>
-
-        {/* Botones de Acción */}
         <div className="flex justify-center space-x-4">
-          <button 
-            onClick={handleSendEmail}
-            disabled={isSendingEmail}
-            className="neu-button text-slate-700 font-semibold py-3 px-8 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          <button onClick={handleSendEmail} disabled={isSendingEmail} className="neu-button text-slate-700 font-semibold py-3 px-8 disabled:opacity-50 disabled:cursor-not-allowed">
             {isSendingEmail ? 'Enviando...' : '📧 Enviar por Correo'}
           </button>
-          <button 
-            onClick={onClose}
-            className="neu-button text-slate-700 font-semibold py-3 px-8"
-          >
-            Cerrar Reporte
-          </button>
+          <button onClick={onClose} className="neu-button text-slate-700 font-semibold py-3 px-8">Cerrar Reporte</button>
         </div>
       </div>
     </div>
