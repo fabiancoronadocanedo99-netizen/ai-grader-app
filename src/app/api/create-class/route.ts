@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { Pool } from 'pg';
+
+// Crear pool de conexiones PostgreSQL usando variables de entorno
+const pool = new Pool({
+  host: process.env.PGHOST,
+  port: parseInt(process.env.PGPORT || '5432'),
+  database: process.env.PGDATABASE,
+  user: process.env.PGUSER,
+  password: process.env.PGPASSWORD,
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,7 +27,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Crear cliente de Supabase con el token del usuario
+    // Crear cliente de Supabase solo para verificar el usuario
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -56,50 +66,38 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Usuario autenticado:', user.id);
 
-    // Paso 1: Asegurar que existe el perfil del usuario usando RPC
-    console.log('📝 Verificando/creando perfil de usuario...');
-    const { data: profileResult, error: profileError } = await supabase
-      .rpc('ensure_user_profile', {
-        p_user_id: user.id,
-        p_full_name: user.email || 'Usuario'
-      });
+    // Usar conexión directa a PostgreSQL para evitar problemas de cache
+    const client = await pool.connect();
     
-    if (profileError) {
-      console.error('❌ Error asegurando perfil:', profileError);
-      return NextResponse.json(
-        { error: 'Error al crear perfil: ' + profileError.message }, 
-        { status: 500 }
-      );
-    }
+    try {
+      // Paso 1: Asegurar que existe el perfil del usuario
+      console.log('📝 Verificando/creando perfil de usuario...');
+      await client.query(`
+        INSERT INTO profiles (id, full_name, profile_completed, created_at, updated_at)
+        VALUES ($1, $2, false, NOW(), NOW())
+        ON CONFLICT (id) DO NOTHING
+      `, [user.id, user.email || 'Usuario']);
 
-    console.log('✅ Perfil asegurado:', profileResult);
+      // Paso 2: Crear la clase directamente
+      console.log('🏫 Creando clase...');
+      const classResult = await client.query(`
+        INSERT INTO classes (id, name, teacher_id, created_at, updated_at)
+        VALUES (gen_random_uuid(), $1, $2, NOW(), NOW())
+        RETURNING id, name, teacher_id, created_at
+      `, [className.trim(), user.id]);
 
-    // Paso 2: Crear la clase usando RPC que evita el cache del esquema
-    console.log('🏫 Creando clase con RPC...');
-    const { data: newClass, error: classError } = await supabase
-      .rpc('create_class_for_user', {
-        class_name: className.trim(),
-        user_id: user.id
+      const newClass = classResult.rows[0];
+
+      console.log('✅ Clase creada exitosamente:', newClass);
+      return NextResponse.json({
+        success: true,
+        message: 'Clase creada exitosamente',
+        class: newClass
       });
 
-    if (classError) {
-      console.error('❌ Error creando clase con RPC:', classError);
-      return NextResponse.json(
-        { 
-          error: 'Error al crear la clase: ' + classError.message,
-          code: classError.code,
-          details: classError.details
-        }, 
-        { status: 500 }
-      );
+    } finally {
+      client.release();
     }
-
-    console.log('✅ Clase creada exitosamente con RPC:', newClass);
-    return NextResponse.json({
-      success: true,
-      message: 'Clase creada exitosamente',
-      class: newClass
-    });
 
   } catch (error) {
     console.error('❌ Error fatal creando clase:', error);

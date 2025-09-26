@@ -1,6 +1,7 @@
 modules = ["nodejs-20", "web", "postgresql-16"]
 [agent]
 expertMode = true
+integrations = ["javascript_database:1.0.0"]
 
 [nix]
 channel = "stable-25_05"
@@ -40,6 +41,10 @@ externalPort = 3000
 [[ports]]
 localPort = 34281
 externalPort = 3002
+
+[[ports]]
+localPort = 35013
+externalPort = 3003
 
 [[ports]]
 localPort = 37715
