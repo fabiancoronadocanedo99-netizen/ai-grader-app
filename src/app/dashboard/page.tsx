@@ -44,29 +44,24 @@ export default function DashboardPage() {
     }
 
     try {
-      // Intentar primero con filtro de user_id
-      const { data, error } = await supabase
-        .from('classes')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-      
-      if (error) {
-        // Si hay error de columna, usar fallback sin filtro (temporal)
-        console.warn('Error con user_id, usando fallback:', error.message)
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('classes')
-          .select('*')
-          .order('created_at', { ascending: false })
-        
-        if (fallbackError) {
-          console.error('Error al cargar las clases:', fallbackError.message)
-          alert(`Error al cargar las clases: ${fallbackError.message}`)
-        } else {
-          setClasses(fallbackData || [])
+      // El dashboard debe conectarse a la misma base de datos PostgreSQL
+      // Crear una API route para obtener clases ya que Supabase no está conectado a nuestra BD
+      const response = await fetch('/api/get-classes', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
         }
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al cargar las clases');
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        setClasses(result.classes || []);
       } else {
-        setClasses(data || [])
+        throw new Error(result.error || 'Error desconocido');
       }
     } catch (error) {
       console.error('Error inesperado al cargar las clases:', error)
