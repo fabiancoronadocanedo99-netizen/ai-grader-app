@@ -24,49 +24,42 @@ export default function CreateClassModal({ isOpen, onClose, onClassCreated }: Cr
     setIsSubmitting(true)
     
     try {
-      // Obtener el usuario actual
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        alert('Usuario no autenticado')
-        return
+      // Obtener el token de acceso del usuario actual
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        alert('No se pudo obtener el token de autenticación');
+        return;
       }
 
-      // Asegurar que existe el perfil del usuario (crear si no existe)
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({ 
-          id: user.id,
-          full_name: user.email || 'Usuario',
-          profile_completed: false
-        }, { 
-          onConflict: 'id',
-          ignoreDuplicates: true 
-        })
-      
-      if (profileError) {
-        alert(`Error al crear el perfil: ${profileError.message}`)
-        return
+      // Usar la API Route para crear la clase (evita problemas de cache del esquema)
+      const response = await fetch('/api/create-class', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ className: newClassName.trim() })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Error ${response.status}`);
       }
 
-      // Ahora crear la clase
-      const { error } = await supabase
-        .from('classes')
-        .insert([{ 
-          name: newClassName.trim(),
-          teacher_id: user.id
-        }])
-      
-      if (error) {
-        alert(`Error al crear la clase: ${error.message}`)
-      } else {
+      const data = await response.json();
+      if (data.success) {
         // Limpiar el formulario y cerrar el modal
         setNewClassName('')
         onClose()
         // Llamar a la función para actualizar la lista de clases
         onClassCreated()
+        alert('¡Clase creada exitosamente!')
+      } else {
+        throw new Error(data.error || 'Error desconocido al crear la clase');
       }
     } catch (error) {
-      alert(`Error inesperado: ${error}`)
+      alert(`Error al crear la clase: ${(error as Error).message}`)
     } finally {
       setIsSubmitting(false)
     }
