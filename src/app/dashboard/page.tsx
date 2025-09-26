@@ -44,24 +44,18 @@ export default function DashboardPage() {
     }
 
     try {
-      // El dashboard debe conectarse a la misma base de datos PostgreSQL
-      // Crear una API route para obtener clases ya que Supabase no está conectado a nuestra BD
-      const response = await fetch('/api/get-classes', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al cargar las clases');
-      }
-
-      const result = await response.json();
-      if (result.success) {
-        setClasses(result.classes || []);
+      // Usar Supabase directamente como backend principal
+      const { data, error } = await supabase
+        .from('classes')
+        .select('*')
+        .eq('teacher_id', user.id)
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('Error al cargar las clases:', error.message)
+        alert(`Error al cargar las clases: ${error.message}`)
       } else {
-        throw new Error(result.error || 'Error desconocido');
+        setClasses(data || [])
       }
     } catch (error) {
       console.error('Error inesperado al cargar las clases:', error)
@@ -101,7 +95,7 @@ export default function DashboardPage() {
         .from('classes')
         .delete()
         .eq('id', classToDelete.id)
-        // .eq('teacher_id', user.id)  // Temporalmente comentado por cache
+        .eq('teacher_id', user.id)
 
       if (error) {
         console.error('Error al eliminar la clase:', error.message)
@@ -133,7 +127,7 @@ export default function DashboardPage() {
         .from('classes')
         .update({ name: editingName.trim() })
         .eq('id', classToEdit.id)
-        // .eq('teacher_id', user.id)  // Temporalmente comentado por cache
+        .eq('teacher_id', user.id)
 
       if (error) {
         console.error('Error al editar la clase:', error.message)
