@@ -21,25 +21,29 @@ export default function OnboardingPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Usuario no autenticado.')
 
+      // --- CÓDIGO CORREGIDO ---
+      const profileData = {
+        id: user.id, // <-- LA CORRECCIÓN CLAVE: Incluir el ID del usuario
+        full_name: fullName,
+        subject: subject,
+        country: country,
+        institution: institution,
+        years_experience: parseInt(yearsExperience) || 0,
+        profile_completed: true
+      }
+
       const { error } = await supabase
         .from('profiles')
-        .upsert({
-          id: user.id, // Asegurar que usamos el ID del usuario autenticado
-          full_name: fullName,
-          subject: subject,
-          country: country,
-          institution: institution,
-          years_experience: parseInt(yearsExperience) || 0,
-          profile_completed: true
-        })
+        .upsert(profileData) // Usamos la variable con todos los datos
+      // --- FIN DE LA CORRECCIÓN ---
 
       if (error) throw error
 
-      // Redirigir al dashboard después del éxito
+      alert('¡Perfil guardado con éxito!'); // Feedback positivo para el usuario
       router.push('/dashboard')
     } catch (error) {
       console.error('Error al guardar el perfil:', error)
-      alert(`Error: ${(error as Error).message}`)
+      alert(`Error al guardar el perfil: ${(error as Error).message}`)
     } finally {
       setLoading(false)
     }

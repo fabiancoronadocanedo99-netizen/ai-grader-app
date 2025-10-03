@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import { useDropzone, FileWithPath } from 'react-dropzone'
 import { supabase } from '@/lib/supabaseClient'
 
-// --- Tipos de Datos ---
+// --- Tipos de Datos (CORREGIDOS) ---
 interface ExamDetails { id: string; name: string; class_id: string; solution_file_url?: string; }
 interface Submission { id: string; student_name: string; submission_file_url: string; status: string; grade?: number; feedback?: string; ai_feedback?: any; student_id?: string; }
 interface Student { id: string; full_name: string; student_email: string; tutor_email: string; }
@@ -15,6 +15,7 @@ interface Grade { id: string; submission_id: string; }
 export default function ExamManagementPage() {
   const params = useParams();
   const examId = params.examId as string;
+  const classId = params.classId as string; // Añadido para consistencia
 
   const [examDetails, setExamDetails] = useState<ExamDetails | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -64,8 +65,11 @@ export default function ExamManagementPage() {
   };
 
   const handleViewFeedback = async (submission: Submission) => {
-    const { data: grade, error } = await supabase.from('grades').select('id').eq('submission_id', submission.id).single();
-    if (error) console.error("No se encontró la calificación correspondiente:", error);
+    if (!submission.id) return;
+    const { data: grade, error } = await supabase.from('grades').select('id, submission_id').eq('submission_id', submission.id).single();
+    if (error) {
+      console.error("No se encontró la calificación correspondiente:", error);
+    }
     setViewingFeedback({ feedback: submission.ai_feedback, grade: grade || null });
   };
 
@@ -209,34 +213,34 @@ function CreateSubmissionModal({ onClose, examId, onUploadSuccess, classId }: { 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative neu-card p-8 max-w-2xl w-full mx-4">
-        <h2 className="text-center font-bold text-2xl mb-6 text-slate-800">Subir Entregas</h2>
-        <div {...getRootProps()} className="mb-6 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center">
-          <input {...getInputProps()} />
-          <p className="text-slate-700">Arrastra los archivos aquí, o haz clic para seleccionarlos.</p>
+        <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+        <div className="relative neu-card p-8 max-w-2xl w-full mx-4">
+            <h2 className="text-center font-bold text-2xl mb-6 text-slate-800">Subir Entregas</h2>
+            <div {...getRootProps()} className="mb-6 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center">
+                <input {...getInputProps()} />
+                <p className="text-slate-700">Arrastra los archivos aquí, o haz clic para seleccionarlos.</p>
+            </div>
+            {filesWithStudents.length > 0 && (
+                <div className="mb-6 space-y-3">
+                    <h3 className="font-semibold text-slate-800 mb-3">Archivos seleccionados:</h3>
+                    {filesWithStudents.map((item, index) => (
+                        <div key={`${item.file.name}-${index}`} className="flex items-center justify-between p-3 neu-card bg-gray-50">
+                            <span className="text-sm text-slate-800 flex-1">{item.file.name}</span>
+                            <select value={item.studentId || ''} onChange={(e) => handleStudentSelect(index, e.target.value)} className="ml-3 neu-input px-3 py-2 text-sm min-w-[200px]">
+                                <option value="">Seleccionar estudiante</option>
+                                {students.map(student => ( <option key={student.id} value={student.id}>{student.full_name}</option> ))}
+                            </select>
+                        </div>
+                    ))}
+                </div>
+            )}
+            <div className="flex space-x-4">
+                <button onClick={onClose} className="flex-1 neu-button py-3 text-slate-700 font-medium">Cancelar</button>
+                <button onClick={handleUpload} disabled={isUploading || filesWithStudents.length === 0} className="flex-1 neu-button py-3 disabled:opacity-50 text-slate-700 font-medium">
+                    {isUploading ? 'Subiendo...' : `Subir ${filesWithStudents.length} Archivos`}
+                </button>
+            </div>
         </div>
-        {filesWithStudents.length > 0 && (
-          <div className="mb-6 space-y-3">
-            <h3 className="font-semibold text-slate-800 mb-3">Archivos seleccionados:</h3>
-            {filesWithStudents.map((item, index) => (
-              <div key={`${item.file.name}-${index}`} className="flex items-center justify-between p-3 neu-card bg-gray-50">
-                <span className="text-sm text-slate-800 flex-1">{item.file.name}</span>
-                <select value={item.studentId || ''} onChange={(e) => handleStudentSelect(index, e.target.value)} className="ml-3 neu-input px-3 py-2 text-sm min-w-[200px]">
-                  <option value="">Seleccionar estudiante</option>
-                  {students.map(student => ( <option key={student.id} value={student.id}>{student.full_name}</option> ))}
-                </select>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex space-x-4">
-          <button onClick={onClose} className="flex-1 neu-button py-3 text-slate-700 font-medium">Cancelar</button>
-          <button onClick={handleUpload} disabled={isUploading || filesWithStudents.length === 0} className="flex-1 neu-button py-3 disabled:opacity-50 text-slate-700 font-medium">
-            {isUploading ? 'Subiendo...' : `Subir ${filesWithStudents.length} Archivos`}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
