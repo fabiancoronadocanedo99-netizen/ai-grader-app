@@ -9,24 +9,26 @@ export default function HomePage() {
   const supabase = createClientComponentClient()
 
   useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
-        // Si hay una sesión, redirige al dashboard
-        router.push('/dashboard')
+        // Si se detecta una sesión (incluso si llega un poco tarde), redirige al dashboard
+        router.push('/dashboard');
       } else {
-        // Si no hay sesión, redirige al login
-        router.push('/login')
+        // Si no hay sesión o el usuario cierra sesión, redirige al login
+        router.push('/login');
       }
-    }
+    });
 
-    checkSession()
-  }, [router, supabase])
+    // Limpiar el "oyente" cuando el componente se desmonte
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router, supabase]);
 
-  // Muestra un mensaje de "Cargando..." mientras se verifica la sesión
+  // Muestra un mensaje de "Cargando..." mientras se espera el evento
   return (
     <div className="flex h-screen items-center justify-center">
-      <p>Redirigiendo...</p>
+      <p>Verificando autenticación...</p>
     </div>
-  )
+  );
 }
