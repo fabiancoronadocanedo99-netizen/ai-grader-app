@@ -6,29 +6,34 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 export default function LoginPage() {
   const router = useRouter()
-  const supabase = createClientComponentClient()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(true) // Empezamos en estado de carga
 
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        // Si encontramos una sesión al cargar, nos vamos directo al dashboard
         router.push('/dashboard');
       } else {
-        // Si no, terminamos de cargar y mostramos la página de login
         setLoading(false);
       }
     };
-
     checkSession();
   }, [router, supabase]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) alert(error.message);
+    else router.push('/dashboard');
+  };
 
   const handleLoginWithGoogle = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${location.origin}/auth/callback`, // Esta parte es correcta y necesaria
+        redirectTo: `${location.origin}/auth/callback`,
       },
     });
   };
@@ -43,21 +48,48 @@ export default function LoginPage() {
         <h2 className="text-3xl font-bold text-gray-700 mb-8 text-center">
           Iniciar Sesión
         </h2>
-        {/* El formulario de email/pass lo quitamos por ahora para simplificar */}
+        <form onSubmit={handleLogin} className="space-y-6">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+            <input
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="neu-input w-full p-4"
+              placeholder="tu@email.com"
+            />
+          </div>
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">Contraseña</label>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="neu-input w-full p-4"
+              placeholder="••••••••"
+            />
+          </div>
+          <button
+            type="submit"
+            className="neu-button w-full text-gray-700 font-semibold py-4"
+          >
+            Iniciar Sesión
+          </button>
+        </form>
         <div className="relative my-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-400 opacity-30"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-4 bg-gray-100 text-gray-500">o</span>
-          </div>
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-300"></div></div>
+          <div className="relative flex justify-center text-sm"><span className="px-2 bg-gray-100 text-gray-500">o</span></div>
         </div>
         <button
           type="button"
           onClick={handleLoginWithGoogle}
-          className="neu-button-white w-full text-gray-700 font-semibold py-4 px-6 flex items-center justify-center space-x-3"
+          className="neu-button-white w-full text-gray-700 font-semibold py-4 flex items-center justify-center space-x-3"
         >
-          {/* SVG de Google */}
+          <svg className="w-5 h-5" viewBox="0 0 24 24">{/* SVG de Google */}</svg>
           <span>Continuar con Google</span>
         </button>
       </div>
