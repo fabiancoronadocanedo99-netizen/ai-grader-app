@@ -13,13 +13,13 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    
+
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password
-      })
-      
+      });
+
       if (error) {
         alert(`Error: ${error.message}`)
       } else {
@@ -33,17 +33,14 @@ export default function LoginPage() {
   }
 
   const handleLoginWithGoogle = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google'
-      })
-      
-      if (error) {
-        alert(`Error: ${error.message}`)
-      }
-    } catch (error) {
-      alert(`Error inesperado: ${(error as Error).message}`)
-    }
+    // --- CÓDIGO CORREGIDO ---
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${location.origin}/auth/callback`,
+      },
+    });
+    // --- FIN DE LA CORRECCIÓN ---
   }
 
   return (
@@ -52,7 +49,7 @@ export default function LoginPage() {
         <h2 className="text-3xl font-bold text-gray-700 mb-8 text-center">
           Iniciar Sesión
         </h2>
-        
+
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
@@ -68,7 +65,7 @@ export default function LoginPage() {
               placeholder="tu@email.com"
             />
           </div>
-          
+
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
               Contraseña
@@ -83,7 +80,7 @@ export default function LoginPage() {
               placeholder="••••••••"
             />
           </div>
-          
+
           <button
             type="submit"
             disabled={loading}
@@ -97,7 +94,7 @@ export default function LoginPage() {
               <div className="w-full border-t border-gray-400 opacity-30"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-4 neu-container text-gray-500">o</span>
+              <span className="px-4 bg-gray-100 text-gray-500">o</span>
             </div>
           </div>
 
