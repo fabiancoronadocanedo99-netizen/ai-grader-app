@@ -1,6 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr'
 
-// Crea un cliente de Supabase PARA EL NAVEGADOR (client-side)
+// Esta función es nuestra nueva "fábrica"
 export function createClient() {
   return createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
