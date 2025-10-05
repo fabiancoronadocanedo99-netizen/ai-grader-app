@@ -1,142 +1,76 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '../lib/supabaseClient'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
-interface CreateClassModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onClassCreated: () => void
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  onClassCreated: () => void;
 }
 
-export default function CreateClassModal({ isOpen, onClose, onClassCreated }: CreateClassModalProps) {
-  const [newClassName, setNewClassName] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
+export default function CreateClassModal({ isOpen, onClose, onClassCreated }: Props) {
+  const supabase = createClientComponentClient(); // <-- CORRECCIÓN
+  const [newClassName, setNewClassName] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleCreateClass = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!newClassName.trim()) {
-      alert('Por favor ingresa un nombre para la clase')
-      return
-    }
+    e.preventDefault();
+    if (!newClassName.trim()) return;
+    setLoading(true);
 
-    setIsSubmitting(true)
-    
     try {
-      // Obtener el usuario actual
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        alert('Usuario no autenticado')
-        return
-      }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuario no autenticado.");
 
-      // Asegurar que existe el perfil del usuario (crear si no existe)
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({ 
-          id: user.id,
-          full_name: user.email || 'Usuario',
-          profile_completed: false
-        }, { 
-          onConflict: 'id',
-          ignoreDuplicates: true 
-        })
-      
-      if (profileError) {
-        alert(`Error al crear el perfil: ${profileError.message}`)
-        return
-      }
+      const { error } = await supabase.from('classes').insert({
+        name: newClassName.trim(),
+        user_id: user.id
+      });
 
-      // Crear la clase directamente en Supabase
-      const { error } = await supabase
-        .from('classes')
-        .insert([{ 
-          name: newClassName.trim(),
-          user_id: user.id
-        }])
-      
-      if (error) {
-        alert(`Error al crear la clase: ${error.message}`)
-      } else {
-        // Limpiar el formulario y cerrar el modal
-        setNewClassName('')
-        onClose()
-        // Llamar a la función para actualizar la lista de clases
-        onClassCreated()
-      }
+      if (error) throw error;
+
+      alert('¡Clase creada con éxito!');
+      onClassCreated(); // Refresca la lista de clases en el dashboard
+      onClose(); // Cierra el modal
     } catch (error) {
-      alert(`Error inesperado: ${error}`)
+      alert(`Error al crear la clase: ${(error as Error).message}`);
     } finally {
-      setIsSubmitting(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const handleCancel = () => {
-    setNewClassName('')
-    onClose()
-  }
-
-  // Si el modal no está abierto, no renderizar nada
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Overlay semitransparente */}
-      <div 
-        className="absolute inset-0 bg-black/50"
-        onClick={handleCancel}
-      />
-      
-      {/* Modal con diseño Glassmórfico */}
-      <div className="relative neu-card p-8 max-w-md w-full mx-4">
-        {/* Título del modal */}
-        <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">
-          Crear Nueva Clase
-        </h2>
-        
-        {/* Formulario */}
-        <form onSubmit={handleCreateClass} className="space-y-6">
-          {/* Campo de nombre de la clase */}
-          <div>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="neu-card p-8 rounded-lg w-full max-w-md">
+        <h3 className="text-xl font-bold text-center mb-6">Crear Nueva Clase</h3>
+        <form onSubmit={handleCreateClass}>
+          <div className="mb-4">
             <label htmlFor="className" className="block text-sm font-medium text-gray-700 mb-2">
               Nombre de la Clase
             </label>
             <input
-              type="text"
               id="className"
+              type="text"
               value={newClassName}
               onChange={(e) => setNewClassName(e.target.value)}
-              required
-              className="neu-input w-full p-4 text-gray-700 placeholder-gray-500"
-              placeholder="Ej: Matemáticas 101"
-              disabled={isSubmitting}
+              className="neu-input w-full p-3"
+              placeholder="Ej: Salón 101"
+              autoFocus
             />
           </div>
-          
-          {/* Botones de acción */}
-          <div className="flex space-x-4">
-            {/* Botón Cancelar */}
-            <button
-              type="button"
-              onClick={handleCancel}
-              disabled={isSubmitting}
-              className="flex-1 neu-button text-gray-700 font-semibold py-3 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+          <div className="flex justify-end gap-4 mt-6">
+            <button type="button" onClick={onClose} className="neu-button px-4 py-2">
               Cancelar
             </button>
-            
-            {/* Botón Crear */}
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex-1 neu-button text-gray-700 font-semibold py-3 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? 'Creando...' : 'Crear'}
+            <button type="submit" disabled={loading} className="neu-button px-4 py-2 disabled:opacity-50">
+              {loading ? 'Creando...' : 'Crear'}
             </button>
           </div>
         </form>
       </div>
     </div>
-  )
+  );
 }
