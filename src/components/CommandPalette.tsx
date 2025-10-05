@@ -1,209 +1,81 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Command } from 'cmdk'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { Command } from 'cmdk'
 import { createClient } from '@/lib/supabaseClient'
-import * as VisuallyHidden from '@radix-ui/react-visually-hidden'
 
-interface Class {
-  id: number
-  name: string
-  subject?: string
-  grade_level?: string
-}
-
-interface Exam {
-  id: number
-  title: string
-  class_id: number
-}
+// ... (tus interfaces aquí)
 
 export default function CommandPalette() {
-  const supabase = createClient();
-  const [open, setOpen] = useState(false)
-  const [classes, setClasses] = useState<Class[]>([])
-  const [exams, setExams] = useState<Exam[]>([])
-  const [loading, setLoading] = useState(false)
-  const router = useRouter()
+  const supabase = createClient(); // <-- LA CORRECCIÓN
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [pages, setPages] = useState<any[]>([]); // Usa tipos más específicos si los tienes
 
-  // Atajo de teclado Cmd+K / Ctrl+K
+  // Lógica para abrir/cerrar con atajo de teclado
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
-        setOpen(true)
+        setOpen((open) => !open)
       }
     }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
+    document.addEventListener('keydown', down)
+    return () => document.removeEventListener('keydown', down)
   }, [])
 
-  // Cargar datos cuando se abre la paleta
+  // Lógica para cargar los datos
+  const fetchData = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const classesPromise = supabase.from('classes').select('id, name').eq('user_id', user.id);
+    const examsPromise = supabase.from('exams').select('id, name, class_id').eq('user_id', user.id);
+
+    const [classesResult, examsResult] = await Promise.all([classesPromise, examsPromise]);
+
+    const allPages = [
+      ...(classesResult.data || []).map(c => ({ ...c, type: 'Clase', url: `/dashboard/class/${c.id}` })),
+      ...(examsResult.data || []).map(e => ({ ...e, type: 'Examen', url: `/dashboard/class/${e.class_id}/exam/${e.id}` }))
+    ];
+    setPages(allPages);
+  }, [supabase]);
+
   useEffect(() => {
     if (open) {
-      loadData()
+      fetchData();
     }
-  }, [open])
+  }, [open, fetchData]);
 
-  const loadData = async () => {
-    setLoading(true)
-    try {
-      // Obtener usuario actual
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        console.error('Usuario no autenticado')
-        return
-      }
-
-      // Cargar clases
-      const { data: classesData, error: classesError } = await supabase
-        .from('classes')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (classesError) {
-        console.error('Error al cargar las clases:', classesError.message)
-      } else {
-        setClasses(classesData || [])
-      }
-
-      // Cargar exámenes
-      const { data: examsData, error: examsError } = await supabase
-        .from('exams')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (examsError) {
-        console.error('Error al cargar los exámenes:', examsError.message)
-      } else {
-        setExams(examsData || [])
-      }
-    } catch (error) {
-      console.error('Error inesperado al cargar datos:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleSelectClass = (classId: number) => {
-    router.push(`/dashboard/class/${classId}`)
+  const runCommand = (command: () => void) => {
     setOpen(false)
-  }
-
-  const handleSelectExam = (examId: number, classId: number) => {
-    router.push(`/dashboard/class/${classId}/exam/${examId}`)
-    setOpen(false)
+    command()
   }
 
   return (
-    <Command.Dialog 
-      open={open} 
-      onOpenChange={setOpen}
-      label="Búsqueda Universal - Buscar clases y exámenes"
-      className="fixed inset-0 z-50 flex items-start justify-center pt-20"
-    >
-      {/* Overlay semitransparente */}
-      <div className="fixed inset-0 bg-black/50" onClick={() => setOpen(false)} />
-      
-      {/* Modal con diseño Neumórfico */}
-      <div className="relative neu-card w-full max-w-lg mx-4 overflow-hidden">
-        {/* Título oculto para accesibilidad */}
-        <VisuallyHidden.Root>
-          <h2>Búsqueda Universal - Buscar clases y exámenes</h2>
-        </VisuallyHidden.Root>
-        
-        {/* Barra de búsqueda */}
-        <Command.Input
-          placeholder="Buscar clases, exámenes..."
-          className="neu-input w-full p-4 text-gray-700 placeholder-gray-500 border-0 bg-transparent focus:outline-none focus:ring-0"
-        />
-        
-        {/* Lista de resultados */}
-        <Command.List className="max-h-80 overflow-y-auto p-2">
-          {/* Mensaje de cargando */}
-          {loading && (
-            <div className="flex items-center justify-center py-8">
-              <span className="text-gray-500">Cargando...</span>
-            </div>
-          )}
+    <Command.Dialog open={open} onOpenChange={setOpen} label="Búsqueda Global">
+      <Command.Input value={search} onValueChange={setSearch} placeholder="Buscar clases, exámenes..." />
+      <Command.List>
+        <Command.Empty>No se encontraron resultados.</Command.Empty>
 
-          {/* Mensaje de no hay resultados */}
-          <Command.Empty className="flex items-center justify-center py-8">
-            <span className="text-gray-500">No se encontraron resultados</span>
-          </Command.Empty>
+        <Command.Group heading="Clases">
+          {pages.filter(p => p.type === 'Clase').map((page) => (
+            <Command.Item key={page.id} onSelect={() => runCommand(() => router.push(page.url))}>
+              {page.name}
+            </Command.Item>
+          ))}
+        </Command.Group>
 
-          {/* Grupo de Clases */}
-          {classes.length > 0 && (
-            <Command.Group heading="Clases" className="mb-4">
-              {classes.map((cls) => (
-                <Command.Item
-                  key={`class-${cls.id}`}
-                  value={`${cls.name} ${cls.subject || ''} ${cls.grade_level || ''}`}
-                  onSelect={() => handleSelectClass(cls.id)}
-                  className="neu-button-flat flex items-center px-3 py-2 mb-1 cursor-pointer text-gray-700 hover:bg-gray-50 rounded-lg"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <span className="text-blue-600 text-sm font-semibold">📚</span>
-                    </div>
-                    <div>
-                      <div className="font-medium">{cls.name}</div>
-                      {(cls.subject || cls.grade_level) && (
-                        <div className="text-xs text-gray-500">
-                          {cls.subject} {cls.grade_level && `• ${cls.grade_level}`}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </Command.Item>
-              ))}
-            </Command.Group>
-          )}
-
-          {/* Grupo de Exámenes */}
-          {exams.length > 0 && (
-            <Command.Group heading="Exámenes" className="mb-4">
-              {exams.map((exam) => {
-                const examClass = classes.find(c => c.id === exam.class_id)
-                return (
-                  <Command.Item
-                    key={`exam-${exam.id}`}
-                    value={`${exam.title} ${examClass?.name || ''}`}
-                    onSelect={() => handleSelectExam(exam.id, exam.class_id)}
-                    className="neu-button-flat flex items-center px-3 py-2 mb-1 cursor-pointer text-gray-700 hover:bg-gray-50 rounded-lg"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="flex-shrink-0 w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                        <span className="text-green-600 text-sm font-semibold">📝</span>
-                      </div>
-                      <div>
-                        <div className="font-medium">{exam.title}</div>
-                        {examClass && (
-                          <div className="text-xs text-gray-500">
-                            en {examClass.name}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </Command.Item>
-                )
-              })}
-            </Command.Group>
-          )}
-        </Command.List>
-
-        {/* Indicador de atajos */}
-        <div className="border-t border-gray-200 px-4 py-2 bg-gray-50">
-          <div className="flex items-center justify-between text-xs text-gray-500">
-            <span>Presiona ↵ para seleccionar</span>
-            <span>Esc para cerrar</span>
-          </div>
-        </div>
-      </div>
+        <Command.Group heading="Exámenes">
+          {pages.filter(p => p.type === 'Examen').map((page) => (
+            <Command.Item key={page.id} onSelect={() => runCommand(() => router.push(page.url))}>
+              {page.name}
+            </Command.Item>
+          ))}
+        </Command.Group>
+      </Command.List>
     </Command.Dialog>
   )
 }
