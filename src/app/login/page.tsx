@@ -2,13 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/lib/supabaseClient' // <-- 1. CAMBIO IMPORTANTE
 
 export default function LoginPage() {
   const router = useRouter()
-  const supabase = createClientComponentClient(); // Declaración correcta y única
+  const supabase = createClient() // <-- 2. CAMBIO IMPORTANTE
 
-  // Estados para el formulario y la carga
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(true)

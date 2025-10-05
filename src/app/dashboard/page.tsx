@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/lib/supabaseClient' // <-- 1. CAMBIO IMPORTANTE
 import Link from 'next/link'
 import CreateClassModal from '../../components/CreateClassModal'
 
@@ -10,9 +10,8 @@ interface Class { id: string; name: string | null; subject: string | null; grade
 interface Profile { profile_completed: boolean; }
 
 export default function DashboardPage() {
-  
   const router = useRouter()
-  const supabase = createClientComponentClient()
+  const supabase = createClient() // <-- 2. CAMBIO IMPORTANTE
   const [classes, setClasses] = useState<Class[]>([])
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)

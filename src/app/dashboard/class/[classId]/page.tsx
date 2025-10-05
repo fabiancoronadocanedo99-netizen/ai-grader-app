@@ -4,36 +4,16 @@ import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useDropzone } from 'react-dropzone'
-import { supabase } from '../../../../lib/supabaseClient'
+import { createClient } from '@/lib/supabaseClient'
 
 // --- INTERFACES CORREGIDAS (TODO STRING) ---
-interface ClassDetails {
-  id: string;
-  name: string;
-  subject?: string;
-  grade_level?: string;
-}
-
-interface Exam {
-  id: string;
-  name: string;
-  class_id: string;
-  created_at?: string;
-}
-
-interface Student {
-  id: string;
-  full_name: string;
-  student_email: string;
-  tutor_email?: string;
-  class_id: string;
-  created_at?: string;
-}
+interface ClassDetails { id: string; name: string; subject?: string; grade_level?: string; }
+interface Exam { id: string; name: string; class_id: string; created_at?: string; }
+interface Student { id: string; full_name: string; student_email: string; tutor_email?: string; class_id: string; created_at?: string; }
 
 export default function ClassDetailPage() {
   const supabase = createClient();
   const params = useParams()
-  // --- CORRECCIÓN #1: Eliminar parseInt ---
   const classId = params.classId as string;
 
   const [classDetails, setClassDetails] = useState<ClassDetails | null>(null)
@@ -42,16 +22,13 @@ export default function ClassDetailPage() {
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [newExamName, setNewExamName] = useState('')
-
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [examToDelete, setExamToDelete] = useState<Exam | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [examToEdit, setExamToEdit] = useState<Exam | null>(null)
   const [editingExamName, setEditingExamName] = useState('')
-
   const [activeTab, setActiveTab] = useState<'exams' | 'students'>('students')
-
   const [isCSVModalOpen, setIsCSVModalOpen] = useState(false)
   const [isProcessingCSV, setIsProcessingCSV] = useState(false)
   const [csvFile, setCSVFile] = useState<File | null>(null)
@@ -61,21 +38,21 @@ export default function ClassDetailPage() {
     const { data, error } = await supabase.from('classes').select('*').eq('id', classId).single()
     if (error) console.error("Error al cargar detalles de la clase:", error)
     else setClassDetails(data)
-  }, [classId])
+  }, [classId, supabase])
 
   const fetchExams = useCallback(async () => {
     if (!classId) return;
     const { data, error } = await supabase.from('exams').select('*').eq('class_id', classId).order('created_at', { ascending: false })
     if (error) console.error("Error al cargar los exámenes:", error)
     else setExams(data || [])
-  }, [classId])
+  }, [classId, supabase])
 
   const fetchStudents = useCallback(async () => {
     if (!classId) return;
     const { data, error } = await supabase.from('students').select('*').eq('class_id', classId).order('created_at', { ascending: false })
     if (error) console.error("Error al cargar los estudiantes:", error)
     else setStudents(data || [])
-  }, [classId])
+  }, [classId, supabase])
 
   useEffect(() => {
     const loadData = async () => {

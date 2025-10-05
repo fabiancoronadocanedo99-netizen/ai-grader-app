@@ -2,10 +2,10 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabaseClient'
+import { createClient } from '@/lib/supabaseClient' // <-- 1. CAMBIO IMPORTANTE
 
 export default function OnboardingPage() {
-  const supabase = createClient();
+  const supabase = createClient(); // <-- 2. CAMBIO IMPORTANTE
   const router = useRouter()
   const [fullName, setFullName] = useState('')
   const [subject, setSubject] = useState('')
@@ -22,9 +22,8 @@ export default function OnboardingPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Usuario no autenticado.')
 
-      // --- CÓDIGO CORREGIDO ---
       const profileData = {
-        id: user.id, // <-- LA CORRECCIÓN CLAVE: Incluir el ID del usuario
+        id: user.id,
         full_name: fullName,
         subject: subject,
         country: country,
@@ -35,12 +34,11 @@ export default function OnboardingPage() {
 
       const { error } = await supabase
         .from('profiles')
-        .upsert(profileData) // Usamos la variable con todos los datos
-      // --- FIN DE LA CORRECCIÓN ---
+        .upsert(profileData)
 
       if (error) throw error
 
-      alert('¡Perfil guardado con éxito!'); // Feedback positivo para el usuario
+      alert('¡Perfil guardado con éxito!');
       router.push('/dashboard')
     } catch (error) {
       console.error('Error al guardar el perfil:', error)

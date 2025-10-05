@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/lib/supabaseClient' // <-- 1. CAMBIO IMPORTANTE
 
 interface Props {
   isOpen: boolean;
@@ -10,8 +10,7 @@ interface Props {
 }
 
 export default function CreateClassModal({ isOpen, onClose, onClassCreated }: Props) {
- 
-  const supabase = createClientComponentClient(); // <-- CORRECCIÓN
+  const supabase = createClient(); // <-- 2. CAMBIO IMPORTANTE
   const [newClassName, setNewClassName] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -32,8 +31,8 @@ export default function CreateClassModal({ isOpen, onClose, onClassCreated }: Pr
       if (error) throw error;
 
       alert('¡Clase creada con éxito!');
-      onClassCreated(); // Refresca la lista de clases en el dashboard
-      onClose(); // Cierra el modal
+      onClassCreated();
+      onClose();
     } catch (error) {
       alert(`Error al crear la clase: ${(error as Error).message}`);
     } finally {

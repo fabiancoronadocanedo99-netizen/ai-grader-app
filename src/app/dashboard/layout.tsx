@@ -1,13 +1,13 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/lib/supabaseClient' // <-- 1. CAMBIO IMPORTANTE
 import { useEffect, useState } from 'react'
-import CommandPalette from '@/components/CommandPalette' // <-- 1. Importar
+import CommandPalette from '@/components/CommandPalette'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const supabase = createClientComponentClient()
+  const supabase = createClient() // <-- 2. CAMBIO IMPORTANTE
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
@@ -40,7 +40,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </header>
       <main>{children}</main>
-      <CommandPalette /> {/* <-- 2. Añadir aquí */}
+      <CommandPalette />
     </div>
   )
 }

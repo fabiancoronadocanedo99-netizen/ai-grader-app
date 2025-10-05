@@ -5,14 +5,20 @@ import { useRouter } from 'next/navigation'
 import { Command } from 'cmdk'
 import { createClient } from '@/lib/supabaseClient'
 
-// ... (tus interfaces aquí)
+// --- Definición de Interfaces para claridad ---
+interface SearchResult {
+  id: string;
+  name: string;
+  type: 'Clase' | 'Examen';
+  url: string;
+}
 
 export default function CommandPalette() {
-  const supabase = createClient(); // <-- LA CORRECCIÓN
+  const supabase = createClient();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [pages, setPages] = useState<any[]>([]); // Usa tipos más específicos si los tienes
+  const [pages, setPages] = useState<SearchResult[]>([]);
 
   // Lógica para abrir/cerrar con atajo de teclado
   useEffect(() => {
@@ -31,14 +37,15 @@ export default function CommandPalette() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    // Usaremos un RPC para hacer una consulta más eficiente en el futuro
     const classesPromise = supabase.from('classes').select('id, name').eq('user_id', user.id);
     const examsPromise = supabase.from('exams').select('id, name, class_id').eq('user_id', user.id);
 
     const [classesResult, examsResult] = await Promise.all([classesPromise, examsPromise]);
 
-    const allPages = [
-      ...(classesResult.data || []).map(c => ({ ...c, type: 'Clase', url: `/dashboard/class/${c.id}` })),
-      ...(examsResult.data || []).map(e => ({ ...e, type: 'Examen', url: `/dashboard/class/${e.class_id}/exam/${e.id}` }))
+    const allPages: SearchResult[] = [
+      ...(classesResult.data || []).map(c => ({ id: c.id, name: c.name || '', type: 'Clase', url: `/dashboard/class/${c.id}` })),
+      ...(examsResult.data || []).map(e => ({ id: e.id, name: e.name || '', type: 'Examen', url: `/dashboard/class/${e.class_id}/exam/${e.id}` }))
     ];
     setPages(allPages);
   }, [supabase]);
@@ -62,7 +69,7 @@ export default function CommandPalette() {
 
         <Command.Group heading="Clases">
           {pages.filter(p => p.type === 'Clase').map((page) => (
-            <Command.Item key={page.id} onSelect={() => runCommand(() => router.push(page.url))}>
+            <Command.Item key={`class-${page.id}`} onSelect={() => runCommand(() => router.push(page.url))}>
               {page.name}
             </Command.Item>
           ))}
@@ -70,7 +77,7 @@ export default function CommandPalette() {
 
         <Command.Group heading="Exámenes">
           {pages.filter(p => p.type === 'Examen').map((page) => (
-            <Command.Item key={page.id} onSelect={() => runCommand(() => router.push(page.url))}>
+            <Command.Item key={`exam-${page.id}`} onSelect={() => runCommand(() => router.push(page.url))}>
               {page.name}
             </Command.Item>
           ))}
