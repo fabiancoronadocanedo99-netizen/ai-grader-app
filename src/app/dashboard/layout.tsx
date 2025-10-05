@@ -3,9 +3,9 @@
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useEffect, useState } from 'react'
+import CommandPalette from '@/components/CommandPalette' // <-- 1. Importar
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
- 
   const router = useRouter()
   const supabase = createClientComponentClient()
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -16,7 +16,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (user) {
         setUserEmail(user.email || null)
       } else {
-        router.push('/login') // Si no hay usuario, lo sacamos
+        router.push('/login')
       }
     }
     getUser()
@@ -25,7 +25,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/login')
-    router.refresh() // Refresca para limpiar cualquier estado
+    router.refresh()
   }
 
   return (
@@ -40,6 +40,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </header>
       <main>{children}</main>
+      <CommandPalette /> {/* <-- 2. Añadir aquí */}
     </div>
   )
 }

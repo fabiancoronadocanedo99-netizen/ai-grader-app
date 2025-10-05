@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { NavigationProvider } from '@/contexts/NavigationContext';
 import NavigationBar from '@/components/NavigationBar';
-import CommandPalette from '@/components/CommandPalette';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,7 +20,6 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({
-
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -36,7 +34,7 @@ export default function RootLayout({
           <main className="min-h-[calc(100vh-4rem)]">
             {children}
           </main>
-          <CommandPalette />
+          {/* CommandPalette ha sido eliminado de aquí */}
         </NavigationProvider>
       </body>
     </html>
