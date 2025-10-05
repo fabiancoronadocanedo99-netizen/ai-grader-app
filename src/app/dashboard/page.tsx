@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
-import CreateClassModal from '../../components/CreateClassModal' // Asegúrate de importar tu modal
+import CreateClassModal from '../../components/CreateClassModal'
 
 interface Class { id: string; name: string | null; subject: string | null; grade_level: string | null; }
 interface Profile { profile_completed: boolean; }
@@ -15,30 +15,40 @@ export default function DashboardPage() {
   const [classes, setClasses] = useState<Class[]>([])
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isModalOpen, setIsModalOpen] = useState(false) // <-- CORRECCIÓN: Declaración del estado
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const fetchClasses = useCallback(async () => {
-    // ... (tu función fetchClasses se mantiene igual)
-  }, [supabase]);
+  const fetchData = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push('/login');
+      return;
+    }
 
-  const fetchProfile = useCallback(async () => {
-    // ... (tu función fetchProfile se mantiene igual)
-  }, [supabase]);
+    const profilePromise = supabase.from('profiles').select('profile_completed').eq('id', user.id).single();
+    const classesPromise = supabase.from('classes').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
 
-  // Renombramos fetchData a onDataChange para claridad
-  const onDataChange = useCallback(() => {
-    fetchClasses();
-    fetchProfile();
-  }, [fetchClasses, fetchProfile]);
+    const [profileResult, classesResult] = await Promise.all([profilePromise, classesPromise]);
+
+    if (profileResult.error) console.error("Error al cargar perfil:", profileResult.error);
+    else setProfile(profileResult.data);
+
+    if (classesResult.error) console.error("Error al cargar clases:", classesResult.error);
+    else setClasses(classesResult.data || []);
+
+    setLoading(false);
+  }, [router, supabase]);
 
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      await Promise.all([fetchClasses(), fetchProfile()]);
-      setLoading(false);
-    };
-    loadData();
-  }, [fetchClasses, fetchProfile]);
+    fetchData();
+  }, [fetchData]);
+
+  const handleCreateClassClick = () => {
+    if (profile?.profile_completed === false) {
+      router.push('/onboarding');
+    } else {
+      setIsModalOpen(true);
+    }
+  };
 
   if (loading) {
     return (
@@ -47,14 +57,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
-  const handleCreateClassClick = () => {
-    if (profile?.profile_completed === false) {
-      router.push('/onboarding');
-    } else {
-      setIsModalOpen(true); // <-- CORRECCIÓN: Abre el modal
-    }
-  };
 
   return (
     <div className="p-8 neu-container min-h-screen">
@@ -70,6 +72,7 @@ export default function DashboardPage() {
           Crear Nueva Clase
         </button>
       </div>
+
       {classes.length === 0 ? (
         <div className="text-center py-16 neu-card">
           <div className="text-6xl mb-4">📚</div>
@@ -83,4 +86,28 @@ export default function DashboardPage() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {classes.map((classItem) => (
+            <div key={classItem.id} className="neu-card p-6 flex flex-col justify-between">
+              <div>
+                <h3 className="text-xl font-semibold mb-2">{classItem.name}</h3>
+                <p className="text-sm text-gray-500 mb-4">{classItem.subject || 'Sin materia'}</p>
+              </div>
+              <Link href={`/dashboard/class/${classItem.id}`} className="neu-button text-center block py-2">
+                Ver Exámenes
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isModalOpen && (
+        <CreateClassModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onClassCreated={fetchData} 
+        />
+      )}
+    </div>
+  );
+}
