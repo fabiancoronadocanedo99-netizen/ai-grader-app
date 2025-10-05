@@ -5,15 +5,14 @@ import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 export default function LoginPage() {
-  const supabase = createClient();
   const router = useRouter()
-  const supabase = createClientComponentClient()
+  const supabase = createClientComponentClient(); // Declaración correcta y única
 
   // Estados para el formulario y la carga
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(true)
-  const [authLoading, setAuthLoading] = useState(false) // Nuevo estado para el botón
+  const [authLoading, setAuthLoading] = useState(false)
 
   useEffect(() => {
     const checkSession = async () => {
@@ -38,7 +37,6 @@ export default function LoginPage() {
       alert(`Error: ${error.message}`)
     } else {
       router.push('/dashboard')
-      // Forzar un refresco para asegurar que la nueva sesión se detecte
       router.refresh()
     }
     setAuthLoading(false)
