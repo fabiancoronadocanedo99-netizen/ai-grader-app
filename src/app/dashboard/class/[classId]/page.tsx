@@ -31,6 +31,7 @@ interface Student {
 }
 
 export default function ClassDetailPage() {
+  const supabase = createClient();
   const params = useParams()
   // --- CORRECCIÓN #1: Eliminar parseInt ---
   const classId = params.classId as string;

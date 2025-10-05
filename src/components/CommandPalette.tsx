@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Command } from 'cmdk'
 import { useRouter } from 'next/navigation'
-import { supabase } from '../lib/supabaseClient'
+import { createClient } from '@/lib/supabaseClient'
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden'
 
 interface Class {
@@ -20,6 +20,7 @@ interface Exam {
 }
 
 export default function CommandPalette() {
+  const supabase = createClient();
   const [open, setOpen] = useState(false)
   const [classes, setClasses] = useState<Class[]>([])
   const [exams, setExams] = useState<Exam[]>([])

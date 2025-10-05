@@ -21,6 +21,7 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({
+  const supabase = createClient();
   children,
 }: Readonly<{
   children: React.ReactNode;

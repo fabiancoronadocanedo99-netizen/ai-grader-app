@@ -13,6 +13,7 @@ interface Grade { id: string; submission_id: string; }
 
 // --- Componente Principal ---
 export default function ExamManagementPage() {
+  const supabase = createClient();
   const supabase = createClient(); // <--- CORRECCIÓN 1: Crear instancia
   const params = useParams();
   const examId = params.examId as string;

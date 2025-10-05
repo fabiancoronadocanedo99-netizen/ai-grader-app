@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { useNavigation } from '@/contexts/NavigationContext'
 
 export default function NavigationBar() {
+  const supabase = createClient();
   const router = useRouter()
   const pathname = usePathname()
   const { canGoBack, canGoForward, goBack, goForward } = useNavigation()

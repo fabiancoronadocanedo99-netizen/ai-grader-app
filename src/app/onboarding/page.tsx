@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '../../lib/supabaseClient'
+import { createClient } from '@/lib/supabaseClient'
 
 export default function OnboardingPage() {
+  const supabase = createClient();
   const router = useRouter()
   const [fullName, setFullName] = useState('')
   const [subject, setSubject] = useState('')

@@ -10,6 +10,7 @@ interface Class { id: string; name: string | null; subject: string | null; grade
 interface Profile { profile_completed: boolean; }
 
 export default function DashboardPage() {
+  const supabase = createClient();
   const router = useRouter()
   const supabase = createClientComponentClient()
   const [classes, setClasses] = useState<Class[]>([])
