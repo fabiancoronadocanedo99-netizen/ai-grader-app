@@ -10,7 +10,7 @@ interface Props {
 }
 
 export default function CreateClassModal({ isOpen, onClose, onClassCreated }: Props) {
-  const supabase = createClient();
+ 
   const supabase = createClientComponentClient(); // <-- CORRECCIÓN
   const [newClassName, setNewClassName] = useState('');
   const [loading, setLoading] = useState(false);
