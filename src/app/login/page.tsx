@@ -2,12 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabaseClient' // <-- 1. CAMBIO IMPORTANTE
+import { createClient } from '@/lib/supabaseClient' // Usamos nuestra fábrica consistente
 
 export default function LoginPage() {
   const router = useRouter()
-  const supabase = createClient() // <-- 2. CAMBIO IMPORTANTE
-
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(true)
@@ -15,7 +13,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     const checkSession = async () => {
-      const supabase = createClient();
+      const supabase = createClient(); // Creamos la instancia aquí
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         router.push('/dashboard');
@@ -29,24 +27,19 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setAuthLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-    if (error) {
-      alert(`Error: ${error.message}`)
-    } else {
-      router.push('/dashboard')
-      router.refresh()
-    }
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) alert(`Error: ${error.message}`)
+    else router.push('/dashboard')
     setAuthLoading(false)
   }
 
   const handleLoginWithGoogle = async () => {
+    const supabase = createClient();
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${location.origin}/auth/callback`,
+        redirectTo: `${location.origin}/auth/callback`, // ¡LA 'r' MINÚSCULA ES CORRECTA AQUÍ!
       },
     });
   };
@@ -54,6 +47,7 @@ export default function LoginPage() {
   if (loading) {
     return <div className="flex h-screen items-center justify-center"><p>Verificando sesión...</p></div>;
   }
+
 
   return (
     <div className="min-h-screen neu-container flex items-center justify-center p-4">
