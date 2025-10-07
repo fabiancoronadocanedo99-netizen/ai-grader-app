@@ -15,6 +15,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     const checkSession = async () => {
+      const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         router.push('/dashboard');
@@ -23,7 +24,7 @@ export default function LoginPage() {
       }
     };
     checkSession();
-  }, [router, supabase]);
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
