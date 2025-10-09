@@ -51,17 +51,27 @@ export default function ClassDetailPage() {
   }, [classId, supabase]);
 
   const fetchStudents = useCallback(async () => {
+    console.log("Iniciando fetchStudents..."); // <-- ESPÍA AÑADIDO
     if (!classId) return;
     const { data, error } = await supabase.from('students').select('*').eq('class_id', classId).order('created_at', { ascending: false });
-    if (error) console.error("Error al cargar los estudiantes:", error);
-    else setStudents(data || []);
+    if (error) {
+      console.error("¡ERROR al cargar estudiantes!:", error); // <-- ESPÍA AÑADIDO
+    } else {
+      console.log("¡ÉXITO al cargar estudiantes!:", data); // <-- ESPÍA AÑADIDO
+      setStudents(data || []);
+    }
   }, [classId, supabase]);
 
   const fetchEvaluations = useCallback(async () => {
+    console.log("Iniciando fetchEvaluations..."); // <-- ESPÍA AÑADIDO
     if (!classId) return;
     const { data, error } = await supabase.from('exams').select('*').eq('class_id', classId).order('created_at', { ascending: false });
-    if (error) console.error("Error al cargar las evaluaciones:", error);
-    else setAllEvaluations(data as Evaluation[] || []);
+    if (error) {
+      console.error("¡ERROR al cargar evaluaciones!:", error); // <-- ESPÍA AÑADIDO
+    } else {
+      console.log("¡ÉXITO al cargar evaluaciones!:", data); // <-- ESPÍA AÑADIDO
+      setAllEvaluations(data as Evaluation[] || []);
+    }
   }, [classId, supabase]);
 
   useEffect(() => {
@@ -73,37 +83,7 @@ export default function ClassDetailPage() {
     if (classId) loadData();
   }, [classId, fetchClassDetails, fetchEvaluations, fetchStudents]);
 
-  const handleCreateEvaluation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newEvaluationName.trim() || !classId) return;
-    const { error } = await supabase.from('exams').insert([{ name: newEvaluationName, class_id: classId, type: newEvaluationType }]);
-    if (error) { alert(`Error: ${error.message}`); }
-    else { setNewEvaluationName(''); setNewEvaluationType('exam'); setIsCreateModalOpen(false); await fetchEvaluations(); }
-  };
+  // ... (el resto del código se mantiene exactamente igual) ...
 
-  const handleDeleteEvaluation = async () => {
-    if (!evaluationToDelete) return;
-    const { error } = await supabase.from('exams').delete().eq('id', evaluationToDelete.id);
-    if (error) { alert(`Error: ${error.message}`); }
-    else { setIsDeleteModalOpen(false); setEvaluationToDelete(null); await fetchEvaluations(); }
-  };
-
-  const handleEditEvaluationName = async (e: React.FormEvent) => {
-    if (!evaluationToEdit || !editingEvaluationName.trim()) return;
-    const { error } = await supabase.from('exams').update({ name: editingEvaluationName }).eq('id', evaluationToEdit.id);
-    if (error) { alert(`Error: ${error.message}`); }
-    else { setIsEditModalOpen(false); setEvaluationToEdit(null); setEditingEvaluationName(''); await fetchEvaluations(); }
-  };
-
-  const openDeleteModal = (evaluation: Evaluation) => { setEvaluationToDelete(evaluation); setIsDeleteModalOpen(true); setOpenDropdown(null); };
-  const openEditModal = (evaluation: Evaluation) => { setEvaluationToEdit(evaluation); setEditingEvaluationName(evaluation.name); setIsEditModalOpen(true); setOpenDropdown(null); };
-
-  if (loading) { return <div>Cargando...</div>; }
-  if (!classDetails) { return <div>Clase no encontrada.</div>; }
-
-  return (
-    <div className="p-8">
-      {/* ... (el JSX se mantiene igual que en el bloque de código original que me pasaste) ... */}
-    </div>
-  );
+  // (Aquí iría todo el resto del código que ya tenías)
 }
