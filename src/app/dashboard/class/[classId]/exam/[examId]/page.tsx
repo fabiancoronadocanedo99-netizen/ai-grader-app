@@ -25,9 +25,7 @@ export default function ExamManagementPage() {
 
   const fetchData = useCallback(async () => {
     if (!examId) { setLoading(false); return; }
-    setExamDetails(null);
-    setSubmissions([]);
-    setLoading(true);
+    setLoading(true); // Se pone en true al inicio de la carga
     try {
       const examPromise = supabase.from('exams').select('*').eq('id', examId).single();
       const submissionsPromise = supabase.from('submissions').select('*').eq('exam_id', examId).order('created_at', { ascending: false });
@@ -49,26 +47,45 @@ export default function ExamManagementPage() {
 
   const onUploadSuccess = () => fetchData();
 
+  // --- ¡¡¡CORRECCIÓN IMPORTANTE AQUÍ!!! ---
   const handleGrade = async (submissionId: string) => {
     setSubmissions(prev => prev.map(sub => sub.id === submissionId ? { ...sub, status: 'processing' } : sub));
     try {
-      const { data, error } = await supabase.functions.invoke('grade-submission', { body: { submissionId } });
-      if (error) throw error;
+      // Reemplazamos la llamada a la Edge Function por una llamada a nuestra API Route
+      const response = await fetch('/api/grade-submission', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId }),
+      });
+
+      const result = await response.json();
+
+      if (!result.ok) {
+        // Si nuestra API devuelve un error, lo lanzamos para que lo capture el 'catch'
+        throw new Error(result.error || 'Error desconocido del servidor');
+      }
+
       alert('¡Calificación completada!');
-      fetchData();
+      await fetchData(); // Refresca todos los datos de la página
     } catch (error) {
+      console.error('Error en el frontend al calificar:', error);
       setSubmissions(prev => prev.map(sub => sub.id === submissionId ? { ...sub, status: 'pending' } : sub));
-      alert(`Error: ${(error as Error).message}`);
+      alert(`Error al calificar: ${(error as Error).message}`);
     }
   };
 
   const handleViewFeedback = async (submission: Submission) => {
     if (!submission.id) return;
-    const { data: grade, error } = await supabase.from('grades').select('id, submission_id').eq('submission_id', submission.id).single();
-    if (error) {
-      console.error("No se encontró la calificación correspondiente:", error);
+    try {
+      const { data: grade, error } = await supabase.from('grades').select('id, submission_id').eq('submission_id', submission.id).single();
+      if (error && error.code !== 'PGRST116') { // Ignora el error "no rows found"
+        throw error;
+      }
+      setViewingFeedback({ feedback: submission.ai_feedback, grade: grade || null });
+    } catch(err) {
+      console.error("No se encontró la calificación correspondiente:", err);
+      setViewingFeedback({ feedback: submission.ai_feedback, grade: null }); // Muestra el feedback aunque no haya 'grade'
     }
-    setViewingFeedback({ feedback: submission.ai_feedback, grade: grade || null });
   };
 
   if (loading) return <div className="p-8 text-center">Cargando...</div>;
@@ -312,7 +329,6 @@ function FeedbackModal({ viewingFeedback, onClose }: { viewingFeedback: { feedba
     }
     setIsSendingEmail(true);
     try {
-      // Usaremos una API Route en lugar de Edge Function
       const response = await fetch('/api/send-results-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
