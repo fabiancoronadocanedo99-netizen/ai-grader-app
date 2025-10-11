@@ -3,7 +3,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// --- El Prompt Maestro ---
 const MASTER_PROMPT = `
 ROL Y OBJETIVO:
 Eres "Profe-Bot", un especialista en pedagogía y didáctica que actúa como un evaluador imparcial y un mentor empático. Tu objetivo es evaluar el examen de un alumno, generando un objeto JSON estructurado y preciso. Tu salida debe ser estrictamente en formato JSON, optimizada para consumo por aplicaciones externas. Tu tono debe ser paciente, constructivo y motivador.
@@ -36,20 +35,44 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    // --- ESPÍAS DE DEPURACIÓN ---
-    console.log("HOLA_MUNDO:", process.env.HOLA_MUNDO);
-    console.log("GEMINI_API_KEY existe?:", !!process.env.GEMINI_API_KEY);
-    // ----------------------------
+    // === VERIFICACIÓN DE VARIABLES DE ENTORNO ===
+    console.log('=== DEBUG VARIABLES DE ENTORNO ===');
+    console.log('NEXT_PUBLIC_SUPABASE_URL existe?:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
+    console.log('SUPABASE_SERVICE_ROLE_KEY existe?:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+    console.log('GEMINI_API_KEY existe?:', !!process.env.GEMINI_API_KEY);
+    console.log('==================================');
+
+    // Verificar variables críticas
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      throw new Error('NEXT_PUBLIC_SUPABASE_URL no está configurada');
+    }
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error('SUPABASE_SERVICE_ROLE_KEY no está configurada');
+    }
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY no está configurada en el servidor.');
+    }
 
     const body = await req.json();
     const { submissionId } = body;
+
     if (!submissionId || typeof submissionId !== 'string') {
-      return NextResponse.json({ ok: false, error: 'submissionId inválido o ausente' }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: 'submissionId inválido o ausente' },
+        { status: 400 }
+      );
     }
 
+    // Crear cliente de Supabase con las variables correctas
     const supabaseAdmin = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
     );
 
     console.log(`Iniciando calificación para la entrega ID: ${submissionId}`);
@@ -58,7 +81,11 @@ export async function POST(req: NextRequest) {
       submission_file_url: string;
       student_id: string;
       exam_id: string;
-      exams: { id: string; solution_file_url: string; name: string; } | null;
+      exams: { 
+        id: string;
+        solution_file_url: string;
+        name: string;
+      } | null;
     };
 
     const { data: submission, error: subError } = await supabaseAdmin
@@ -67,51 +94,88 @@ export async function POST(req: NextRequest) {
       .eq('id', submissionId)
       .single<SubmissionWithExam>();
 
-    if (subError) throw new Error(`Error al buscar la entrega: ${subError.message}`);
-    if (!submission?.exams?.solution_file_url) throw new Error('El examen no tiene un solucionario subido.');
+    if (subError) {
+      console.error('Error al buscar la entrega:', subError);
+      throw new Error(`Error al buscar la entrega: ${subError.message}`);
+    }
 
-    const solutionPath = new URL(submission.exams.solution_file_url).pathname.split('/exam_files/')[1];
-    const submissionPath = new URL(submission.submission_file_url).pathname.split('/exam_files/')[1];
+    if (!submission?.exams?.solution_file_url) {
+      throw new Error('El examen no tiene un solucionario subido.');
+    }
 
-    const { data: solutionBlob, error: solutionError } = await supabaseAdmin.storage.from('exam_files').download(solutionPath);
-    const { data: submissionBlob, error: submissionError } = await supabaseAdmin.storage.from('exam_files').download(submissionPath);
+    // Extraer rutas de los archivos
+    const solutionPath = new URL(submission.exams.solution_file_url)
+      .pathname.split('/exam_files/')[1];
+    const submissionPath = new URL(submission.submission_file_url)
+      .pathname.split('/exam_files/')[1];
 
-    if (solutionError || submissionError) throw new Error('Error al descargar uno de los archivos PDF.');
-    if (!solutionBlob || !submissionBlob) throw new Error('Uno de los archivos descargados está vacío.');
+    console.log('Descargando archivos desde Supabase Storage...');
 
-    // --- LÓGICA DE BYPASS DE LA LIBRERÍA ---
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY no está configurada en el servidor.");
+    // Descargar archivos
+    const { data: solutionBlob, error: solutionError } = await supabaseAdmin
+      .storage
+      .from('exam_files')
+      .download(solutionPath);
 
+    const { data: submissionBlob, error: submissionError } = await supabaseAdmin
+      .storage
+      .from('exam_files')
+      .download(submissionPath);
+
+    if (solutionError || submissionError) {
+      console.error('Error al descargar archivos:', { solutionError, submissionError });
+      throw new Error('Error al descargar uno de los archivos PDF.');
+    }
+
+    if (!solutionBlob || !submissionBlob) {
+      throw new Error('Uno de los archivos descargados está vacío.');
+    }
+
+    console.log('Archivos descargados exitosamente');
+
+    // Preparar prompt con datos del examen
     const finalPrompt = MASTER_PROMPT
       .replace('"YYYY-MM-DD"', `"${new Date().toISOString().split('T')[0]}"`)
       .replace('"ID_DEL_EXAMEN"', `"${submission.exams.name}"`);
 
+    // Convertir blobs a buffers
     const solutionBuffer = Buffer.from(await solutionBlob.arrayBuffer());
     const submissionBuffer = Buffer.from(await submissionBlob.arrayBuffer());
 
+    // Preparar petición a Gemini
     const requestBody = {
       contents: [{
         role: "user",
         parts: [
           { text: finalPrompt },
           { text: "solucionario.pdf:" },
-          { inlineData: { mimeType: 'application/pdf', data: solutionBuffer.toString('base64') } },
+          { 
+            inlineData: { 
+              mimeType: 'application/pdf',
+              data: solutionBuffer.toString('base64')
+            }
+          },
           { text: "entrega_alumno.pdf:" },
-          { inlineData: { mimeType: 'application/pdf', data: submissionBuffer.toString('base64') } },
+          { 
+            inlineData: { 
+              mimeType: 'application/pdf',
+              data: submissionBuffer.toString('base64')
+            }
+          },
         ]
       }]
     };
 
-    console.log("Enviando petición manual a la API de Gemini...");
+    console.log('Enviando petición a la API de Gemini...');
 
+    // Llamar a Gemini API
     const response = await fetch(
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent',
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
+          'x-goog-api-key': process.env.GEMINI_API_KEY,
         },
         body: JSON.stringify(requestBody),
       }
@@ -119,31 +183,68 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Error de la API de Gemini:", JSON.stringify(errorData, null, 2));
-      throw new Error(`Error de la API de Gemini: ${errorData.error.message}`);
+      console.error('Error de la API de Gemini:', JSON.stringify(errorData, null, 2));
+      throw new Error(`Error de la API de Gemini: ${errorData.error?.message || 'Error desconocido'}`);
     }
 
     const data = await response.json();
-    const responseText = data.candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim();
+    console.log('Respuesta recibida de Gemini');
+
+    // Procesar respuesta
+    const responseText = data.candidates[0].content.parts[0].text
+      .replace(/```json|```/g, '')
+      .trim();
+
     const responseJson = JSON.parse(responseText);
-    // --- FIN DE LA LÓGICA DE BYPASS ---
 
-    // Actualizar 'submissions' y 'grades'
-    await supabaseAdmin.from('submissions').update({ status: 'graded', ai_feedback: responseJson }).eq('id', submissionId);
+    console.log('Actualizando base de datos...');
 
-    await supabaseAdmin.from('grades').insert({
-      student_id: submission.student_id,
-      exam_id: submission.exam_id,
-      score_obtained: responseJson.informe_evaluacion.resumen_general.puntuacion_total_obtenida,
-      score_possible: responseJson.informe_evaluacion.resumen_general.puntuacion_total_posible,
-      ai_feedback: responseJson
-    });
+    // Actualizar submission
+    const { error: updateError } = await supabaseAdmin
+      .from('submissions')
+      .update({ 
+        status: 'graded',
+        ai_feedback: responseJson
+      })
+      .eq('id', submissionId);
+
+    if (updateError) {
+      console.error('Error al actualizar submission:', updateError);
+      throw new Error(`Error al actualizar submission: ${updateError.message}`);
+    }
+
+    // Insertar grade
+    const { error: gradeError } = await supabaseAdmin
+      .from('grades')
+      .insert({
+        student_id: submission.student_id,
+        exam_id: submission.exam_id,
+        score_obtained: responseJson.informe_evaluacion.resumen_general.puntuacion_total_obtenida,
+        score_possible: responseJson.informe_evaluacion.resumen_general.puntuacion_total_posible,
+        ai_feedback: responseJson
+      });
+
+    if (gradeError) {
+      console.error('Error al insertar grade:', gradeError);
+      throw new Error(`Error al insertar grade: ${gradeError.message}`);
+    }
 
     console.log('¡Calificación completada con éxito!');
-    return NextResponse.json({ ok: true, feedback: responseJson });
+
+    return NextResponse.json({ 
+      ok: true,
+      feedback: responseJson
+    });
 
   } catch (error: any) {
     console.error('[GRADE-SUBMISSION-ERROR]', error);
-    return NextResponse.json({ ok: false, error: error.message || 'Error interno del servidor' }, { status: 500 });
+
+    return NextResponse.json(
+      { 
+        ok: false,
+        error: error.message || 'Error interno del servidor'
+      },
+      { status: 500 }
+    );
   }
 }
