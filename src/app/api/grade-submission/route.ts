@@ -36,6 +36,11 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
+    // --- ESPÍAS DE DEPURACIÓN ---
+    console.log("HOLA_MUNDO:", process.env.HOLA_MUNDO);
+    console.log("GEMINI_API_KEY existe?:", !!process.env.GEMINI_API_KEY);
+    // ----------------------------
+
     const body = await req.json();
     const { submissionId } = body;
     if (!submissionId || typeof submissionId !== 'string') {
@@ -142,4 +147,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: error.message || 'Error interno del servidor' }, { status: 500 });
   }
 }
-// Forzando un redespliegue limpio - [Fecha y Hora]
