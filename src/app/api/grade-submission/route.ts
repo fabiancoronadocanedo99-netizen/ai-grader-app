@@ -37,14 +37,15 @@ export async function POST(req: NextRequest) {
   try {
     // === VERIFICACIÓN DE VARIABLES DE ENTORNO ===
     console.log('=== DEBUG VARIABLES DE ENTORNO ===');
-    console.log('NEXT_PUBLIC_SUPABASE_URL existe?:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
+    console.log('SUPABASE_URL existe?:', !!process.env.SUPABASE_URL);
+    console.log('SUPABASE_ANON_KEY existe?:', !!process.env.SUPABASE_ANON_KEY);
     console.log('SUPABASE_SERVICE_ROLE_KEY existe?:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
     console.log('GEMINI_API_KEY existe?:', !!process.env.GEMINI_API_KEY);
     console.log('==================================');
 
-    // Verificar variables críticas
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      throw new Error('NEXT_PUBLIC_SUPABASE_URL no está configurada');
+    // Verificar variables críticas ANTES de continuar
+    if (!process.env.SUPABASE_URL) {
+      throw new Error('SUPABASE_URL no está configurada');
     }
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error('SUPABASE_SERVICE_ROLE_KEY no está configurada');
@@ -63,9 +64,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Crear cliente de Supabase con las variables correctas
+    // Crear cliente de Supabase Admin (sin NEXT_PUBLIC_ prefix)
     const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY,
       {
         auth: {
