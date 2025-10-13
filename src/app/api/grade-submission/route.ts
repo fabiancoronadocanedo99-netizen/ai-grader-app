@@ -3,7 +3,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// --- El Prompt Maestro ---
 const MASTER_PROMPT = `
 ROL Y OBJETIVO:
 Eres "Profe-Bot", un especialista en pedagogía y didáctica que actúa como un evaluador imparcial y un mentor empático. Tu objetivo es evaluar el examen de un alumno, generando un objeto JSON estructurado y preciso. Tu salida debe ser estrictamente en formato JSON, optimizada para consumo por aplicaciones externas. Tu tono debe ser paciente, constructivo y motivador.
@@ -40,20 +39,20 @@ export async function POST(req: NextRequest) {
     console.log('=== DEBUG VARIABLES DE ENTORNO ===');
     console.log('SUPABASE_URL existe?:', !!process.env.SUPABASE_URL);
     console.log('SUPABASE_SERVICE_ROLE_KEY existe?:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
-    console.log('SUPABASE_GEMINI_KEY existe?:', !!process.env.SUPABASE_GEMINI_KEY);
+    console.log('AI_API_KEY existe?:', !!process.env.AI_API_KEY);
     console.log('==================================');
 
-    const apiKey = process.env.SUPABASE_GEMINI_KEY;
-
-    // Verificar variables críticas ANTES de continuar
+    // Verificar variables críticas
     if (!process.env.SUPABASE_URL) {
       throw new Error('SUPABASE_URL no está configurada');
     }
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error('SUPABASE_SERVICE_ROLE_KEY no está configurada');
     }
+
+    const apiKey = process.env.AI_API_KEY;
     if (!apiKey) {
-      throw new Error('SUPABASE_GEMINI_KEY no está configurada en el servidor.');
+      throw new Error('AI_API_KEY no está configurada en el servidor.');
     }
 
     const body = await req.json();
@@ -105,13 +104,22 @@ export async function POST(req: NextRequest) {
       throw new Error('El examen no tiene un solucionario subido.');
     }
 
-    const solutionPath = new URL(submission.exams.solution_file_url).pathname.split('/exam_files/')[1];
-    const submissionPath = new URL(submission.submission_file_url).pathname.split('/exam_files/')[1];
+    const solutionPath = new URL(submission.exams.solution_file_url)
+      .pathname.split('/exam_files/')[1];
+    const submissionPath = new URL(submission.submission_file_url)
+      .pathname.split('/exam_files/')[1];
 
     console.log('Descargando archivos desde Supabase Storage...');
 
-    const { data: solutionBlob, error: solutionError } = await supabaseAdmin.storage.from('exam_files').download(solutionPath);
-    const { data: submissionBlob, error: submissionError } = await supabaseAdmin.storage.from('exam_files').download(submissionPath);
+    const { data: solutionBlob, error: solutionError } = await supabaseAdmin
+      .storage
+      .from('exam_files')
+      .download(solutionPath);
+
+    const { data: submissionBlob, error: submissionError } = await supabaseAdmin
+      .storage
+      .from('exam_files')
+      .download(submissionPath);
 
     if (solutionError || submissionError) {
       console.error('Error al descargar archivos:', { solutionError, submissionError });
@@ -177,7 +185,10 @@ export async function POST(req: NextRequest) {
     const data = await response.json();
     console.log('Respuesta recibida de Gemini');
 
-    const responseText = data.candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim();
+    const responseText = data.candidates[0].content.parts[0].text
+      .replace(/```json|```/g, '')
+      .trim();
+
     const responseJson = JSON.parse(responseText);
 
     console.log('Actualizando base de datos...');
@@ -219,6 +230,7 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error('[GRADE-SUBMISSION-ERROR]', error);
+
     return NextResponse.json(
       { 
         ok: false,
