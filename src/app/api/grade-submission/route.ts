@@ -1,7 +1,6 @@
-// src/app/api/grade-submission/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getGeminiApiKey, getSupabaseConfig } from '@/config/env';
 
 const MASTER_PROMPT = `
 ROL Y OBJETIVO:
@@ -35,17 +34,14 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    // Obtener la API key desde NEXT_PUBLIC (que SIEMPRE funciona en Vercel)
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    // Usar la función helper que busca en múltiples lugares
+    const apiKey = getGeminiApiKey();
+    const supabaseConfig = getSupabaseConfig();
 
-    console.log('=== DEBUG VARIABLES DE ENTORNO ===');
-    console.log('NEXT_PUBLIC_GEMINI_API_KEY existe?:', !!apiKey);
-    console.log('SUPABASE_URL existe?:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
-    console.log('==================================');
-
-    if (!apiKey) {
-      throw new Error('NEXT_PUBLIC_GEMINI_API_KEY no está configurada en el servidor.');
-    }
+    console.log('=== DEBUG ===');
+    console.log('API Key encontrada:', !!apiKey);
+    console.log('Supabase URL:', !!supabaseConfig.url);
+    console.log('=============');
 
     const body = await req.json();
     const { submissionId } = body;
@@ -57,10 +53,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Usar NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY
     const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      supabaseConfig.url!,
+      supabaseConfig.serviceRoleKey!,
       {
         auth: {
           autoRefreshToken: false,
