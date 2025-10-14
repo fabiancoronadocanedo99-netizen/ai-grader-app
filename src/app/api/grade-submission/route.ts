@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     console.log('=== DEBUG VARIABLES DE ENTORNO ===');
     console.log('SUPABASE_URL existe?:', !!process.env.SUPABASE_URL);
     console.log('SUPABASE_SERVICE_ROLE_KEY existe?:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
-    console.log('AI_API_KEY existe?:', !!process.env.AI_API_KEY);
+    console.log('SUPABASE_GEMINI_KEY existe?:', !!process.env.SUPABASE_GEMINI_KEY);
     console.log('==================================');
 
     // Verificar variables críticas
@@ -50,9 +50,9 @@ export async function POST(req: NextRequest) {
       throw new Error('SUPABASE_SERVICE_ROLE_KEY no está configurada');
     }
 
-    const apiKey = process.env.AI_API_KEY;
+    const apiKey = process.env.SUPABASE_GEMINI_KEY;
     if (!apiKey) {
-      throw new Error('AI_API_KEY no está configurada en el servidor.');
+      throw new Error('SUPABASE_GEMINI_KEY no está configurada en el servidor.');
     }
 
     const body = await req.json();
@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
       }]
     };
 
-    console.log('Enviando petición a la API de Gemini...');
+    console.log('Enviando petición a la SUPABASE_GEMINI_KEY...');
 
     const response = await fetch(
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent',
