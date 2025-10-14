@@ -35,24 +35,16 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    // === VERIFICACIÓN DE VARIABLES DE ENTORNO ===
+    // Obtener la API key desde NEXT_PUBLIC (que SIEMPRE funciona en Vercel)
+    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+
     console.log('=== DEBUG VARIABLES DE ENTORNO ===');
-    console.log('SUPABASE_URL existe?:', !!process.env.SUPABASE_URL);
-    console.log('SUPABASE_SERVICE_ROLE_KEY existe?:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
-    console.log('SUPABASE_GEMINI_KEY existe?:', !!process.env.SUPABASE_GEMINI_KEY);
+    console.log('NEXT_PUBLIC_GEMINI_API_KEY existe?:', !!apiKey);
+    console.log('SUPABASE_URL existe?:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
     console.log('==================================');
 
-    // Verificar variables críticas
-    if (!process.env.SUPABASE_URL) {
-      throw new Error('SUPABASE_URL no está configurada');
-    }
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('SUPABASE_SERVICE_ROLE_KEY no está configurada');
-    }
-
-    const apiKey = process.env.SUPABASE_GEMINI_KEY;
     if (!apiKey) {
-      throw new Error('SUPABASE_GEMINI_KEY no está configurada en el servidor.');
+      throw new Error('NEXT_PUBLIC_GEMINI_API_KEY no está configurada en el servidor.');
     }
 
     const body = await req.json();
@@ -65,9 +57,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Usar NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY
     const supabaseAdmin = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
       {
         auth: {
           autoRefreshToken: false,
@@ -162,7 +155,7 @@ export async function POST(req: NextRequest) {
       }]
     };
 
-    console.log('Enviando petición a la SUPABASE_GEMINI_KEY...');
+    console.log('Enviando petición a la API de Gemini...');
 
     const response = await fetch(
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent',

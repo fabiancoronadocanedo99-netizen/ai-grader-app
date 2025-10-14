@@ -4,11 +4,11 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   return NextResponse.json({
-    hasAiApiKey: !!process.env.SUPABASE_GEMINI_KEY,
-    hasSupabaseUrl: !!process.env.SUPABASE_URL,
+    hasNextPublicGeminiKey: !!process.env.NEXT_PUBLIC_GEMINI_API_KEY,
+    hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
     hasSupabaseServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
     allEnvKeys: Object.keys(process.env).filter(k => 
-      k.includes('AI') || k.includes('SUPABASE')
+      k.includes('GEMINI') || k.includes('SUPABASE') || k.includes('AI')
     )
   });
 }
