@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { useDropzone } from 'react-dropzone'
+import { useDropzone, FileWithPath } from 'react-dropzone'
 import { createClient } from '@/lib/supabaseClient'
 
 // --- INTERFACES ---
@@ -110,10 +110,48 @@ export default function ClassDetailPage() {
   const openDeleteModal = (evaluation: Evaluation) => { setEvaluationToDelete(evaluation); setIsDeleteModalOpen(true); setOpenDropdown(null); };
   const openEditModal = (evaluation: Evaluation) => { setEvaluationToEdit(evaluation); setEditingEvaluationName(evaluation.name); setIsEditModalOpen(true); setOpenDropdown(null); };
 
-  const generateCSVTemplate = () => { /* ... tu código para generar CSV ... */ };
-  const processCSVFile = async (file: File) => { /* ... tu código para procesar CSV ... */ };
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ /* ... */ });
-  const handleCSVUpload = () => { if (csvFile) { processCSVFile(csvFile); } };
+  const generateCSVTemplate = () => {
+    const csvContent = 'full_name,student_email,tutor_email\n';
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'plantilla_alumnos.csv';
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  const processCSVFile = async (file: File) => {
+    setIsProcessingCSV(true);
+    try {
+      const text = await file.text();
+      const response = await fetch('/api/process-csv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csvData: text, classId })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      alert(`CSV procesado: ${result.studentsAdded} alumnos añadidos.`);
+      await fetchStudents();
+      setIsCSVModalOpen(false);
+    } catch (error) {
+      alert(`Error al procesar CSV: ${(error as Error).message}`);
+    } finally {
+      setIsProcessingCSV(false);
+    }
+  };
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop: (acceptedFiles: FileWithPath[]) => {
+      if (acceptedFiles.length > 0) {
+        setCSVFile(acceptedFiles[0]);
+      }
+    },
+    accept: { 'text/csv': ['.csv'] },
+    multiple: false
+  });
+
+  const handleCSVUpload = () => { if (csvFile) processCSVFile(csvFile); };
 
   if (loading) {
     return (
@@ -267,6 +305,77 @@ export default function ClassDetailPage() {
                 <button type="submit" className="flex-1 neu-button">Crear</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {isCSVModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setIsCSVModalOpen(false)} />
+          <div className="relative neu-card p-8 max-w-2xl w-full mx-4">
+            <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">Importar Alumnos desde CSV</h2>
+
+            <div className="mb-6 p-4 neu-card">
+              <h3 className="font-semibold text-gray-700 mb-2">Descargar Plantilla</h3>
+              <p className="text-sm text-gray-600 mb-3">Descarga la plantilla CSV de ejemplo para asegurarte de que tu archivo tenga el formato correcto.</p>
+              <button onClick={generateCSVTemplate} className="neu-button text-gray-700 font-medium py-2 px-4 text-sm">
+                📥 Descargar plantilla_alumnos.csv
+              </button>
+            </div>
+
+            <div {...getRootProps()} className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors duration-200 cursor-pointer ${isDragActive ? 'border-blue-400 bg-blue-50' : csvFile ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'}`}>
+              <input {...getInputProps()} />
+              {csvFile ? (
+                <div className="space-y-2">
+                  <div className="text-4xl">📄</div>
+                  <p className="text-lg font-medium text-green-700">Archivo seleccionado</p>
+                  <p className="text-sm text-gray-600">{csvFile.name}</p>
+                  <p className="text-xs text-gray-500">Tamaño: {(csvFile.size / 1024).toFixed(2)} KB</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-4xl text-gray-400">📎</div>
+                  {isDragActive ? (
+                    <p className="text-lg text-blue-600">Suelta el archivo CSV aquí...</p>
+                  ) : (
+                    <>
+                      <p className="text-lg text-gray-600">Arrastra y suelta tu archivo CSV aquí</p>
+                      <p className="text-sm text-gray-500">o haz clic para seleccionar un archivo</p>
+                    </>
+                  )}
+                  <p className="text-xs text-gray-400 mt-2">Solo se permiten archivos .csv (máximo 1 archivo)</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex space-x-4 mt-6">
+              <button type="button" onClick={() => { setIsCSVModalOpen(false); setCSVFile(null); }} className="flex-1 neu-button text-gray-700 font-semibold py-3 px-4" disabled={isProcessingCSV}>
+                Cancelar
+              </button>
+              {csvFile && (
+                <button onClick={() => setCSVFile(null)} className="neu-button text-gray-700 font-medium py-3 px-4" disabled={isProcessingCSV}>
+                  🗑️ Quitar archivo
+                </button>
+              )}
+              <button onClick={handleCSVUpload} disabled={!csvFile || isProcessingCSV} className={`flex-1 font-semibold py-3 px-4 ${!csvFile || isProcessingCSV ? 'neu-button text-gray-400 cursor-not-allowed opacity-50' : 'neu-button text-gray-700'}`}>
+                {isProcessingCSV ? (
+                  <span className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-700 mr-2"></div>
+                    Procesando...
+                  </span>
+                ) : ('📤 Importar Alumnos')}
+              </button>
+            </div>
+
+            <div className="mt-6 p-4 neu-card bg-blue-50/30">
+              <h4 className="font-medium text-gray-700 mb-2">Formato requerido:</h4>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>• <strong>Nombre Completo:</strong> Nombre y apellidos del alumno</li>
+                <li>• <strong>Email Alumno:</strong> Correo electrónico del estudiante</li>
+                <li>• <strong>Email Tutor:</strong> Correo electrónico del padre/madre/tutor</li>
+              </ul>
+              <p className="text-xs text-gray-500 mt-3">💡 Tip: La primera fila debe contener los encabezados de las columnas</p>
+            </div>
           </div>
         </div>
       )}
