@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
     console.log('Enviando petición a la API de Gemini...');
 
     const response = await fetch(
-      'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro-latest:generateContent', // URL Correcta
+      'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent', // <-- QUITAMOS "-latest", // URL Correcta
       {
         method: 'POST',
         headers: {
