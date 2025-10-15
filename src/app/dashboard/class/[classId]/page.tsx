@@ -124,13 +124,26 @@ export default function ClassDetailPage() {
     setIsProcessingCSV(true);
     try {
       const text = await file.text();
+
+      // --- CORRECCIÓN: OBTENER LA SESIÓN ---
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error("No hay sesión activa. Por favor, vuelve a iniciar sesión.");
+      }
+
       const response = await fetch('/api/process-csv', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          // --- CORRECCIÓN: AÑADIR EL HEADER DE AUTORIZACIÓN ---
+          'Authorization': `Bearer ${session.accessToken}`
+        },
         body: JSON.stringify({ csvData: text, classId })
       });
+
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
+
       alert(`CSV procesado: ${result.studentsAdded} alumnos añadidos.`);
       await fetchStudents();
       setIsCSVModalOpen(false);
