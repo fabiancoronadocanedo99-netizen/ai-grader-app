@@ -125,19 +125,12 @@ export default function ClassDetailPage() {
     try {
       const text = await file.text();
 
-      // --- CORRECCIÓN: OBTENER LA SESIÓN ---
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error("No hay sesión activa. Por favor, vuelve a iniciar sesión.");
-      }
-
       const response = await fetch('/api/process-csv', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          // --- CORRECCIÓN: AÑADIR EL HEADER DE AUTORIZACIÓN ---
-          'Authorization': `Bearer ${session.accessToken}`
         },
+        credentials: 'include', // <-- ¡LA LÍNEA MÁGICA!
         body: JSON.stringify({ csvData: text, classId })
       });
 
