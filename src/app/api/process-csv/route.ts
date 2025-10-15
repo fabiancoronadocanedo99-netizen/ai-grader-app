@@ -1,5 +1,7 @@
-import { createClient } from '@supabase/supabase-js'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js' // Mantenemos este para el admin
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,25 +47,7 @@ export async function POST(request: NextRequest) {
     console.log("🎯 classId normalized:", classIdForQuery)
 
     // Create Supabase client for auth check
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader) {
-      return NextResponse.json(
-        { error: 'Authorization header required' },
-        { status: 401 }
-      )
-    }
-
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        global: {
-          headers: {
-            Authorization: authHeader
-          }
-        }
-      }
-    )
+    const supabase = createRouteHandlerClient({ cookies });
 
     // Verify user authentication and authorization
     const { data: { user }, error: authError } = await supabase.auth.getUser()
