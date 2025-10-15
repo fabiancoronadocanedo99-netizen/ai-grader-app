@@ -192,10 +192,56 @@ export default function ClassDetailPage() {
         )}
 
         {activeTab === 'students' && (
-          <div>
-            <h2 className="text-2xl font-bold text-gray-700 mb-8">Gestión de Alumnos</h2>
-            <p>Aquí irá la tabla de alumnos...</p>
-          </div>
+          <>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-700">Gestión de Alumnos</h2>
+              <div className="flex space-x-4">
+                <button className="neu-button text-gray-700 font-semibold py-3 px-6">
+                  Añadir Alumno Manualmente
+                </button>
+                <button onClick={() => setIsCSVModalOpen(true)} className="neu-button text-gray-700 font-semibold py-3 px-6">
+                  Importar CSV
+                </button>
+              </div>
+            </div>
+            <div className="neu-card p-4">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-4 px-4 font-semibold text-gray-700">Nombre Completo</th>
+                      <th className="text-left py-4 px-4 font-semibold text-gray-700">Email Alumno</th>
+                      <th className="text-left py-4 px-4 font-semibold text-gray-700">Email Tutor</th>
+                      <th className="text-left py-4 px-4 font-semibold text-gray-700">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {students.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="text-center py-12 text-gray-600">
+                          Aun no hay alumnos en esta clase. ¡Impórtalos desde un CSV!
+                        </td>
+                      </tr>
+                    ) : (
+                      students.map((student) => (
+                        <tr key={student.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                          <td className="py-4 px-4 text-gray-700">{student.full_name}</td>
+                          <td className="py-4 px-4 text-gray-600">{student.student_email}</td>
+                          <td className="py-4 px-4 text-gray-600">{student.tutor_email || 'No especificado'}</td>
+                          <td className="py-4 px-4">
+                            <div className="flex space-x-2">
+                              <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">Editar</button>
+                              <button className="text-red-600 hover:text-red-800 text-sm font-medium">Eliminar</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
