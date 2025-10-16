@@ -6,169 +6,195 @@ import { useParams } from 'next/navigation'
 import { useDropzone, FileWithPath } from 'react-dropzone'
 import { createClient } from '@/lib/supabaseClient'
 
-// --- INTERFACES ---
-interface ClassDetails { id: string; name: string; subject?: string; grade_level?: string; }
-interface Evaluation { id: string; name: string; class_id: string; created_at?: string; type: 'exam' | 'assignment'; } 
-interface Student { id: string; full_name: string; student_email: string; tutor_email?: string; class_id: string; created_at?: string; }
+interface ClassDetails { 
+  id: string
+  name: string
+  subject?: string
+  grade_level?: string
+}
+
+interface Evaluation { 
+  id: string
+  name: string
+  class_id: string
+  created_at?: string
+  type: 'exam' | 'assignment'
+}
+
+interface Student { 
+  id: string
+  full_name: string
+  student_email: string
+  tutor_email?: string
+  class_id: string
+  created_at?: string
+}
 
 export default function ClassDetailPage() {
-  const supabase = createClient();
-  const params = useParams();
-  const classId = params.classId as string;
+  const supabase = createClient()
+  const params = useParams()
+  const classId = params.classId as string
 
-  const [classDetails, setClassDetails] = useState<ClassDetails | null>(null);
-  const [allEvaluations, setAllEvaluations] = useState<Evaluation[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [newEvaluationName, setNewEvaluationName] = useState('');
-  const [newEvaluationType, setNewEvaluationType] = useState<'exam' | 'assignment'>('exam');
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [evaluationToDelete, setEvaluationToDelete] = useState<Evaluation | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [evaluationToEdit, setEvaluationToEdit] = useState<Evaluation | null>(null);
-  const [editingEvaluationName, setEditingEvaluationName] = useState('');
-  const [activeTab, setActiveTab] = useState<'evaluations' | 'students'>('evaluations');
-  const [isCSVModalOpen, setIsCSVModalOpen] = useState(false);
-  const [csvFile, setCSVFile] = useState<File | null>(null);
-  const [isProcessingCSV, setIsProcessingCSV] = useState(false);
+  const [classDetails, setClassDetails] = useState<ClassDetails | null>(null)
+  const [allEvaluations, setAllEvaluations] = useState<Evaluation[]>([])
+  const [students, setStudents] = useState<Student[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [newEvaluationName, setNewEvaluationName] = useState('')
+  const [newEvaluationType, setNewEvaluationType] = useState<'exam' | 'assignment'>('exam')
+  const [activeTab, setActiveTab] = useState<'evaluations' | 'students'>('evaluations')
+  const [isCSVModalOpen, setIsCSVModalOpen] = useState(false)
+  const [csvFile, setCSVFile] = useState<File | null>(null)
+  const [isProcessingCSV, setIsProcessingCSV] = useState(false)
 
-  const exams = useMemo(() => allEvaluations.filter(e => e.type === 'exam'), [allEvaluations]);
-  const assignments = useMemo(() => allEvaluations.filter(e => e.type === 'assignment'), [allEvaluations]);
+  const exams = useMemo(() => allEvaluations.filter(e => e.type === 'exam'), [allEvaluations])
+  const assignments = useMemo(() => allEvaluations.filter(e => e.type === 'assignment'), [allEvaluations])
 
   const fetchClassDetails = useCallback(async () => {
-    console.log("Iniciando fetchClassDetails con classId:", classId);
-    if (!classId) {
-      console.log("No hay classId, deteniendo.");
-      return;
-    }
-    const { data, error } = await supabase.from('classes').select('*').eq('id', classId).single();
+    if (!classId) return
+    const { data, error } = await supabase.from('classes').select('*').eq('id', classId).single()
     if (error) {
-      console.error("¡ERROR al cargar detalles de la clase!:", error);
+      console.error("Error al cargar detalles de la clase:", error)
     } else {
-      console.log("¡ÉXITO! Detalles de la clase encontrados:", data);
-      setClassDetails(data);
+      setClassDetails(data)
     }
-  }, [classId, supabase]);
+  }, [classId, supabase])
 
   const fetchStudents = useCallback(async () => {
-    console.log("Iniciando fetchStudents...");
-    if (!classId) return;
-    const { data, error } = await supabase.from('students').select('*').eq('class_id', classId).order('created_at', { ascending: false });
+    if (!classId) return
+    const { data, error } = await supabase
+      .from('students')
+      .select('*')
+      .eq('class_id', classId)
+      .order('created_at', { ascending: false })
+
     if (error) {
-      console.error("¡ERROR al cargar estudiantes!:", error);
+      console.error("Error al cargar estudiantes:", error)
     } else {
-      console.log("¡ÉXITO al cargar estudiantes!:", data);
-      setStudents(data || []);
+      setStudents(data || [])
     }
-  }, [classId, supabase]);
+  }, [classId, supabase])
 
   const fetchEvaluations = useCallback(async () => {
-    console.log("Iniciando fetchEvaluations...");
-    if (!classId) return;
-    const { data, error } = await supabase.from('exams').select('*').eq('class_id', classId).order('created_at', { ascending: false });
+    if (!classId) return
+    const { data, error } = await supabase
+      .from('exams')
+      .select('*')
+      .eq('class_id', classId)
+      .order('created_at', { ascending: false })
+
     if (error) {
-      console.error("¡ERROR al cargar evaluaciones!:", error);
+      console.error("Error al cargar evaluaciones:", error)
     } else {
-      console.log("¡ÉXITO al cargar evaluaciones!:", data);
-      setAllEvaluations(data as Evaluation[] || []);
+      setAllEvaluations(data as Evaluation[] || [])
     }
-  }, [classId, supabase]);
+  }, [classId, supabase])
 
   useEffect(() => {
     const loadData = async () => {
-      setLoading(true);
-      await Promise.all([fetchClassDetails(), fetchEvaluations(), fetchStudents()]);
-      setLoading(false);
-    };
-    if (classId) loadData();
-  }, [classId, fetchClassDetails, fetchEvaluations, fetchStudents]);
+      setLoading(true)
+      await Promise.all([fetchClassDetails(), fetchEvaluations(), fetchStudents()])
+      setLoading(false)
+    }
+    if (classId) loadData()
+  }, [classId, fetchClassDetails, fetchEvaluations, fetchStudents])
 
   const handleCreateEvaluation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newEvaluationName.trim() || !classId) return;
-    const { error } = await supabase.from('exams').insert([{ name: newEvaluationName, class_id: classId, type: newEvaluationType }]);
-    if (error) { alert(`Error: ${error.message}`); }
-    else { setNewEvaluationName(''); setNewEvaluationType('exam'); setIsCreateModalOpen(false); await fetchEvaluations(); }
-  };
+    e.preventDefault()
+    if (!newEvaluationName.trim() || !classId) return
 
-  const handleDeleteEvaluation = async () => {
-    if (!evaluationToDelete) return;
-    const { error } = await supabase.from('exams').delete().eq('id', evaluationToDelete.id);
-    if (error) { alert(`Error: ${error.message}`); }
-    else { setIsDeleteModalOpen(false); setEvaluationToDelete(null); await fetchEvaluations(); }
-  };
+    const { error } = await supabase
+      .from('exams')
+      .insert([{ 
+        name: newEvaluationName,
+        class_id: classId,
+        type: newEvaluationType 
+      }])
 
-  const handleEditEvaluationName = async (e: React.FormEvent) => {
-    if (!evaluationToEdit || !editingEvaluationName.trim()) return;
-    const { error } = await supabase.from('exams').update({ name: editingEvaluationName }).eq('id', evaluationToEdit.id);
-    if (error) { alert(`Error: ${error.message}`); }
-    else { setIsEditModalOpen(false); setEvaluationToEdit(null); setEditingEvaluationName(''); await fetchEvaluations(); }
-  };
-
-  const openDeleteModal = (evaluation: Evaluation) => { setEvaluationToDelete(evaluation); setIsDeleteModalOpen(true); setOpenDropdown(null); };
-  const openEditModal = (evaluation: Evaluation) => { setEvaluationToEdit(evaluation); setEditingEvaluationName(evaluation.name); setIsEditModalOpen(true); setOpenDropdown(null); };
+    if (error) {
+      alert(`Error: ${error.message}`)
+    } else {
+      setNewEvaluationName('')
+      setNewEvaluationType('exam')
+      setIsCreateModalOpen(false)
+      await fetchEvaluations()
+    }
+  }
 
   const generateCSVTemplate = () => {
-    const csvContent = 'full_name,student_email,tutor_email\n';
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'plantilla_alumnos.csv';
-    link.click();
-    URL.revokeObjectURL(link.href);
-  };
+    const csvContent = 'full_name,student_email,tutor_email\n'
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = 'plantilla_alumnos.csv'
+    link.click()
+    URL.revokeObjectURL(link.href)
+  }
 
   const processCSVFile = async (file: File) => {
-    setIsProcessingCSV(true);
+    setIsProcessingCSV(true)
     try {
-      const text = await file.text();
+      const text = await file.text()
 
       const response = await fetch('/api/process-csv', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
         },
-        credentials: 'include', // <-- ¡LA LÍNEA MÁGICA!
-        body: JSON.stringify({ csvData: text, classId })
-      });
+        credentials: 'include',
+        body: JSON.stringify({ 
+          csvData: text,
+          classId: classId 
+        })
+      })
 
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
+      const result = await response.json()
 
-      alert(`CSV procesado: ${result.studentsAdded} alumnos añadidos.`);
-      await fetchStudents();
-      setIsCSVModalOpen(false);
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al procesar CSV')
+      }
+
+      alert(`✅ CSV procesado exitosamente: ${result.studentsAdded} alumnos añadidos.`)
+      await fetchStudents()
+      setIsCSVModalOpen(false)
+      setCSVFile(null)
+
     } catch (error) {
-      alert(`Error al procesar CSV: ${(error as Error).message}`);
+      console.error('Error al procesar CSV:', error)
+      alert(`❌ Error al procesar CSV: ${(error as Error).message}`)
     } finally {
-      setIsProcessingCSV(false);
+      setIsProcessingCSV(false)
     }
-  };
+  }
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (acceptedFiles: FileWithPath[]) => {
       if (acceptedFiles.length > 0) {
-        setCSVFile(acceptedFiles[0]);
+        setCSVFile(acceptedFiles[0])
       }
     },
     accept: { 'text/csv': ['.csv'] },
     multiple: false
-  });
+  })
 
-  const handleCSVUpload = () => { if (csvFile) processCSVFile(csvFile); };
+  const handleCSVUpload = () => {
+    if (csvFile) processCSVFile(csvFile)
+  }
 
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
       </div>
-    );
+    )
   }
 
   if (!classDetails) {
-    return <div className="p-8 text-center text-lg text-red-600">Error: Clase no encontrada o no tienes permiso para verla.</div>;
+    return (
+      <div className="p-8 text-center text-lg text-red-600">
+        Error: Clase no encontrada o no tienes permiso para verla.
+      </div>
+    )
   }
 
   return (
@@ -180,10 +206,24 @@ export default function ClassDetailPage() {
 
       <div className="neu-card p-6">
         <div className="flex border-b border-gray-200 mb-6">
-          <button onClick={() => setActiveTab('evaluations')} className={`px-6 py-3 font-semibold ${activeTab === 'evaluations' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'}`}>
+          <button 
+            onClick={() => setActiveTab('evaluations')} 
+            className={`px-6 py-3 font-semibold ${
+              activeTab === 'evaluations' 
+                ? 'border-b-2 border-blue-500 text-blue-600' 
+                : 'text-gray-500'
+            }`}
+          >
             Evaluaciones
           </button>
-          <button onClick={() => setActiveTab('students')} className={`px-6 py-3 font-semibold ${activeTab === 'students' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'}`}>
+          <button 
+            onClick={() => setActiveTab('students')} 
+            className={`px-6 py-3 font-semibold ${
+              activeTab === 'students' 
+                ? 'border-b-2 border-blue-500 text-blue-600' 
+                : 'text-gray-500'
+            }`}
+          >
             Alumnos
           </button>
         </div>
@@ -192,7 +232,10 @@ export default function ClassDetailPage() {
           <>
             <div className="flex justify-between items-center mb-8">
               <h2 className="text-2xl font-bold text-gray-700">Gestión de Evaluaciones</h2>
-              <button onClick={() => setIsCreateModalOpen(true)} className="neu-button text-gray-700 font-semibold py-3 px-6">
+              <button 
+                onClick={() => setIsCreateModalOpen(true)} 
+                className="neu-button text-gray-700 font-semibold py-3 px-6"
+              >
                 Crear Nueva Evaluación
               </button>
             </div>
@@ -206,7 +249,10 @@ export default function ClassDetailPage() {
                   {exams.map(exam => (
                     <div key={exam.id} className="neu-card p-4">
                       <h4 className="font-semibold text-gray-800">{exam.name}</h4>
-                      <Link href={`/dashboard/class/${classId}/exam/${exam.id}`} className="neu-button mt-4 text-center block">
+                      <Link 
+                        href={`/dashboard/class/${classId}/exam/${exam.id}`} 
+                        className="neu-button mt-4 text-center block"
+                      >
                         Gestionar
                       </Link>
                     </div>
@@ -216,7 +262,7 @@ export default function ClassDetailPage() {
             </section>
 
             <section>
-              <h3 className="text-xl font-semibold text-gray-600 mb-4">Homework Tareas</h3>
+              <h3 className="text-xl font-semibold text-gray-600 mb-4">📚 Tareas</h3>
               {assignments.length === 0 ? (
                 <p className="text-center text-gray-500 py-4">No hay tareas para esta clase.</p>
               ) : (
@@ -224,7 +270,10 @@ export default function ClassDetailPage() {
                   {assignments.map(task => (
                     <div key={task.id} className="neu-card p-4">
                       <h4 className="font-semibold text-gray-800">{task.name}</h4>
-                      <Link href={`/dashboard/class/${classId}/exam/${task.id}`} className="neu-button mt-4 text-center block">
+                      <Link 
+                        href={`/dashboard/class/${classId}/exam/${task.id}`} 
+                        className="neu-button mt-4 text-center block"
+                      >
                         Gestionar
                       </Link>
                     </div>
@@ -239,15 +288,14 @@ export default function ClassDetailPage() {
           <>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-gray-700">Gestión de Alumnos</h2>
-              <div className="flex space-x-4">
-                <button className="neu-button text-gray-700 font-semibold py-3 px-6">
-                  Añadir Alumno Manualmente
-                </button>
-                <button onClick={() => setIsCSVModalOpen(true)} className="neu-button text-gray-700 font-semibold py-3 px-6">
-                  Importar CSV
-                </button>
-              </div>
+              <button 
+                onClick={() => setIsCSVModalOpen(true)} 
+                className="neu-button text-gray-700 font-semibold py-3 px-6"
+              >
+                📤 Importar CSV
+              </button>
             </div>
+
             <div className="neu-card p-4">
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -256,14 +304,13 @@ export default function ClassDetailPage() {
                       <th className="text-left py-4 px-4 font-semibold text-gray-700">Nombre Completo</th>
                       <th className="text-left py-4 px-4 font-semibold text-gray-700">Email Alumno</th>
                       <th className="text-left py-4 px-4 font-semibold text-gray-700">Email Tutor</th>
-                      <th className="text-left py-4 px-4 font-semibold text-gray-700">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {students.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="text-center py-12 text-gray-600">
-                          Aun no hay alumnos en esta clase. ¡Impórtalos desde un CSV!
+                        <td colSpan={3} className="text-center py-12 text-gray-600">
+                          Aún no hay alumnos en esta clase. ¡Impórtalos desde un CSV!
                         </td>
                       </tr>
                     ) : (
@@ -272,12 +319,6 @@ export default function ClassDetailPage() {
                           <td className="py-4 px-4 text-gray-700">{student.full_name}</td>
                           <td className="py-4 px-4 text-gray-600">{student.student_email}</td>
                           <td className="py-4 px-4 text-gray-600">{student.tutor_email || 'No especificado'}</td>
-                          <td className="py-4 px-4">
-                            <div className="flex space-x-2">
-                              <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">Editar</button>
-                              <button className="text-red-600 hover:text-red-800 text-sm font-medium">Eliminar</button>
-                            </div>
-                          </td>
                         </tr>
                       ))
                     )}
@@ -289,47 +330,109 @@ export default function ClassDetailPage() {
         )}
       </div>
 
+      {/* Modal Crear Evaluación */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setIsCreateModalOpen(false)} />
+          <div 
+            className="absolute inset-0 bg-black/50" 
+            onClick={() => setIsCreateModalOpen(false)} 
+          />
           <div className="relative neu-card p-8 w-full max-w-lg">
             <h2 className="text-2xl font-bold mb-6 text-center">Crear Nueva Evaluación</h2>
             <form onSubmit={handleCreateEvaluation}>
               <div className="mb-6">
                 <label className="block text-sm font-bold mb-3">Tipo de Evaluación</label>
                 <div className="flex space-x-2">
-                  <button type="button" onClick={() => setNewEvaluationType('exam')} className={`flex-1 py-3 rounded-lg font-semibold ${newEvaluationType === 'exam' ? 'neu-button-active shadow-inner' : 'neu-button'}`}>📝 Examen</button>
-                  <button type="button" onClick={() => setNewEvaluationType('assignment')} className={`flex-1 py-3 rounded-lg font-semibold ${newEvaluationType === 'assignment' ? 'neu-button-active shadow-inner' : 'neu-button'}`}>Homework Tarea</button>
+                  <button 
+                    type="button" 
+                    onClick={() => setNewEvaluationType('exam')} 
+                    className={`flex-1 py-3 rounded-lg font-semibold ${
+                      newEvaluationType === 'exam' 
+                        ? 'neu-button-active shadow-inner' 
+                        : 'neu-button'
+                    }`}
+                  >
+                    📝 Examen
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setNewEvaluationType('assignment')} 
+                    className={`flex-1 py-3 rounded-lg font-semibold ${
+                      newEvaluationType === 'assignment' 
+                        ? 'neu-button-active shadow-inner' 
+                        : 'neu-button'
+                    }`}
+                  >
+                    📚 Tarea
+                  </button>
                 </div>
               </div>
               <div className="mb-4">
-                <label htmlFor="evaluationName" className="block text-sm font-bold mb-2">Nombre de la Evaluación</label>
-                <input id="evaluationName" type="text" value={newEvaluationName} onChange={(e) => setNewEvaluationName(e.target.value)} className="neu-input w-full p-4" placeholder={newEvaluationType === 'exam' ? "Ej: Parcial de Álgebra" : "Ej: Guía Capítulo 5"} required />
+                <label htmlFor="evaluationName" className="block text-sm font-bold mb-2">
+                  Nombre de la Evaluación
+                </label>
+                <input 
+                  id="evaluationName" 
+                  type="text" 
+                  value={newEvaluationName} 
+                  onChange={(e) => setNewEvaluationName(e.target.value)} 
+                  className="neu-input w-full p-4" 
+                  placeholder={newEvaluationType === 'exam' ? "Ej: Parcial de Álgebra" : "Ej: Guía Capítulo 5"} 
+                  required 
+                />
               </div>
               <div className="flex space-x-4 mt-6">
-                <button type="button" onClick={() => setIsCreateModalOpen(false)} className="flex-1 neu-button">Cancelar</button>
-                <button type="submit" className="flex-1 neu-button">Crear</button>
+                <button 
+                  type="button" 
+                  onClick={() => setIsCreateModalOpen(false)} 
+                  className="flex-1 neu-button"
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="flex-1 neu-button">
+                  Crear
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
+      {/* Modal Importar CSV */}
       {isCSVModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setIsCSVModalOpen(false)} />
+          <div 
+            className="absolute inset-0 bg-black/50" 
+            onClick={() => setIsCSVModalOpen(false)} 
+          />
           <div className="relative neu-card p-8 max-w-2xl w-full mx-4">
-            <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">Importar Alumnos desde CSV</h2>
+            <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">
+              Importar Alumnos desde CSV
+            </h2>
 
             <div className="mb-6 p-4 neu-card">
               <h3 className="font-semibold text-gray-700 mb-2">Descargar Plantilla</h3>
-              <p className="text-sm text-gray-600 mb-3">Descarga la plantilla CSV de ejemplo para asegurarte de que tu archivo tenga el formato correcto.</p>
-              <button onClick={generateCSVTemplate} className="neu-button text-gray-700 font-medium py-2 px-4 text-sm">
+              <p className="text-sm text-gray-600 mb-3">
+                Descarga la plantilla CSV de ejemplo para asegurarte de que tu archivo tenga el formato correcto.
+              </p>
+              <button 
+                onClick={generateCSVTemplate} 
+                className="neu-button text-gray-700 font-medium py-2 px-4 text-sm"
+              >
                 📥 Descargar plantilla_alumnos.csv
               </button>
             </div>
 
-            <div {...getRootProps()} className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors duration-200 cursor-pointer ${isDragActive ? 'border-blue-400 bg-blue-50' : csvFile ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'}`}>
+            <div 
+              {...getRootProps()} 
+              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors duration-200 cursor-pointer ${
+                isDragActive 
+                  ? 'border-blue-400 bg-blue-50' 
+                  : csvFile 
+                  ? 'border-green-400 bg-green-50' 
+                  : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+              }`}
+            >
               <input {...getInputProps()} />
               {csvFile ? (
                 <div className="space-y-2">
@@ -349,42 +452,66 @@ export default function ClassDetailPage() {
                       <p className="text-sm text-gray-500">o haz clic para seleccionar un archivo</p>
                     </>
                   )}
-                  <p className="text-xs text-gray-400 mt-2">Solo se permiten archivos .csv (máximo 1 archivo)</p>
+                  <p className="text-xs text-gray-400 mt-2">Solo se permiten archivos .csv</p>
                 </div>
               )}
             </div>
 
             <div className="flex space-x-4 mt-6">
-              <button type="button" onClick={() => { setIsCSVModalOpen(false); setCSVFile(null); }} className="flex-1 neu-button text-gray-700 font-semibold py-3 px-4" disabled={isProcessingCSV}>
+              <button 
+                type="button" 
+                onClick={() => { 
+                  setIsCSVModalOpen(false)
+                  setCSVFile(null)
+                }} 
+                className="flex-1 neu-button text-gray-700 font-semibold py-3 px-4" 
+                disabled={isProcessingCSV}
+              >
                 Cancelar
               </button>
               {csvFile && (
-                <button onClick={() => setCSVFile(null)} className="neu-button text-gray-700 font-medium py-3 px-4" disabled={isProcessingCSV}>
-                  🗑️ Quitar archivo
+                <button 
+                  onClick={() => setCSVFile(null)} 
+                  className="neu-button text-gray-700 font-medium py-3 px-4" 
+                  disabled={isProcessingCSV}
+                >
+                  🗑️ Quitar
                 </button>
               )}
-              <button onClick={handleCSVUpload} disabled={!csvFile || isProcessingCSV} className={`flex-1 font-semibold py-3 px-4 ${!csvFile || isProcessingCSV ? 'neu-button text-gray-400 cursor-not-allowed opacity-50' : 'neu-button text-gray-700'}`}>
+              <button 
+                onClick={handleCSVUpload} 
+                disabled={!csvFile || isProcessingCSV} 
+                className={`flex-1 font-semibold py-3 px-4 ${
+                  !csvFile || isProcessingCSV 
+                    ? 'neu-button text-gray-400 cursor-not-allowed opacity-50' 
+                    : 'neu-button text-gray-700'
+                }`}
+              >
                 {isProcessingCSV ? (
                   <span className="flex items-center justify-center">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-700 mr-2"></div>
                     Procesando...
                   </span>
-                ) : ('📤 Importar Alumnos')}
+                ) : (
+                  '📤 Importar Alumnos'
+                )}
               </button>
             </div>
 
             <div className="mt-6 p-4 neu-card bg-blue-50/30">
               <h4 className="font-medium text-gray-700 mb-2">Formato requerido:</h4>
               <ul className="text-sm text-gray-600 space-y-1">
-                <li>• <strong>Nombre Completo:</strong> Nombre y apellidos del alumno</li>
-                <li>• <strong>Email Alumno:</strong> Correo electrónico del estudiante</li>
-                <li>• <strong>Email Tutor:</strong> Correo electrónico del padre/madre/tutor</li>
+                <li>• <strong>full_name:</strong> Nombre y apellidos del alumno</li>
+                <li>• <strong>student_email:</strong> Correo electrónico del estudiante</li>
+                <li>• <strong>tutor_email:</strong> Correo electrónico del padre/madre/tutor</li>
               </ul>
-              <p className="text-xs text-gray-500 mt-3">💡 Tip: La primera fila debe contener los encabezados de las columnas</p>
+              <p className="text-xs text-gray-500 mt-3">
+                💡 Tip: La primera fila debe contener exactamente estos encabezados
+              </p>
             </div>
           </div>
         </div>
       )}
     </div>
-  );
+  )
 }

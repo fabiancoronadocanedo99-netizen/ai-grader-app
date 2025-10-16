@@ -1,57 +1,39 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js' // Mantenemos este para el admin
+import { createClient } from '@supabase/supabase-js'
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
     console.log("🚀 Next.js API Route - Process CSV started")
 
-    // Parse request body
     const body = await request.json()
-    const { csvData } = body
-    const raw = String(body.classId ?? "").trim()
-    
-    // Enhanced logging for debugging
-    console.log("classId_received", {raw, type: typeof body.classId, body: body})
-    
-    if (!csvData || !raw) {
+    const { csvData, classId } = body
+
+    console.log("Request received:", { 
+      hasCsvData: !!csvData, 
+      classId: classId,
+      classIdType: typeof classId 
+    })
+
+    if (!csvData || !classId) {
       return NextResponse.json(
         { 
           error: 'Missing required fields: csvData and classId',
-          received: { csvData: !!csvData, classId: raw }
+          received: { csvData: !!csvData, classId: classId }
         },
         { status: 400 }
       )
     }
-
-    // Validate classId is either a number or a valid UUID
-    const isNumber = /^\d+$/.test(raw)
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw)
-    
-    console.log("classId_validation", {raw, isNumber, isUUID})
-    
-    if (!isNumber && !isUUID) {
-      return NextResponse.json(
-        { 
-          error: 'classId must be a valid number or UUID',
-          received: raw,
-          validation: { isNumber, isUUID }
-        },
-        { status: 400 }
-      )
-    }
-    
-    // Normalize classId for database query
-    const classIdForQuery = isNumber ? parseInt(raw, 10) : raw
-    console.log("🎯 classId normalized:", classIdForQuery)
 
     // Create Supabase client for auth check
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = createRouteHandlerClient({ cookies })
 
-    // Verify user authentication and authorization
+    // Verify user authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
+
     if (authError || !user) {
       console.error("🚨 Auth error:", authError)
       return NextResponse.json(
@@ -62,12 +44,12 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ User authenticated:", user.id)
 
-    // Verify user owns/teaches the class
+    // Verify user owns the class
     const { data: classData, error: classError } = await supabase
       .from('classes')
       .select('id')
-      .eq('id', classIdForQuery)  // Use normalized classId
-      .eq('user_id', user.id)  // Fixed: usar user_id en lugar de teacher_id
+      .eq('id', classId)
+      .eq('user_id', user.id)
       .single()
 
     if (classError || !classData) {
@@ -75,9 +57,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           error: 'Class not found or access denied',
-          details: classError?.message,
-          classId: classIdForQuery,
-          userId: user.id
+          details: classError?.message
         },
         { status: 403 }
       )
@@ -93,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     // Parse CSV data
     const lines = csvData.trim().split('\n')
-    
+
     if (lines.length < 2) {
       return NextResponse.json(
         { error: 'CSV debe contener al menos una fila de encabezados y una de datos' },
@@ -104,7 +84,7 @@ export async function POST(request: NextRequest) {
     // Get headers and validate
     const headers = lines[0].split(',').map((h: string) => h.trim().toLowerCase())
     const expectedHeaders = ['full_name', 'student_email', 'tutor_email']
-    
+
     if (!expectedHeaders.every(header => headers.includes(header))) {
       return NextResponse.json(
         { error: `CSV debe contener los encabezados: ${expectedHeaders.join(', ')}` },
@@ -115,24 +95,24 @@ export async function POST(request: NextRequest) {
     // Parse data rows
     const students: any[] = []
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map((v: string) => v.trim())
-      
-      if (values.length !== headers.length) {
-        continue // Skip invalid rows
-      }
+      const line = lines[i].trim()
+      if (!line) continue // Skip empty lines
 
-      const student: any = {}
-      headers.forEach((header: string, index: number) => {
-        student[header] = values[index]
-      })
+      const values = line.split(',').map((v: string) => v.trim())
+
+      if (values.length < 2) continue // Skip invalid rows
+
+      const fullName = values[headers.indexOf('full_name')] || ''
+      const studentEmail = values[headers.indexOf('student_email')] || ''
+      const tutorEmail = values[headers.indexOf('tutor_email')] || null
 
       // Validate required fields
-      if (student.full_name && student.student_email) {
+      if (fullName && studentEmail) {
         students.push({
-          full_name: student.full_name,
-          student_email: student.student_email,
-          tutor_email: student.tutor_email || null,
-          class_id: classIdForQuery  // Use normalized classId
+          full_name: fullName,
+          student_email: studentEmail,
+          tutor_email: tutorEmail,
+          class_id: classId
         })
       }
     }
@@ -149,7 +129,7 @@ export async function POST(request: NextRequest) {
     // Insert students into database using admin client
     let studentsAdded = 0
     const errors: string[] = []
-    
+
     for (const student of students) {
       const { data, error } = await supabaseAdmin
         .from('students')
@@ -173,7 +153,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           error: 'No se pudieron insertar alumnos en la base de datos',
-          details: errors.slice(0, 3) // Show first 3 errors
+          details: errors.slice(0, 3)
         },
         { status: 500 }
       )
@@ -181,7 +161,6 @@ export async function POST(request: NextRequest) {
 
     console.log("🎉 CSV Processing complete:", { studentsAdded, totalProcessed: students.length })
 
-    // Return success response (partial or full success)
     return NextResponse.json(
       { 
         success: true,
@@ -194,7 +173,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('🚨 Critical error in process-csv API:', error)
-    
+
     return NextResponse.json(
       { 
         error: 'Error interno del servidor al procesar el CSV',
