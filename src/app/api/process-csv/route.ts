@@ -1,163 +1,123 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🚀 API Route - Process CSV started")
+    console.log("🚀 API Route - Process CSV started");
 
-    const body = await request.json()
-    const { csvData, classId } = body
+    // --- BLOQUE DE SEGURIDAD CORRECTO ---
+    const supabase = createRouteHandlerClient({ cookies });
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    console.log("✅ User authenticated:", user.id);
+    // ------------------------------------
+
+    const body = await request.json();
+    const { csvData, classId } = body;
 
     if (!csvData || !classId) {
       return NextResponse.json(
         { error: 'Missing required fields: csvData and classId' },
         { status: 400 }
-      )
+      );
     }
-
-    // Obtener token del header
-    const authHeader = request.headers.get('authorization')
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-
-    const token = authHeader.replace('Bearer ', '')
-
-    // Crear cliente Supabase
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-
-    // Verificar token y obtener usuario
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-
-    if (authError || !user) {
-      console.error("🚨 Auth error:", authError)
-      return NextResponse.json(
-        { error: 'Invalid or expired token' },
-        { status: 401 }
-      )
-    }
-
-    console.log("✅ User authenticated:", user.id)
 
     // Verificar que el usuario sea dueño de la clase
+    // Usamos el cliente 'supabase' que ya tiene la sesión del usuario
     const { data: classData, error: classError } = await supabase
       .from('classes')
       .select('id')
       .eq('id', classId)
       .eq('user_id', user.id)
-      .single()
+      .single();
 
     if (classError || !classData) {
-      console.error("🚨 Class access error:", classError)
+      console.error("🚨 Class access error:", classError);
       return NextResponse.json(
         { error: 'Class not found or access denied' },
         { status: 403 }
-      )
+      );
     }
+    console.log("✅ Class access verified");
 
-    console.log("✅ Class access verified")
+    // --- CLIENTE ADMIN SOLO PARA INSERTAR ---
+    // Creamos un cliente separado con permisos de administrador para la inserción masiva
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
     // Parsear CSV
-    const lines = csvData.trim().split('\n')
-
+    const lines = csvData.trim().split('\n');
     if (lines.length < 2) {
-      return NextResponse.json(
-        { error: 'CSV debe contener al menos encabezados y una fila de datos' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'CSV debe contener al menos encabezados y una fila de datos' }, { status: 400 });
     }
 
-    const headers = lines[0].split(',').map((h: string) => h.trim().toLowerCase())
-    const expectedHeaders = ['full_name', 'student_email', 'tutor_email']
+    const headers = lines[0].split(',').map((h: string) => h.trim().toLowerCase());
+    const expectedHeaders = ['full_name', 'student_email', 'tutor_email'];
 
     if (!expectedHeaders.every(h => headers.includes(h))) {
-      return NextResponse.json(
-        { error: `CSV debe contener: ${expectedHeaders.join(', ')}` },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: `CSV debe contener: ${expectedHeaders.join(', ')}` }, { status: 400 });
     }
 
     // Procesar estudiantes
-    const students: any[] = []
-
+    const studentsToInsert: any[] = [];
     for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim()
-      if (!line) continue
-
-      const values = line.split(',').map((v: string) => v.trim())
-
-      const fullName = values[headers.indexOf('full_name')] || ''
-      const studentEmail = values[headers.indexOf('student_email')] || ''
-      const tutorEmail = values[headers.indexOf('tutor_email')] || null
+      const line = lines[i].trim();
+      if (!line) continue;
+      const values = line.split(',').map((v: string) => v.trim());
+      const fullName = values[headers.indexOf('full_name')] || '';
+      const studentEmail = values[headers.indexOf('student_email')] || '';
+      const tutorEmail = values[headers.indexOf('tutor_email')] || null;
 
       if (fullName && studentEmail) {
-        students.push({
+        studentsToInsert.push({
           full_name: fullName,
           student_email: studentEmail,
           tutor_email: tutorEmail,
-          class_id: classId
-        })
+          class_id: classId,
+          user_id: user.id // Añadimos el user_id para la política de RLS
+        });
       }
     }
 
-    if (students.length === 0) {
-      return NextResponse.json(
-        { error: 'No se encontraron estudiantes válidos en el CSV' },
-        { status: 400 }
-      )
+    if (studentsToInsert.length === 0) {
+      return NextResponse.json({ error: 'No se encontraron estudiantes válidos en el CSV' }, { status: 400 });
+    }
+    console.log("📊 Students to insert:", studentsToInsert.length);
+
+    // Insertar estudiantes usando el cliente ADMIN
+    const { data: insertedData, error: insertError } = await supabaseAdmin
+      .from('students')
+      .insert(studentsToInsert)
+      .select();
+
+    if (insertError) {
+      console.error('❌ Error al insertar estudiantes:', insertError);
+      return NextResponse.json({ error: 'No se pudieron insertar los alumnos', details: insertError.message }, { status: 500 });
     }
 
-    console.log("📊 Students to insert:", students.length)
-
-    // Insertar estudiantes
-    let studentsAdded = 0
-    const errors: string[] = []
-
-    for (const student of students) {
-      const { data, error } = await supabase
-        .from('students')
-        .insert([student])
-        .select()
-
-      if (error) {
-        console.error('❌ Error:', error)
-        errors.push(`${student.full_name}: ${error.message}`)
-      } else if (data && data.length > 0) {
-        studentsAdded++
-        console.log("✅ Added:", student.full_name)
-      }
-    }
-
-    if (studentsAdded === 0) {
-      return NextResponse.json(
-        { error: 'No se pudieron insertar alumnos', details: errors.slice(0, 3) },
-        { status: 500 }
-      )
-    }
-
-    console.log("🎉 Complete:", studentsAdded, "students added")
+    const studentsAdded = insertedData?.length || 0;
+    console.log("🎉 Complete:", studentsAdded, "students added");
 
     return NextResponse.json({
       success: true,
-      studentsAdded,
-      totalProcessed: students.length,
-      errors: errors.length > 0 ? `${errors.length} estudiantes fallaron` : undefined
-    })
+      studentsAdded: studentsAdded,
+      totalProcessed: studentsToInsert.length,
+    });
 
   } catch (error) {
-    console.error('🚨 Critical error:', error)
+    console.error('🚨 Critical error:', error);
     return NextResponse.json(
       { error: 'Error interno del servidor', details: error instanceof Error ? error.message : 'Unknown' },
       { status: 500 }
-    )
+    );
   }
 }

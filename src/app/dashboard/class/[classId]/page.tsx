@@ -6,29 +6,10 @@ import { useParams } from 'next/navigation'
 import { useDropzone, FileWithPath } from 'react-dropzone'
 import { createClient } from '@/lib/supabaseClient'
 
-interface ClassDetails { 
-  id: string
-  name: string
-  subject?: string
-  grade_level?: string
-}
-
-interface Evaluation { 
-  id: string
-  name: string
-  class_id: string
-  created_at?: string
-  type: 'exam' | 'assignment'
-}
-
-interface Student { 
-  id: string
-  full_name: string
-  student_email: string
-  tutor_email?: string
-  class_id: string
-  created_at?: string
-}
+// --- INTERFACES ---
+interface ClassDetails { id: string; name: string; subject?: string; grade_level?: string; }
+interface Evaluation { id: string; name: string; class_id: string; created_at?: string; type: 'exam' | 'assignment'; } 
+interface Student { id: string; full_name: string; student_email: string; tutor_email?: string; class_id: string; created_at?: string; }
 
 export default function ClassDetailPage() {
   const supabase = createClient()
@@ -53,41 +34,22 @@ export default function ClassDetailPage() {
   const fetchClassDetails = useCallback(async () => {
     if (!classId) return
     const { data, error } = await supabase.from('classes').select('*').eq('id', classId).single()
-    if (error) {
-      console.error("Error al cargar detalles de la clase:", error)
-    } else {
-      setClassDetails(data)
-    }
+    if (error) { console.error("Error al cargar detalles de la clase:", error) } 
+    else { setClassDetails(data) }
   }, [classId, supabase])
 
   const fetchStudents = useCallback(async () => {
     if (!classId) return
-    const { data, error } = await supabase
-      .from('students')
-      .select('*')
-      .eq('class_id', classId)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error("Error al cargar estudiantes:", error)
-    } else {
-      setStudents(data || [])
-    }
+    const { data, error } = await supabase.from('students').select('*').eq('class_id', classId).order('created_at', { ascending: false })
+    if (error) { console.error("Error al cargar estudiantes:", error) } 
+    else { setStudents(data || []) }
   }, [classId, supabase])
 
   const fetchEvaluations = useCallback(async () => {
     if (!classId) return
-    const { data, error } = await supabase
-      .from('exams')
-      .select('*')
-      .eq('class_id', classId)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error("Error al cargar evaluaciones:", error)
-    } else {
-      setAllEvaluations(data as Evaluation[] || [])
-    }
+    const { data, error } = await supabase.from('exams').select('*').eq('class_id', classId).order('created_at', { ascending: false })
+    if (error) { console.error("Error al cargar evaluaciones:", error) } 
+    else { setAllEvaluations(data as Evaluation[] || []) }
   }, [classId, supabase])
 
   useEffect(() => {
@@ -102,18 +64,9 @@ export default function ClassDetailPage() {
   const handleCreateEvaluation = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newEvaluationName.trim() || !classId) return
-
-    const { error } = await supabase
-      .from('exams')
-      .insert([{ 
-        name: newEvaluationName,
-        class_id: classId,
-        type: newEvaluationType 
-      }])
-
-    if (error) {
-      alert(`Error: ${error.message}`)
-    } else {
+    const { error } = await supabase.from('exams').insert([{ name: newEvaluationName, class_id: classId, type: newEvaluationType }])
+    if (error) { alert(`Error: ${error.message}`) } 
+    else {
       setNewEvaluationName('')
       setNewEvaluationType('exam')
       setIsCreateModalOpen(false)
@@ -132,40 +85,53 @@ export default function ClassDetailPage() {
   }
 
   const processCSVFile = async (file: File) => {
-    setIsProcessingCSV(true)
+    setIsProcessingCSV(true);
     try {
-      const text = await file.text()
+      const text = await file.text();
+
+      // Forzar refresh de la sesión
+      const { data, error: refreshError } = await supabase.auth.refreshSession();
+
+      // --- CORRECCIÓN #1: Hacemos la comprobación más explícita ---
+      if (refreshError || !data.session || !data.session.access_token) {
+        throw new Error('Por favor, cierra sesión y vuelve a iniciar sesión');
+      }
+
+      const session = data.session;
+
+      console.log('✅ Sesión refrescada, token obtenido');
 
       const response = await fetch('/api/process-csv', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
         },
-        credentials: 'include',
         body: JSON.stringify({ 
           csvData: text,
           classId: classId 
         })
-      })
+      });
 
-      const result = await response.json()
+      const result = await response.json();
 
+      // --- CORRECCIÓN #2: 'response' en minúscula ---
       if (!response.ok) {
-        throw new Error(result.error || 'Error al procesar CSV')
+        throw new Error(result.error || 'Error al procesar CSV');
       }
 
-      alert(`✅ CSV procesado exitosamente: ${result.studentsAdded} alumnos añadidos.`)
-      await fetchStudents()
-      setIsCSVModalOpen(false)
-      setCSVFile(null)
+      alert(`✅ CSV procesado: ${result.studentsAdded} alumnos añadidos.`);
+      await fetchStudents();
+      setIsCSVModalOpen(false);
+      setCSVFile(null);
 
     } catch (error) {
       console.error('Error al procesar CSV:', error)
       alert(`❌ Error al procesar CSV: ${(error as Error).message}`)
     } finally {
-      setIsProcessingCSV(false)
+      setIsProcessingCSV(false);
     }
-  }
+  };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (acceptedFiles: FileWithPath[]) => {
