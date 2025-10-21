@@ -152,4 +152,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-}
+} // Empezando a trabajar en la calificación en lote
