@@ -33,7 +33,7 @@ interface Student {
 
 interface Grade { 
   id: string
-  submission_id: string
+  submission_id?: string
 }
 
 // --- Componente Principal ---
@@ -217,32 +217,33 @@ export default function ExamManagementPage() {
   }
 
   const handleViewFeedback = async (submission: Submission) => {
-    if (!submission.id) return
+    if (!submission.id) {
+      alert("Error: La entrega seleccionada no tiene un ID.");
+      return;
+    }
 
-    try {
-      const { data: grade, error } = await supabase
-        .from('grades')
-        .select('id, submission_id')
-        .eq('submission_id', submission.id)
-        .single()
+    console.log("Buscando calificación para la entrega con ID:", submission.id);
 
-      if (error && error.code !== 'PGRST116') {
-        throw error
-      }
+    const { data: gradeData, error: gradeError } = await supabase
+      .from('grades')
+      .select('id')
+      .eq('submission_id', submission.id)
+      .single();
 
-      setViewingFeedback({ 
-        feedback: submission.ai_feedback, 
-        grade: grade || null 
-      })
-
-    } catch(err) {
-      console.error("No se encontró la calificación correspondiente:", err)
+    if (gradeError || !gradeData) {
+      console.error("Error al buscar la calificación:", gradeError);
       setViewingFeedback({ 
         feedback: submission.ai_feedback, 
         grade: null 
-      })
+      });
+    } else {
+      console.log("Calificación encontrada:", gradeData);
+      setViewingFeedback({ 
+        feedback: submission.ai_feedback, 
+        grade: gradeData 
+      });
     }
-  }
+  };
 
   if (loading) return <div className="p-8 text-center">Cargando...</div>
   if (!examDetails) return <div className="p-8 text-center">Examen no encontrado.</div>
