@@ -226,7 +226,7 @@ export async function POST(request: NextRequest) {
         'Authorization': `Bearer ${resendApiKey}`
       },
       body: JSON.stringify({
-        from: 'AI Grader <onboarding@resend.dev>', // Cambia esto por tu dominio verificado
+        from: 'AI Grader <onboarding@resend.dev>',// Cambia esto por tu dominio verificado
         to: recipients,
         subject: `Reporte de Calificación - ${exam.name}`,
         html: emailHTML
