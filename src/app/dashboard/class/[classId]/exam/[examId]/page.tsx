@@ -715,21 +715,30 @@ function FeedbackModal({ viewingFeedback, onClose }: { viewingFeedback: { feedba
 
   const handleSendEmail = async () => {
     if (!viewingFeedback.grade?.id) {
-      alert("Error: No se encontró el ID de la calificación para enviar el correo.");
+      alert("No se puede enviar el correo, no se encontró el ID de la calificación.");
       return;
     }
     setIsSendingEmail(true);
     try {
-      // Asumiendo que ahora usamos una API Route
+      // --- CORRECCIÓN: OBTENER LA SESIÓN ---
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sesión no encontrada.");
+
       const response = await fetch('/api/send-results-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gradeId: viewingFeedback.grade.id }),
+        headers: {
+          'Content-Type': 'application/json',
+          // --- CORRECCIÓN: AÑADIR EL HEADER DE AUTORIZACIÓN ---
+          'Authorization': `Bearer ${session.access_token}` // <-- ¡Usa guion bajo!
+        },
+        body: JSON.stringify({ gradeId: viewingFeedback.grade.id })
       });
+
       if (!response.ok) {
-        const errorResult = await response.json();
-        throw new Error(errorResult.error || 'Error del servidor');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Error desconocido');
       }
+
       alert('¡Correo enviado con éxito!');
     } catch (error) {
       console.error('Error al enviar correo:', error);
@@ -738,7 +747,6 @@ function FeedbackModal({ viewingFeedback, onClose }: { viewingFeedback: { feedba
       setIsSendingEmail(false);
     }
   };
-
   const feedbackData = viewingFeedback.feedback?.informe_evaluacion || viewingFeedback.feedback || {};
   const resumen = feedbackData.resumen_general || {};
   const evaluaciones = feedbackData.evaluacion_detallada || [];
