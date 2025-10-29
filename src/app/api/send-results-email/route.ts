@@ -16,7 +16,7 @@ type GradeWithRelations = {
   } | null;
 }
 
-// Función para construir el template HTML del email
+// Función para construir el template HTML del email (VERSIÓN COMPLETA)
 function buildEmailTemplate({ studentName, grade, maxGrade, feedback, resumen, evaluaciones }: {
   studentName: string;
   grade: number;
@@ -53,46 +53,126 @@ function buildEmailTemplate({ studentName, grade, maxGrade, feedback, resumen, e
         .stat-label { font-size: 12px; color: #64748b; text-transform: uppercase; }
         .section-title { font-size: 20px; font-weight: 700; color: #1e293b; margin: 30px 0 15px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;}
         .question-item { background: #f8fafc; border-radius: 8px; padding: 20px; margin-bottom: 15px; border-left: 4px solid #e2e8f0; }
-        .question-item.correct { border-left-color: #10b981; }
-        .question-item.partial { border-left-color: #f59e0b; }
-        .question-item.incorrect { border-left-color: #ef4444; }
-        .footer { background: #f8fafc; padding: 25px 20px; text-align: center; border-top: 1px solid #e2e8f0; }
+        .question-item.correct { border-left-color: #10b981; background: #f0fdf4; }
+        .question-item.partial { border-left-color: #f59e0b; background: #fffbeb; }
+        .question-item.incorrect { border-left-color: #ef4444; background: #fef2f2; }
+        .question-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .question-title { font-size: 16px; font-weight: 700; color: #1e293b; margin: 0; }
+        .question-score { font-size: 14px; font-weight: 600; padding: 4px 12px; border-radius: 12px; background: white; }
+        .feedback-section { margin: 12px 0; padding: 12px; background: white; border-radius: 6px; }
+        .feedback-label { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 6px; }
+        .feedback-label.positive { color: #10b981; }
+        .feedback-label.warning { color: #f59e0b; }
+        .feedback-label.error { color: #ef4444; }
+        .feedback-label.info { color: #3b82f6; }
+        .feedback-text { font-size: 14px; color: #475569; line-height: 1.5; }
+        .footer { background: #f8fafc; padding: 25px 20px; text-align: center; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 14px; }
       </style>
     </head>
     <body>
       <div class="container">
-        <div class="header"><h1>📊 Reporte de Calificación</h1></div>
+        <div class="header">
+          <h1>📊 Reporte de Calificación</h1>
+        </div>
+
         <div class="content">
-          <h2>Estimado/a ${studentName},</h2>
-          <p>Te compartimos el resultado de tu evaluación:</p>
+          <h2 style="color: #1e293b;">Estimado/a ${studentName},</h2>
+          <p style="color: #475569;">Te compartimos el resultado detallado de tu evaluación:</p>
+
           <div class="grade-summary">
             <div class="grade-score">${grade}/${maxGrade}</div>
-            <div class="grade-text">Calificación Final</div>
+            <div class="grade-text">Calificación Final (${percentage}%)</div>
           </div>
+
           ${resumen && Object.keys(resumen).length > 0 ? `
           <div class="stats-grid">
-            <div class="stat-card"><div class="stat-number correct">✅ ${resumen.preguntas_correctas || 0}</div><div class="stat-label">Correctas</div></div>
-            <div class="stat-card"><div class="stat-number partial">⚠️ ${resumen.preguntas_parciales || 0}</div><div class="stat-label">Parciales</div></div>
-            <div class="stat-card"><div class="stat-number incorrect">❌ ${resumen.preguntas_incorrectas || 0}</div><div class="stat-label">Incorrectas</div></div>
+            <div class="stat-card">
+              <div class="stat-number correct">✅ ${resumen.preguntas_correctas || 0}</div>
+              <div class="stat-label">Correctas</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-number partial">⚠️ ${resumen.preguntas_parciales || 0}</div>
+              <div class="stat-label">Parciales</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-number incorrect">❌ ${resumen.preguntas_incorrectas || 0}</div>
+              <div class="stat-label">Incorrectas</div>
+            </div>
           </div>
           ` : ''}
+
           ${evaluaciones && evaluaciones.length > 0 ? `
-          <h3 class="section-title">📝 Evaluación Detallada</h3>
-          ${evaluaciones.map((pregunta: any, index: number) => `
-            <div class="question-item ${pregunta.evaluacion?.toLowerCase().includes('parcialmente') ? 'partial' : pregunta.evaluacion?.toLowerCase() === 'correcto' ? 'correct' : 'incorrect'}">
-              <h4>${pregunta.pregunta_id || `Pregunta ${index + 1}`}</h4>
-              <p>${pregunta.feedback?.refuerzo_positivo || pregunta.feedback?.explicacion_del_error || 'Sin feedback detallado.'}</p>
+          <h3 class="section-title">📝 Evaluación Detallada por Pregunta</h3>
+          ${evaluaciones.map((pregunta: any, index: number) => {
+            const evaluacion = pregunta.evaluacion?.toLowerCase() || '';
+            const isCorrect = evaluacion === 'correcto';
+            const isPartial = evaluacion.includes('parcialmente') || evaluacion.includes('parcial');
+            const isIncorrect = evaluacion === 'incorrecto';
+
+            const questionClass = isCorrect ? 'correct' : isPartial ? 'partial' : 'incorrect';
+            const icon = isCorrect ? '✅' : isPartial ? '⚠️' : '❌';
+
+            return `
+            <div class="question-item ${questionClass}">
+              <div class="question-header">
+                <h4 class="question-title">${icon} ${pregunta.pregunta_id || `Pregunta ${index + 1}`}</h4>
+                <span class="question-score">${pregunta.puntuacion_obtenida || 0}/${pregunta.puntuacion_posible || 0} pts</span>
+              </div>
+
+              ${pregunta.tema ? `
+                <p style="font-size: 13px; color: #64748b; margin: 0 0 12px 0;">
+                  <strong>Tema:</strong> ${pregunta.tema}
+                </p>
+              ` : ''}
+
+              ${pregunta.feedback?.refuerzo_positivo ? `
+                <div class="feedback-section">
+                  <div class="feedback-label positive">💚 Refuerzo Positivo</div>
+                  <div class="feedback-text">${pregunta.feedback.refuerzo_positivo}</div>
+                </div>
+              ` : ''}
+
+              ${pregunta.feedback?.area_de_mejora ? `
+                <div class="feedback-section">
+                  <div class="feedback-label warning">💡 Área de Mejora</div>
+                  <div class="feedback-text">${pregunta.feedback.area_de_mejora}</div>
+                </div>
+              ` : ''}
+
+              ${pregunta.feedback?.explicacion_del_error ? `
+                <div class="feedback-section">
+                  <div class="feedback-label error">🔍 Explicación del Error</div>
+                  <div class="feedback-text">${pregunta.feedback.explicacion_del_error}</div>
+                </div>
+              ` : ''}
+
+              ${pregunta.feedback?.sugerencia_de_estudio ? `
+                <div class="feedback-section">
+                  <div class="feedback-label info">📚 Sugerencia de Estudio</div>
+                  <div class="feedback-text">${pregunta.feedback.sugerencia_de_estudio}</div>
+                </div>
+              ` : ''}
+
+              ${pregunta.tipo_de_error && pregunta.tipo_de_error !== 'ninguno' ? `
+                <p style="font-size: 12px; color: #64748b; margin: 12px 0 0 0;">
+                  <strong>Tipo de error:</strong> ${pregunta.tipo_de_error.replace(/_/g, ' ')}
+                </p>
+              ` : ''}
             </div>
-          `).join('')}
+            `;
+          }).join('')}
           ` : ''}
         </div>
-        <div class="footer"><p>Generado por AI Grader</p></div>
+
+        <div class="footer">
+          <p style="margin: 0;">Generado automáticamente por <strong>AI Grader</strong></p>
+          <p style="margin: 8px 0 0 0; font-size: 12px;">Este reporte fue creado utilizando inteligencia artificial</p>
+        </div>
       </div>
     </body>
     </html>
   `;
 }
-
 // --- API ROUTE ---
 export async function POST(request: NextRequest) {
   try {
