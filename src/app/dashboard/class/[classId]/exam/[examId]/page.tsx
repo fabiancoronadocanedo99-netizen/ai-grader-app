@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { useDropzone, FileWithPath } from 'react-dropzone'
 import { createClient } from '@/lib/supabaseClient'
+// ✅ A. Importar el componente del escáner
+import CameraScannerModal from '@/components/CameraScannerModal'
 
 // --- Tipos de Datos ---
 interface ExamDetails { 
@@ -129,7 +131,6 @@ export default function ExamManagementPage() {
   }
 
   const handleGradeAll = async () => {
-    // Encontrar todas las entregas pendientes
     const pendingSubmissions = submissions.filter(sub => sub.status === 'pending')
 
     if (pendingSubmissions.length === 0) {
@@ -137,14 +138,12 @@ export default function ExamManagementPage() {
       return
     }
 
-    // Mostrar confirmación
     const confirmed = window.confirm(
       `Vas a calificar ${pendingSubmissions.length} entrega${pendingSubmissions.length > 1 ? 's' : ''}. ¿Estás seguro?`
     )
 
     if (!confirmed) return
 
-    // Cambiar el estado de todas las entregas pendientes a 'processing'
     setSubmissions(prev => 
       prev.map(sub => 
         sub.status === 'pending' 
@@ -154,7 +153,6 @@ export default function ExamManagementPage() {
     )
 
     try {
-      // Lanzar todas las calificaciones en paralelo
       const gradePromises = pendingSubmissions.map(submission => 
         fetch('/api/grade-submission', {
           method: 'POST',
@@ -175,14 +173,10 @@ export default function ExamManagementPage() {
         })
       )
 
-      // Esperar a que todas terminen
       const results = await Promise.all(gradePromises)
-
-      // Contar éxitos y fallos
       const successful = results.filter(r => r.success).length
       const failed = results.filter(r => !r.success).length
 
-      // Mostrar resultado
       if (failed === 0) {
         alert(`✅ ¡Todas las entregas fueron calificadas exitosamente! (${successful}/${pendingSubmissions.length})`)
       } else {
@@ -198,14 +192,12 @@ export default function ExamManagementPage() {
         )
       }
 
-      // Refrescar datos
       await fetchData()
 
     } catch (error) {
       console.error('Error en calificación en lote:', error)
       alert(`❌ Error al procesar las calificaciones: ${(error as Error).message}`)
 
-      // Revertir los estados en caso de error catastrófico
       setSubmissions(prev => 
         prev.map(sub => 
           sub.status === 'processing' 
@@ -352,8 +344,6 @@ function SubmissionsManager({
   classId: string
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
-
-  // Contar entregas pendientes
   const pendingCount = submissions.filter(sub => sub.status === 'pending').length
 
   return (
@@ -368,7 +358,6 @@ function SubmissionsManager({
         </button>
       </div>
 
-      {/* BOTÓN DE CALIFICAR EN LOTE */}
       {pendingCount > 0 && (
         <div className="mb-4">
           <button
@@ -427,7 +416,7 @@ function SubmissionsManager({
   )
 }
 
-// --- Componente: CreateSubmissionModal ---
+// --- Componente: CreateSubmissionModal (CON INTEGRACIÓN DEL ESCÁNER) ---
 function CreateSubmissionModal({ 
   onClose, 
   examId, 
@@ -440,9 +429,11 @@ function CreateSubmissionModal({
   classId: string
 }) {
   const supabase = createClient()
-  const [filesWithStudents, setFilesWithStudents] = useState<{ file: FileWithPath; studentId: string | null }[]>([])
+  const [filesWithStudents, setFilesWithStudents] = useState<{ file: FileWithPath | File; studentId: string | null }[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [students, setStudents] = useState<Student[]>([])
+  // ✅ B. Añadir estado para controlar el modal del escáner
+  const [isScannerOpen, setIsScannerOpen] = useState(false)
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -471,6 +462,13 @@ function CreateSubmissionModal({
     multiple: true, 
     accept: { 'application/pdf': ['.pdf'] } 
   })
+
+  // ✅ D. Función para recibir el PDF escaneado
+  const handleScanComplete = (scannedFile: File) => {
+    const newFileEntry = { file: scannedFile, studentId: null }
+    setFilesWithStudents(prev => [...prev, newFileEntry])
+    setIsScannerOpen(false) // Cerrar el modal del escáner automáticamente
+  }
 
   const handleStudentSelect = (fileIndex: number, studentId: string) => {
     setFilesWithStudents(prev => 
@@ -537,19 +535,32 @@ function CreateSubmissionModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative neu-card p-8 max-w-2xl w-full mx-4">
+      <div className="relative neu-card p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <h2 className="text-center font-bold text-2xl mb-6 text-slate-800">
           Subir Entregas
         </h2>
 
+        {/* ✅ C. Zona de drag & drop con botón de escáner */}
         <div 
           {...getRootProps()} 
-          className="mb-6 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center"
+          className="mb-4 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center"
         >
           <input {...getInputProps()} />
           <p className="text-slate-700">
             Arrastra los archivos aquí, o haz clic para seleccionarlos.
           </p>
+        </div>
+
+        {/* ✅ C. Botón para abrir el escáner */}
+        <div className="text-center my-4">
+          <p className="text-gray-500 text-sm mb-2">o</p>
+          <button 
+            type="button" 
+            onClick={() => setIsScannerOpen(true)}
+            className="neu-button py-2 px-4 text-sm text-slate-700 font-medium"
+          >
+            📷 Escanear con la cámara
+          </button>
         </div>
 
         {filesWithStudents.length > 0 && (
@@ -562,7 +573,7 @@ function CreateSubmissionModal({
                 key={`${item.file.name}-${index}`} 
                 className="flex items-center justify-between p-3 neu-card bg-gray-50"
               >
-                <span className="text-sm text-slate-800 flex-1">
+                <span className="text-sm text-slate-800 flex-1 truncate">
                   {item.file.name}
                 </span>
                 <select 
@@ -598,6 +609,13 @@ function CreateSubmissionModal({
           </button>
         </div>
       </div>
+
+      {/* ✅ E. Componente del modal del escáner */}
+      <CameraScannerModal 
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanComplete={handleScanComplete}
+      />
     </div>
   )
 }
@@ -710,47 +728,46 @@ function CreateSolutionModal({
 
 // --- Componente: FeedbackModal ---
 function FeedbackModal({ viewingFeedback, onClose }: { viewingFeedback: { feedback: any; grade: Grade | null }; onClose: () => void }) {
-  const supabase = createClient(); // Añadimos la instancia de Supabase aquí
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const supabase = createClient()
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
 
   const handleSendEmail = async () => {
     if (!viewingFeedback.grade?.id) {
-      alert("No se puede enviar el correo, no se encontró el ID de la calificación.");
-      return;
+      alert("No se puede enviar el correo, no se encontró el ID de la calificación.")
+      return
     }
-    setIsSendingEmail(true);
+    setIsSendingEmail(true)
     try {
-      // --- CORRECCIÓN: OBTENER LA SESIÓN ---
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Sesión no encontrada.");
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error("Sesión no encontrada.")
 
       const response = await fetch('/api/send-results-email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // --- CORRECCIÓN: AÑADIR EL HEADER DE AUTORIZACIÓN ---
-          'Authorization': `Bearer ${session.access_token}` // <-- ¡Usa guion bajo!
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({ gradeId: viewingFeedback.grade.id })
-      });
+      })
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Error desconocido');
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Error desconocido')
       }
 
-      alert('¡Correo enviado con éxito!');
+      alert('¡Correo enviado con éxito!')
     } catch (error) {
-      console.error('Error al enviar correo:', error);
-      alert(`Error al enviar correo: ${(error as Error).message}`);
+      console.error('Error al enviar correo:', error)
+      alert(`Error al enviar correo: ${(error as Error).message}`)
     } finally {
-      setIsSendingEmail(false);
+      setIsSendingEmail(false)
     }
-  };
-  const feedbackData = viewingFeedback.feedback?.informe_evaluacion || viewingFeedback.feedback || {};
-  const resumen = feedbackData.resumen_general || {};
-  const evaluaciones = feedbackData.evaluacion_detallada || [];
-  const metadatos = feedbackData.metadatos || {};
+  }
+
+  const feedbackData = viewingFeedback.feedback?.informe_evaluacion || viewingFeedback.feedback || {}
+  const resumen = feedbackData.resumen_general || {}
+  const evaluaciones = feedbackData.evaluacion_detallada || []
+  const metadatos = feedbackData.metadatos || {}
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -805,5 +822,5 @@ function FeedbackModal({ viewingFeedback, onClose }: { viewingFeedback: { feedba
         </div>
       </div>
     </div>
-  );
+  )
 }
