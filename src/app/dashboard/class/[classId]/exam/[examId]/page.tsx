@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { useDropzone, FileWithPath } from 'react-dropzone'
 import { createClient } from '@/lib/supabaseClient'
-// ✅ A. Importar el componente del escáner
+// 🔥 NUEVO: A. Importar el componente del escáner
 import CameraScannerModal from '@/components/CameraScannerModal'
 
 // --- Tipos de Datos ---
@@ -432,7 +432,7 @@ function CreateSubmissionModal({
   const [filesWithStudents, setFilesWithStudents] = useState<{ file: FileWithPath | File; studentId: string | null }[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [students, setStudents] = useState<Student[]>([])
-  // ✅ B. Añadir estado para controlar el modal del escáner
+  // 🔥 NUEVO: B. Añadir estado para controlar el modal del escáner
   const [isScannerOpen, setIsScannerOpen] = useState(false)
 
   useEffect(() => {
@@ -463,11 +463,14 @@ function CreateSubmissionModal({
     accept: { 'application/pdf': ['.pdf'] } 
   })
 
-  // ✅ D. Función para recibir el PDF escaneado
+  // 🔥 NUEVO: D. Función para recibir el PDF escaneado
   const handleScanComplete = (scannedFile: File) => {
-    const newFileEntry = { file: scannedFile, studentId: null }
+    // Convertimos el File a FileWithPath para que sea compatible
+    const fileWithPath = scannedFile as FileWithPath
+    const newFileEntry = { file: fileWithPath, studentId: null }
     setFilesWithStudents(prev => [...prev, newFileEntry])
-    setIsScannerOpen(false) // Cerrar el modal del escáner automáticamente
+    setIsScannerOpen(false) // Cerrar el modal automáticamente
+    console.log('✅ PDF escaneado agregado:', scannedFile.name)
   }
 
   const handleStudentSelect = (fileIndex: number, studentId: string) => {
@@ -540,24 +543,27 @@ function CreateSubmissionModal({
           Subir Entregas
         </h2>
 
-        {/* ✅ C. Zona de drag & drop con botón de escáner */}
+        {/* Zona de drag & drop */}
         <div 
           {...getRootProps()} 
-          className="mb-4 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center"
+          className="mb-4 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center hover:border-gray-600 transition-colors"
         >
           <input {...getInputProps()} />
           <p className="text-slate-700">
-            Arrastra los archivos aquí, o haz clic para seleccionarlos.
+            📄 Arrastra los archivos aquí, o haz clic para seleccionarlos.
+          </p>
+          <p className="text-sm text-gray-500 mt-2">
+            Archivos PDF únicamente
           </p>
         </div>
 
-        {/* ✅ C. Botón para abrir el escáner */}
+        {/* 🔥 NUEVO: C. Botón para abrir el escáner */}
         <div className="text-center my-4">
           <p className="text-gray-500 text-sm mb-2">o</p>
           <button 
             type="button" 
             onClick={() => setIsScannerOpen(true)}
-            className="neu-button py-2 px-4 text-sm text-slate-700 font-medium"
+            className="neu-button py-2 px-4 text-sm text-slate-700 font-semibold hover:shadow-lg transition-shadow"
           >
             📷 Escanear con la cámara
           </button>
@@ -566,20 +572,23 @@ function CreateSubmissionModal({
         {filesWithStudents.length > 0 && (
           <div className="mb-6 space-y-3">
             <h3 className="font-semibold text-slate-800 mb-3">
-              Archivos seleccionados:
+              📋 Archivos seleccionados: ({filesWithStudents.length})
             </h3>
             {filesWithStudents.map((item, index) => (
               <div 
                 key={`${item.file.name}-${index}`} 
-                className="flex items-center justify-between p-3 neu-card bg-gray-50"
+                className="flex items-center justify-between p-3 neu-card bg-gray-50 gap-3"
               >
-                <span className="text-sm text-slate-800 flex-1 truncate">
-                  {item.file.name}
-                </span>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span className="text-lg">📄</span>
+                  <span className="text-sm text-slate-800 truncate">
+                    {item.file.name}
+                  </span>
+                </div>
                 <select 
                   value={item.studentId || ''} 
                   onChange={(e) => handleStudentSelect(index, e.target.value)} 
-                  className="ml-3 neu-input px-3 py-2 text-sm min-w-[200px]"
+                  className="ml-3 neu-input px-3 py-2 text-sm min-w-[200px] flex-shrink-0"
                 >
                   <option value="">Seleccionar estudiante</option>
                   {students.map(student => (
@@ -603,14 +612,14 @@ function CreateSubmissionModal({
           <button 
             onClick={handleUpload} 
             disabled={isUploading || filesWithStudents.length === 0} 
-            className="flex-1 neu-button py-3 disabled:opacity-50 text-slate-700 font-medium"
+            className="flex-1 neu-button py-3 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 font-medium"
           >
-            {isUploading ? 'Subiendo...' : `Subir ${filesWithStudents.length} Archivos`}
+            {isUploading ? '⏳ Subiendo...' : `Subir ${filesWithStudents.length} Archivo${filesWithStudents.length !== 1 ? 's' : ''}`}
           </button>
         </div>
       </div>
 
-      {/* ✅ E. Componente del modal del escáner */}
+      {/* 🔥 NUEVO: E. Componente del modal del escáner */}
       <CameraScannerModal 
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
@@ -636,7 +645,8 @@ function CreateSolutionModal({
 
   const { getRootProps, getInputProps } = useDropzone({ 
     onDrop: (files) => setFile(files[0] || null), 
-    multiple: false 
+    multiple: false,
+    accept: { 'application/pdf': ['.pdf'] }
   })
 
   const handleUpload = async () => {
@@ -692,17 +702,22 @@ function CreateSolutionModal({
 
         <div 
           {...getRootProps()} 
-          className="mb-6 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center"
+          className="mb-6 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center hover:border-gray-600 transition-colors"
         >
           <input {...getInputProps()} />
           <p className="text-slate-700">
-            Arrastra el solucionario aquí, o haz clic para seleccionarlo.
+            📄 Arrastra el solucionario aquí, o haz clic para seleccionarlo.
+          </p>
+          <p className="text-sm text-gray-500 mt-2">
+            Solo archivos PDF
           </p>
         </div>
 
         {file && (
-          <div className="mb-6">
-            <p className="text-sm text-slate-800">{file.name}</p>
+          <div className="mb-6 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-sm text-slate-800 font-medium">
+              ✅ Archivo seleccionado: {file.name}
+            </p>
           </div>
         )}
 
@@ -716,9 +731,9 @@ function CreateSolutionModal({
           <button 
             onClick={handleUpload} 
             disabled={isUploading || !file} 
-            className="flex-1 neu-button py-3 disabled:opacity-50 text-slate-700 font-medium"
+            className="flex-1 neu-button py-3 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 font-medium"
           >
-            {isUploading ? 'Subiendo...' : 'Subir Solucionario'}
+            {isUploading ? '⏳ Subiendo...' : 'Subir Solucionario'}
           </button>
         </div>
       </div>
@@ -780,8 +795,30 @@ function FeedbackModal({ viewingFeedback, onClose }: { viewingFeedback: { feedba
         <div className="neu-card p-6 mb-6">
           <h3 className="text-xl font-bold text-slate-700 mb-4">📈 Resumen General</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="neu-card p-4"><div className="text-center"><div className="text-3xl font-bold text-blue-600 mb-1">{resumen.puntuacion_total_obtenida || 0}/{resumen.puntuacion_total_posible || 100}</div><p className="text-slate-600">Puntuación Total</p></div></div>
-            <div className="neu-card p-4"><div className="flex justify-around text-center"><div><div className="text-lg font-bold text-green-600">✅ {resumen.preguntas_correctas || 0}</div><p className="text-xs text-slate-600">Correctas</p></div><div><div className="text-lg font-bold text-yellow-600">⚠️ {resumen.preguntas_parciales || 0}</div><p className="text-xs text-slate-600">Parciales</p></div><div><div className="text-lg font-bold text-red-600">❌ {resumen.preguntas_incorrectas || 0}</div><p className="text-xs text-slate-600">Incorrectas</p></div></div></div>
+            <div className="neu-card p-4">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-blue-600 mb-1">
+                  {resumen.puntuacion_total_obtenida || 0}/{resumen.puntuacion_total_posible || 100}
+                </div>
+                <p className="text-slate-600">Puntuación Total</p>
+              </div>
+            </div>
+            <div className="neu-card p-4">
+              <div className="flex justify-around text-center">
+                <div>
+                  <div className="text-lg font-bold text-green-600">✅ {resumen.preguntas_correctas || 0}</div>
+                  <p className="text-xs text-slate-600">Correctas</p>
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-yellow-600">⚠️ {resumen.preguntas_parciales || 0}</div>
+                  <p className="text-xs text-slate-600">Parciales</p>
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-red-600">❌ {resumen.preguntas_incorrectas || 0}</div>
+                  <p className="text-xs text-slate-600">Incorrectas</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         <div className="space-y-4 mb-6">
@@ -805,20 +842,45 @@ function FeedbackModal({ viewingFeedback, onClose }: { viewingFeedback: { feedba
               </div>
               {pregunta.feedback && (
                 <div className="space-y-2">
-                  {pregunta.feedback.refuerzo_positivo && (<div className="bg-green-50 border-l-4 border-green-400 p-3 rounded"><p className="text-green-700 text-sm">💚 {pregunta.feedback.refuerzo_positivo}</p></div>)}
-                  {pregunta.feedback.area_de_mejora && (<div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded"><p className="text-yellow-700 text-sm">💡 <strong>Área de mejora:</strong> {pregunta.feedback.area_de_mejora}</p></div>)}
-                  {pregunta.feedback.explicacion_del_error && (<div className="bg-red-50 border-l-4 border-red-400 p-3 rounded"><p className="text-red-700 text-sm">🔍 <strong>Explicación:</strong> {pregunta.feedback.explicacion_del_error}</p></div>)}
-                  {pregunta.feedback.sugerencia_de_estudio && (<div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded"><p className="text-blue-700 text-sm">📚 <strong>Sugerencia:</strong> {pregunta.feedback.sugerencia_de_estudio}</p></div>)}
+                  {pregunta.feedback.refuerzo_positivo && (
+                    <div className="bg-green-50 border-l-4 border-green-400 p-3 rounded">
+                      <p className="text-green-700 text-sm">💚 {pregunta.feedback.refuerzo_positivo}</p>
+                    </div>
+                  )}
+                  {pregunta.feedback.area_de_mejora && (
+                    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+                      <p className="text-yellow-700 text-sm">💡 <strong>Área de mejora:</strong> {pregunta.feedback.area_de_mejora}</p>
+                    </div>
+                  )}
+                  {pregunta.feedback.explicacion_del_error && (
+                    <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
+                      <p className="text-red-700 text-sm">🔍 <strong>Explicación:</strong> {pregunta.feedback.explicacion_del_error}</p>
+                    </div>
+                  )}
+                  {pregunta.feedback.sugerencia_de_estudio && (
+                    <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
+                      <p className="text-blue-700 text-sm">📚 <strong>Sugerencia:</strong> {pregunta.feedback.sugerencia_de_estudio}</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           ))}
         </div>
         <div className="flex justify-center space-x-4">
-          <button onClick={handleSendEmail} disabled={isSendingEmail} className="neu-button text-slate-700 font-semibold py-3 px-8 disabled:opacity-50 disabled:cursor-not-allowed">
-            {isSendingEmail ? 'Enviando...' : '📧 Enviar por Correo'}
+          <button 
+            onClick={handleSendEmail} 
+            disabled={isSendingEmail} 
+            className="neu-button text-slate-700 font-semibold py-3 px-8 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSendingEmail ? '⏳ Enviando...' : '📧 Enviar por Correo'}
           </button>
-          <button onClick={onClose} className="neu-button text-slate-700 font-semibold py-3 px-8">Cerrar Reporte</button>
+          <button 
+            onClick={onClose} 
+            className="neu-button text-slate-700 font-semibold py-3 px-8"
+          >
+            Cerrar Reporte
+          </button>
         </div>
       </div>
     </div>
