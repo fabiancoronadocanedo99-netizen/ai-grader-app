@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { useDropzone, FileWithPath } from 'react-dropzone'
 import { createClient } from '@/lib/supabaseClient'
+// 🔥🔥🔥 NUEVO: A. Importar el componente del escáner 🔥🔥🔥
+import CameraScannerModal from '@/components/CameraScannerModal'
 
 // --- Tipos de Datos ---
 interface ExamDetails { 
@@ -129,7 +131,6 @@ export default function ExamManagementPage() {
   }
 
   const handleGradeAll = async () => {
-    // Encontrar todas las entregas pendientes
     const pendingSubmissions = submissions.filter(sub => sub.status === 'pending')
 
     if (pendingSubmissions.length === 0) {
@@ -137,14 +138,12 @@ export default function ExamManagementPage() {
       return
     }
 
-    // Mostrar confirmación
     const confirmed = window.confirm(
       `Vas a calificar ${pendingSubmissions.length} entrega${pendingSubmissions.length > 1 ? 's' : ''}. ¿Estás seguro?`
     )
 
     if (!confirmed) return
 
-    // Cambiar el estado de todas las entregas pendientes a 'processing'
     setSubmissions(prev => 
       prev.map(sub => 
         sub.status === 'pending' 
@@ -154,7 +153,6 @@ export default function ExamManagementPage() {
     )
 
     try {
-      // Lanzar todas las calificaciones en paralelo
       const gradePromises = pendingSubmissions.map(submission => 
         fetch('/api/grade-submission', {
           method: 'POST',
@@ -175,14 +173,10 @@ export default function ExamManagementPage() {
         })
       )
 
-      // Esperar a que todas terminen
       const results = await Promise.all(gradePromises)
-
-      // Contar éxitos y fallos
       const successful = results.filter(r => r.success).length
       const failed = results.filter(r => !r.success).length
 
-      // Mostrar resultado
       if (failed === 0) {
         alert(`✅ ¡Todas las entregas fueron calificadas exitosamente! (${successful}/${pendingSubmissions.length})`)
       } else {
@@ -198,14 +192,12 @@ export default function ExamManagementPage() {
         )
       }
 
-      // Refrescar datos
       await fetchData()
 
     } catch (error) {
       console.error('Error en calificación en lote:', error)
       alert(`❌ Error al procesar las calificaciones: ${(error as Error).message}`)
 
-      // Revertir los estados en caso de error catastrófico
       setSubmissions(prev => 
         prev.map(sub => 
           sub.status === 'processing' 
@@ -352,8 +344,6 @@ function SubmissionsManager({
   classId: string
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
-
-  // Contar entregas pendientes
   const pendingCount = submissions.filter(sub => sub.status === 'pending').length
 
   return (
@@ -368,7 +358,6 @@ function SubmissionsManager({
         </button>
       </div>
 
-      {/* BOTÓN DE CALIFICAR EN LOTE */}
       {pendingCount > 0 && (
         <div className="mb-4">
           <button
@@ -427,7 +416,7 @@ function SubmissionsManager({
   )
 }
 
-// --- Componente: CreateSubmissionModal ---
+// --- Componente: CreateSubmissionModal (CON INTEGRACIÓN DEL ESCÁNER) ---
 function CreateSubmissionModal({ 
   onClose, 
   examId, 
@@ -440,9 +429,11 @@ function CreateSubmissionModal({
   classId: string
 }) {
   const supabase = createClient()
-  const [filesWithStudents, setFilesWithStudents] = useState<{ file: FileWithPath; studentId: string | null }[]>([])
+  const [filesWithStudents, setFilesWithStudents] = useState<{ file: FileWithPath | File; studentId: string | null }[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [students, setStudents] = useState<Student[]>([])
+  // 🔥🔥🔥 NUEVO: B. Añadir estado para controlar el modal del escáner 🔥🔥🔥
+  const [isScannerOpen, setIsScannerOpen] = useState(false)
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -471,6 +462,16 @@ function CreateSubmissionModal({
     multiple: true, 
     accept: { 'application/pdf': ['.pdf'] } 
   })
+
+  // 🔥🔥🔥 NUEVO: D. Función para recibir el PDF escaneado 🔥🔥🔥
+  const handleScanComplete = (scannedFile: File) => {
+    // Es necesario castear 'File' a 'FileWithPath' para que sea compatible
+    const fileWithPath = scannedFile as FileWithPath
+    const newFileEntry = { file: fileWithPath, studentId: null }
+    setFilesWithStudents(prev => [...prev, newFileEntry])
+    setIsScannerOpen(false) // Cerrar el escáner automáticamente
+    console.log('✅ PDF escaneado agregado:', scannedFile.name)
+  }
 
   const handleStudentSelect = (fileIndex: number, studentId: string) => {
     setFilesWithStudents(prev => 
@@ -537,38 +538,57 @@ function CreateSubmissionModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative neu-card p-8 max-w-2xl w-full mx-4">
+      <div className="relative neu-card p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <h2 className="text-center font-bold text-2xl mb-6 text-slate-800">
           Subir Entregas
         </h2>
 
+        {/* Zona de drag & drop */}
         <div 
           {...getRootProps()} 
-          className="mb-6 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center"
+          className="mb-4 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center hover:border-gray-600 transition-colors"
         >
           <input {...getInputProps()} />
           <p className="text-slate-700">
-            Arrastra los archivos aquí, o haz clic para seleccionarlos.
+            📄 Arrastra los archivos aquí, o haz clic para seleccionarlos.
           </p>
+          <p className="text-sm text-gray-500 mt-2">
+            Archivos PDF únicamente
+          </p>
+        </div>
+
+        {/* 🔥🔥🔥 NUEVO: C. Botón para abrir el escáner 🔥🔥🔥 */}
+        <div className="text-center my-4">
+          <p className="text-gray-500 text-sm mb-2">o</p>
+          <button 
+            type="button" 
+            onClick={() => setIsScannerOpen(true)}
+            className="neu-button py-2 px-4 text-sm text-slate-700 font-semibold hover:shadow-lg transition-shadow"
+          >
+            📷 Escanear con la cámara
+          </button>
         </div>
 
         {filesWithStudents.length > 0 && (
           <div className="mb-6 space-y-3">
             <h3 className="font-semibold text-slate-800 mb-3">
-              Archivos seleccionados:
+              📋 Archivos seleccionados: ({filesWithStudents.length})
             </h3>
             {filesWithStudents.map((item, index) => (
               <div 
                 key={`${item.file.name}-${index}`} 
-                className="flex items-center justify-between p-3 neu-card bg-gray-50"
+                className="flex items-center justify-between p-3 neu-card bg-gray-50 gap-3"
               >
-                <span className="text-sm text-slate-800 flex-1">
-                  {item.file.name}
-                </span>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span className="text-lg">📄</span>
+                  <span className="text-sm text-slate-800 truncate">
+                    {item.file.name}
+                  </span>
+                </div>
                 <select 
                   value={item.studentId || ''} 
                   onChange={(e) => handleStudentSelect(index, e.target.value)} 
-                  className="ml-3 neu-input px-3 py-2 text-sm min-w-[200px]"
+                  className="ml-3 neu-input px-3 py-2 text-sm min-w-[200px] flex-shrink-0"
                 >
                   <option value="">Seleccionar estudiante</option>
                   {students.map(student => (
@@ -592,12 +612,19 @@ function CreateSubmissionModal({
           <button 
             onClick={handleUpload} 
             disabled={isUploading || filesWithStudents.length === 0} 
-            className="flex-1 neu-button py-3 disabled:opacity-50 text-slate-700 font-medium"
+            className="flex-1 neu-button py-3 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 font-medium"
           >
-            {isUploading ? 'Subiendo...' : `Subir ${filesWithStudents.length} Archivos`}
+            {isUploading ? '⏳ Subiendo...' : `Subir ${filesWithStudents.length} Archivo${filesWithStudents.length !== 1 ? 's' : ''}`}
           </button>
         </div>
       </div>
+
+      {/* 🔥🔥🔥 NUEVO: E. Componente del modal del escáner 🔥🔥🔥 */}
+      <CameraScannerModal 
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanComplete={handleScanComplete}
+      />
     </div>
   )
 }
@@ -618,7 +645,8 @@ function CreateSolutionModal({
 
   const { getRootProps, getInputProps } = useDropzone({ 
     onDrop: (files) => setFile(files[0] || null), 
-    multiple: false 
+    multiple: false,
+    accept: { 'application/pdf': ['.pdf'] }
   })
 
   const handleUpload = async () => {
@@ -674,17 +702,22 @@ function CreateSolutionModal({
 
         <div 
           {...getRootProps()} 
-          className="mb-6 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center"
+          className="mb-6 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center hover:border-gray-600 transition-colors"
         >
           <input {...getInputProps()} />
           <p className="text-slate-700">
-            Arrastra el solucionario aquí, o haz clic para seleccionarlo.
+            📄 Arrastra el solucionario aquí, o haz clic para seleccionarlo.
+          </p>
+          <p className="text-sm text-gray-500 mt-2">
+            Solo archivos PDF
           </p>
         </div>
 
         {file && (
-          <div className="mb-6">
-            <p className="text-sm text-slate-800">{file.name}</p>
+          <div className="mb-6 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-sm text-slate-800 font-medium">
+              ✅ Archivo seleccionado: {file.name}
+            </p>
           </div>
         )}
 
@@ -698,9 +731,9 @@ function CreateSolutionModal({
           <button 
             onClick={handleUpload} 
             disabled={isUploading || !file} 
-            className="flex-1 neu-button py-3 disabled:opacity-50 text-slate-700 font-medium"
+            className="flex-1 neu-button py-3 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 font-medium"
           >
-            {isUploading ? 'Subiendo...' : 'Subir Solucionario'}
+            {isUploading ? '⏳ Subiendo...' : 'Subir Solucionario'}
           </button>
         </div>
       </div>
@@ -710,47 +743,46 @@ function CreateSolutionModal({
 
 // --- Componente: FeedbackModal ---
 function FeedbackModal({ viewingFeedback, onClose }: { viewingFeedback: { feedback: any; grade: Grade | null }; onClose: () => void }) {
-  const supabase = createClient(); // Añadimos la instancia de Supabase aquí
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const supabase = createClient()
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
 
   const handleSendEmail = async () => {
     if (!viewingFeedback.grade?.id) {
-      alert("No se puede enviar el correo, no se encontró el ID de la calificación.");
-      return;
+      alert("No se puede enviar el correo, no se encontró el ID de la calificación.")
+      return
     }
-    setIsSendingEmail(true);
+    setIsSendingEmail(true)
     try {
-      // --- CORRECCIÓN: OBTENER LA SESIÓN ---
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Sesión no encontrada.");
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error("Sesión no encontrada.")
 
       const response = await fetch('/api/send-results-email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // --- CORRECCIÓN: AÑADIR EL HEADER DE AUTORIZACIÓN ---
-          'Authorization': `Bearer ${session.access_token}` // <-- ¡Usa guion bajo!
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({ gradeId: viewingFeedback.grade.id })
-      });
+      })
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Error desconocido');
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Error desconocido')
       }
 
-      alert('¡Correo enviado con éxito!');
+      alert('¡Correo enviado con éxito!')
     } catch (error) {
-      console.error('Error al enviar correo:', error);
-      alert(`Error al enviar correo: ${(error as Error).message}`);
+      console.error('Error al enviar correo:', error)
+      alert(`Error al enviar correo: ${(error as Error).message}`)
     } finally {
-      setIsSendingEmail(false);
+      setIsSendingEmail(false)
     }
-  };
-  const feedbackData = viewingFeedback.feedback?.informe_evaluacion || viewingFeedback.feedback || {};
-  const resumen = feedbackData.resumen_general || {};
-  const evaluaciones = feedbackData.evaluacion_detallada || [];
-  const metadatos = feedbackData.metadatos || {};
+  }
+
+  const feedbackData = viewingFeedback.feedback?.informe_evaluacion || viewingFeedback.feedback || {}
+  const resumen = feedbackData.resumen_general || {}
+  const evaluaciones = feedbackData.evaluacion_detallada || []
+  const metadatos = feedbackData.metadatos || {}
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -763,8 +795,30 @@ function FeedbackModal({ viewingFeedback, onClose }: { viewingFeedback: { feedba
         <div className="neu-card p-6 mb-6">
           <h3 className="text-xl font-bold text-slate-700 mb-4">📈 Resumen General</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="neu-card p-4"><div className="text-center"><div className="text-3xl font-bold text-blue-600 mb-1">{resumen.puntuacion_total_obtenida || 0}/{resumen.puntuacion_total_posible || 100}</div><p className="text-slate-600">Puntuación Total</p></div></div>
-            <div className="neu-card p-4"><div className="flex justify-around text-center"><div><div className="text-lg font-bold text-green-600">✅ {resumen.preguntas_correctas || 0}</div><p className="text-xs text-slate-600">Correctas</p></div><div><div className="text-lg font-bold text-yellow-600">⚠️ {resumen.preguntas_parciales || 0}</div><p className="text-xs text-slate-600">Parciales</p></div><div><div className="text-lg font-bold text-red-600">❌ {resumen.preguntas_incorrectas || 0}</div><p className="text-xs text-slate-600">Incorrectas</p></div></div></div>
+            <div className="neu-card p-4">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-blue-600 mb-1">
+                  {resumen.puntuacion_total_obtenida || 0}/{resumen.puntuacion_total_posible || 100}
+                </div>
+                <p className="text-slate-600">Puntuación Total</p>
+              </div>
+            </div>
+            <div className="neu-card p-4">
+              <div className="flex justify-around text-center">
+                <div>
+                  <div className="text-lg font-bold text-green-600">✅ {resumen.preguntas_correctas || 0}</div>
+                  <p className="text-xs text-slate-600">Correctas</p>
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-yellow-600">⚠️ {resumen.preguntas_parciales || 0}</div>
+                  <p className="text-xs text-slate-600">Parciales</p>
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-red-600">❌ {resumen.preguntas_incorrectas || 0}</div>
+                  <p className="text-xs text-slate-600">Incorrectas</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         <div className="space-y-4 mb-6">
@@ -788,22 +842,47 @@ function FeedbackModal({ viewingFeedback, onClose }: { viewingFeedback: { feedba
               </div>
               {pregunta.feedback && (
                 <div className="space-y-2">
-                  {pregunta.feedback.refuerzo_positivo && (<div className="bg-green-50 border-l-4 border-green-400 p-3 rounded"><p className="text-green-700 text-sm">💚 {pregunta.feedback.refuerzo_positivo}</p></div>)}
-                  {pregunta.feedback.area_de_mejora && (<div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded"><p className="text-yellow-700 text-sm">💡 <strong>Área de mejora:</strong> {pregunta.feedback.area_de_mejora}</p></div>)}
-                  {pregunta.feedback.explicacion_del_error && (<div className="bg-red-50 border-l-4 border-red-400 p-3 rounded"><p className="text-red-700 text-sm">🔍 <strong>Explicación:</strong> {pregunta.feedback.explicacion_del_error}</p></div>)}
-                  {pregunta.feedback.sugerencia_de_estudio && (<div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded"><p className="text-blue-700 text-sm">📚 <strong>Sugerencia:</strong> {pregunta.feedback.sugerencia_de_estudio}</p></div>)}
+                  {pregunta.feedback.refuerzo_positivo && (
+                    <div className="bg-green-50 border-l-4 border-green-400 p-3 rounded">
+                      <p className="text-green-700 text-sm">💚 {pregunta.feedback.refuerzo_positivo}</p>
+                    </div>
+                  )}
+                  {pregunta.feedback.area_de_mejora && (
+                    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+                      <p className="text-yellow-700 text-sm">💡 <strong>Área de mejora:</strong> {pregunta.feedback.area_de_mejora}</p>
+                    </div>
+                  )}
+                  {pregunta.feedback.explicacion_del_error && (
+                    <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
+                      <p className="text-red-700 text-sm">🔍 <strong>Explicación:</strong> {pregunta.feedback.explicacion_del_error}</p>
+                    </div>
+                  )}
+                  {pregunta.feedback.sugerencia_de_estudio && (
+                    <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
+                      <p className="text-blue-700 text-sm">📚 <strong>Sugerencia:</strong> {pregunta.feedback.sugerencia_de_estudio}</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           ))}
         </div>
         <div className="flex justify-center space-x-4">
-          <button onClick={handleSendEmail} disabled={isSendingEmail} className="neu-button text-slate-700 font-semibold py-3 px-8 disabled:opacity-50 disabled:cursor-not-allowed">
-            {isSendingEmail ? 'Enviando...' : '📧 Enviar por Correo'}
+          <button 
+            onClick={handleSendEmail} 
+            disabled={isSendingEmail} 
+            className="neu-button text-slate-700 font-semibold py-3 px-8 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSendingEmail ? '⏳ Enviando...' : '📧 Enviar por Correo'}
           </button>
-          <button onClick={onClose} className="neu-button text-slate-700 font-semibold py-3 px-8">Cerrar Reporte</button>
+          <button 
+            onClick={onClose} 
+            className="neu-button text-slate-700 font-semibold py-3 px-8"
+          >
+            Cerrar Reporte
+          </button>
         </div>
       </div>
     </div>
-  );
+  )
 }
