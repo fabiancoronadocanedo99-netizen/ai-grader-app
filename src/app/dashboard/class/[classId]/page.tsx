@@ -192,6 +192,12 @@ export default function ClassDetailPage() {
           >
             Alumnos
           </button>
+          <Link 
+            href={`/dashboard/class/${classId}/analytics`} 
+            className="px-6 py-3 font-semibold text-gray-500 hover:text-blue-600"
+          >
+            📊 Analíticas
+          </Link>
         </div>
 
         {activeTab === 'evaluations' && (
@@ -459,7 +465,7 @@ export default function ClassDetailPage() {
                     Procesando...
                   </span>
                 ) : (
-                  '📤 Importar Alumnos'
+                  '📤 Importar Alumnos'>
                 )}
               </button>
             </div>
