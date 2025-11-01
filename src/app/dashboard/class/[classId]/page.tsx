@@ -465,7 +465,7 @@ export default function ClassDetailPage() {
                     Procesando...
                   </span>
                 ) : (
-                  '📤 Importar Alumnos'>
+                  '📤 Importar Alumnos'
                 )}
               </button>
             </div>
