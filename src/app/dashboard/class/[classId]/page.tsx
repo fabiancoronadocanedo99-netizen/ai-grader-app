@@ -281,16 +281,8 @@ export default function ClassDetailPage() {
                       </tr>
                     ) : (
                       students.map((student) => (
-                        <tr key={student.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
-                          {/* 🔥🔥🔥 CAMBIO AQUÍ: Nombre ahora es un link clickeable 🔥🔥🔥 */}
-                          <td className="py-4 px-4 text-gray-700 font-medium">
-                            <Link 
-                              href={`/dashboard/student/${student.id}`} 
-                              className="hover:underline text-blue-600 hover:text-blue-800 transition-colors"
-                            >
-                              {student.full_name}
-                            </Link>
-                          </td>
+                        <tr key={student.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                          <td className="py-4 px-4 text-gray-700">{student.full_name}</td>
                           <td className="py-4 px-4 text-gray-600">{student.student_email}</td>
                           <td className="py-4 px-4 text-gray-600">{student.tutor_email || 'No especificado'}</td>
                         </tr>
