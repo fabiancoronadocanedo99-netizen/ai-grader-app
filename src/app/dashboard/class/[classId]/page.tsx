@@ -192,6 +192,12 @@ export default function ClassDetailPage() {
           >
             Alumnos
           </button>
+          <Link 
+            href={`/dashboard/class/${classId}/analytics`} 
+            className="px-6 py-3 font-semibold text-gray-500 hover:text-blue-600"
+          >
+            📊 Analíticas
+          </Link>
         </div>
 
         {activeTab === 'evaluations' && (
@@ -281,13 +287,9 @@ export default function ClassDetailPage() {
                       </tr>
                     ) : (
                       students.map((student) => (
-                        <tr key={student.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
-                          {/* 🔥🔥🔥 CAMBIO AQUÍ: Nombre ahora es un link clickeable 🔥🔥🔥 */}
+                        <tr key={student.id} className="border-b border-gray-100 hover:bg-gray-50/50">
                           <td className="py-4 px-4 text-gray-700 font-medium">
-                            <Link 
-                              href={`/dashboard/student/${student.id}`} 
-                              className="hover:underline text-blue-600 hover:text-blue-800 transition-colors"
-                            >
+                            <Link href={`/dashboard/student/${student.id}`} className="hover:underline text-blue-600">
                               {student.full_name}
                             </Link>
                           </td>
