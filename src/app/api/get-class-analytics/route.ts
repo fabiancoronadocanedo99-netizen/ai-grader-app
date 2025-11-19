@@ -3,10 +3,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 // --- TIPOS ---
+interface StudentSummary {
+  id: string
+  name: string
+}
+
 interface GradeDistribution {
   range: string
   count: number
   percentage: number
+  students: StudentSummary[]
 }
 
 interface QuestionError {
@@ -14,12 +20,14 @@ interface QuestionError {
   tema: string | null
   errorCount: number
   percentage: number
+  failingStudents: StudentSummary[]
 }
 
 interface ErrorTypeCount {
-  name: string  // Recharts espera 'name'
-  value: number // Recharts espera 'value'
+  name: string
+  value: number
   percentage: number
+  students: StudentSummary[] // <--- CORRECCIÓN: Añadida lista de estudiantes
 }
 
 interface ClassAnalytics {
@@ -34,7 +42,7 @@ interface ClassAnalytics {
     classAverage: number
     highestScore: number
     lowestScore: number
-    passingRate: number // Porcentaje de aprobados (>=60%)
+    passingRate: number
   }
   gradeDistribution: GradeDistribution[]
   topFailedQuestions: QuestionError[]
@@ -56,7 +64,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verificar usuario
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -72,11 +79,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('✅ Usuario autenticado:', user.id)
-
-    // 2. Obtener classId del body
+    // 2. Obtener parámetros del body
     const body = await request.json()
-    const { classId } = body
+    const { classId, examId } = body 
 
     if (!classId || typeof classId !== 'string') {
       return NextResponse.json(
@@ -85,7 +90,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('🔍 Analizando clase:', classId)
+    console.log(`🔍 Analizando clase: ${classId} ${examId ? `| Examen específico: ${examId}` : '| Toda la clase'}`)
 
     // 3. Crear cliente admin
     const supabaseAdmin = createClient(
@@ -93,7 +98,6 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Verificar que el usuario es dueño de la clase
     const { data: classData, error: classError } = await supabaseAdmin
       .from('classes')
       .select('id, name, user_id')
@@ -101,30 +105,18 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (classError || !classData) {
-      console.error('❌ Error al buscar clase:', classError)
-      return NextResponse.json(
-        { error: 'Clase no encontrada' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Clase no encontrada' }, { status: 404 })
     }
 
-    // Validar permisos
     if (classData.user_id !== user.id) {
-      console.warn('⚠️ Intento de acceso no autorizado:', {
-        requestedBy: user.id,
-        classOwner: classData.user_id
-      })
-
       return NextResponse.json(
-        { error: 'Acceso denegado: No tienes permiso para ver esta clase' },
+        { error: 'Acceso denegado' },
         { status: 403 }
       )
     }
 
-    console.log('✅ Permisos verificados para clase:', classData.name)
-
-    // 4. Obtener TODAS las calificaciones de la clase con información relacionada
-    const { data: grades, error: gradesError } = await supabaseAdmin
+    // 4. Construir la consulta de calificaciones
+    let gradesQuery = supabaseAdmin
       .from('grades')
       .select(`
         id,
@@ -136,9 +128,19 @@ export async function POST(request: NextRequest) {
         exams!inner (
           class_id,
           name
+        ),
+        students (
+          id,
+          full_name
         )
       `)
       .eq('exams.class_id', classId)
+
+    if (examId) {
+      gradesQuery = gradesQuery.eq('exam_id', examId)
+    }
+
+    const { data: grades, error: gradesError } = await gradesQuery
 
     if (gradesError) {
       console.error('❌ Error al obtener calificaciones:', gradesError)
@@ -148,19 +150,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`📊 Calificaciones encontradas: ${grades?.length || 0}`)
-
-    // Contar estudiantes únicos
     const uniqueStudents = new Set(grades?.map(g => g.student_id) || []).size
 
-    // 5. Procesar datos y calcular estadísticas
-
-    // --- ESTADÍSTICAS GENERALES ---
+    // 5. Procesar datos
     const validGrades = grades?.filter(g => 
       g.score_obtained !== null && 
       g.score_possible !== null && 
       g.score_possible > 0
     ) || []
+
+    // Helper para obtener nombre
+    const getStudentName = (grade: any) => {
+      const student = Array.isArray(grade.students) ? grade.students[0] : grade.students
+      return student?.full_name || 'Estudiante Desconocido'
+    }
 
     if (validGrades.length === 0) {
       return NextResponse.json({
@@ -171,12 +174,7 @@ export async function POST(request: NextRequest) {
           totalStudents: uniqueStudents,
           totalGrades: 0
         },
-        generalStats: {
-          classAverage: 0,
-          highestScore: 0,
-          lowestScore: 0,
-          passingRate: 0
-        },
+        generalStats: { classAverage: 0, highestScore: 0, lowestScore: 0, passingRate: 0 },
         gradeDistribution: [],
         topFailedQuestions: [],
         errorTypesFrequency: []
@@ -184,19 +182,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Calcular porcentajes
-    const percentages = validGrades.map(g => 
-      Math.round((g.score_obtained! / g.score_possible!) * 100)
-    )
+    const gradesWithPercentage = validGrades.map(g => ({
+      ...g,
+      percentage: Math.round((g.score_obtained! / g.score_possible!) * 100)
+    }))
+    const percentages = gradesWithPercentage.map(g => g.percentage)
 
-    const classAverage = Math.round(
-      percentages.reduce((sum, p) => sum + p, 0) / percentages.length
-    )
-
+    // --- ESTADÍSTICAS GENERALES ---
+    const classAverage = Math.round(percentages.reduce((sum, p) => sum + p, 0) / percentages.length)
     const highestScore = Math.max(...percentages)
     const lowestScore = Math.min(...percentages)
-
-    const passingGrades = percentages.filter(p => p >= 60).length
-    const passingRate = Math.round((passingGrades / percentages.length) * 100)
+    const passingRate = Math.round((percentages.filter(p => p >= 60).length / percentages.length) * 100)
 
     // --- DISTRIBUCIÓN DE CALIFICACIONES ---
     const distributionRanges = [
@@ -208,28 +204,21 @@ export async function POST(request: NextRequest) {
     ]
 
     const gradeDistribution: GradeDistribution[] = distributionRanges.map(({ range, min, max }) => {
-      const count = percentages.filter(p => p >= min && p <= max).length
+      const gradesInRange = gradesWithPercentage.filter(g => g.percentage >= min && g.percentage <= max)
       return {
         range,
-        count,
-        percentage: Math.round((count / percentages.length) * 100)
+        count: gradesInRange.length,
+        percentage: Math.round((gradesInRange.length / percentages.length) * 100),
+        students: gradesInRange.map(g => ({ id: g.student_id, name: getStudentName(g) }))
       }
     })
 
     // --- PREGUNTAS MÁS FALLADAS ---
-    const questionErrors: Map<string, { count: number; tema: string | null }> = new Map()
+    const questionErrors: Map<string, { count: number; tema: string | null; students: StudentSummary[] }> = new Map()
 
     validGrades.forEach(grade => {
       let feedback = grade.ai_feedback
-
-      // Parsear si es string
-      if (typeof feedback === 'string') {
-        try {
-          feedback = JSON.parse(feedback)
-        } catch (e) {
-          return
-        }
-      }
+      if (typeof feedback === 'string') { try { feedback = JSON.parse(feedback) } catch (e) { return } }
 
       const evaluaciones = feedback?.informe_evaluacion?.evaluacion_detallada || []
 
@@ -237,62 +226,86 @@ export async function POST(request: NextRequest) {
         if (pregunta.evaluacion === 'INCORRECTO') {
           const questionId = pregunta.pregunta_id || 'Pregunta sin ID'
           const tema = pregunta.tema || null
+          const studentName = getStudentName(grade)
+          const studentId = grade.student_id
 
           if (questionErrors.has(questionId)) {
-            questionErrors.get(questionId)!.count++
+            const entry = questionErrors.get(questionId)!
+            entry.count++
+            entry.students.push({ id: studentId, name: studentName })
           } else {
-            questionErrors.set(questionId, { count: 1, tema })
+            questionErrors.set(questionId, { 
+              count: 1, 
+              tema, 
+              students: [{ id: studentId, name: studentName }] 
+            })
           }
         }
       })
     })
 
-    // Ordenar y tomar top 3
     const topFailedQuestions: QuestionError[] = Array.from(questionErrors.entries())
       .map(([questionId, data]) => ({
         questionId,
         tema: data.tema,
         errorCount: data.count,
-        percentage: Math.round((data.count / validGrades.length) * 100)
+        percentage: Math.round((data.count / validGrades.length) * 100),
+        failingStudents: data.students
       }))
       .sort((a, b) => b.errorCount - a.errorCount)
       .slice(0, 3)
 
-    // --- TIPOS DE ERROR MÁS COMUNES ---
-    const errorTypesMap: Map<string, number> = new Map()
+    // --- TIPOS DE ERROR (ACTUALIZADO PARA INCLUIR ESTUDIANTES) ---
+
+    // Usamos un Map donde la clave es el tipo de error, 
+    // y el valor contiene el conteo y otro Map interno para estudiantes (para evitar duplicados por ID)
+    const errorTypesData: Map<string, { count: number; studentsMap: Map<string, string> }> = new Map()
     let totalErrors = 0
 
     validGrades.forEach(grade => {
       let feedback = grade.ai_feedback
-
-      if (typeof feedback === 'string') {
-        try {
-          feedback = JSON.parse(feedback)
-        } catch (e) {
-          return
-        }
-      }
+      if (typeof feedback === 'string') { try { feedback = JSON.parse(feedback) } catch (e) { return } }
 
       const evaluaciones = feedback?.informe_evaluacion?.evaluacion_detallada || []
 
+      // Obtener datos del estudiante actual
+      const studentId = grade.student_id
+      const studentName = getStudentName(grade)
+
       evaluaciones.forEach((pregunta: any) => {
         if (pregunta.tipo_de_error && pregunta.tipo_de_error !== 'ninguno') {
-          const errorType = pregunta.tipo_de_error
-          errorTypesMap.set(errorType, (errorTypesMap.get(errorType) || 0) + 1)
+          const rawType = pregunta.tipo_de_error
+          // Normalizar nombre del error
+          const errorType = rawType.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())
+
+          // Inicializar si no existe
+          if (!errorTypesData.has(errorType)) {
+            errorTypesData.set(errorType, { count: 0, studentsMap: new Map() })
+          }
+
+          const entry = errorTypesData.get(errorType)!
+          entry.count++
+          // Guardamos al estudiante en un Map interno (ID -> Nombre) para evitar duplicados
+          // si un estudiante comete el mismo error varias veces en el mismo examen
+          entry.studentsMap.set(studentId, studentName)
+
           totalErrors++
         }
       })
     })
 
-    const errorTypesFrequency: ErrorTypeCount[] = Array.from(errorTypesMap.entries())
-      .map(([type, count]) => ({
-        name: type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()), // Recharts espera 'name'
-        value: count, // Recharts espera 'value'
-        percentage: totalErrors > 0 ? Math.round((count / totalErrors) * 100) : 0
+    // Transformar Map a Array final
+    const errorTypesFrequency: ErrorTypeCount[] = Array.from(errorTypesData.entries())
+      .map(([type, data]) => ({
+        name: type,
+        value: data.count,
+        percentage: totalErrors > 0 ? Math.round((data.count / totalErrors) * 100) : 0,
+        // Convertir el Map de estudiantes a Array de StudentSummary
+        students: Array.from(data.studentsMap.entries()).map(([id, name]) => ({ id, name }))
       }))
       .sort((a, b) => b.value - a.value)
 
-    // 6. Construir respuesta
+    // 6. Respuesta Final
     const analytics: ClassAnalytics = {
       success: true,
       classInfo: {
@@ -301,28 +314,18 @@ export async function POST(request: NextRequest) {
         totalStudents: uniqueStudents,
         totalGrades: validGrades.length
       },
-      generalStats: {
-        classAverage,
-        highestScore,
-        lowestScore,
-        passingRate
-      },
+      generalStats: { classAverage, highestScore, lowestScore, passingRate },
       gradeDistribution,
       topFailedQuestions,
       errorTypesFrequency
     }
-
-    console.log('✅ Analíticas generadas exitosamente')
 
     return NextResponse.json(analytics)
 
   } catch (error) {
     console.error('❌ Error fatal en la API:', error)
     return NextResponse.json(
-      { 
-        error: 'Error interno del servidor', 
-        details: (error as Error).message 
-      },
+      { error: 'Error interno del servidor', details: (error as Error).message },
       { status: 500 }
     )
   }
