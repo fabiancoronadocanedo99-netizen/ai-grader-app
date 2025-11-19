@@ -20,13 +20,31 @@ export default function ClassDetailPage() {
   const [allEvaluations, setAllEvaluations] = useState<Evaluation[]>([])
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Tabs
+  const [activeTab, setActiveTab] = useState<'evaluations' | 'students'>('evaluations')
+
+  // Modal Crear
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [newEvaluationName, setNewEvaluationName] = useState('')
   const [newEvaluationType, setNewEvaluationType] = useState<'exam' | 'assignment'>('exam')
-  const [activeTab, setActiveTab] = useState<'evaluations' | 'students'>('evaluations')
+
+  // CSV
   const [isCSVModalOpen, setIsCSVModalOpen] = useState(false)
   const [csvFile, setCSVFile] = useState<File | null>(null)
   const [isProcessingCSV, setIsProcessingCSV] = useState(false)
+
+  // --- ESTADOS NUEVOS PARA EDITAR/ELIMINAR ---
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null) // Menú desplegable activo
+
+  // Eliminar
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [evalToDelete, setEvalToDelete] = useState<Evaluation | null>(null)
+
+  // Editar
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [evalToEdit, setEvalToEdit] = useState<Evaluation | null>(null)
+  const [editName, setEditName] = useState('')
 
   const exams = useMemo(() => allEvaluations.filter(e => e.type === 'exam'), [allEvaluations])
   const assignments = useMemo(() => allEvaluations.filter(e => e.type === 'assignment'), [allEvaluations])
@@ -61,6 +79,82 @@ export default function ClassDetailPage() {
     if (classId) loadData()
   }, [classId, fetchClassDetails, fetchEvaluations, fetchStudents])
 
+  // Cerrar menú si se hace clic fuera
+  useEffect(() => {
+    const handleClickOutside = () => setActiveMenuId(null);
+    if (activeMenuId) {
+      document.addEventListener('click', handleClickOutside);
+    }
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [activeMenuId]);
+
+  // --- FUNCIONES DE MENÚ Y CRUD ---
+
+  const toggleMenu = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveMenuId(activeMenuId === id ? null : id);
+  };
+
+  // Manejar Eliminar
+  const handleDeleteClick = (e: React.MouseEvent, evaluation: Evaluation) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveMenuId(null);
+    setEvalToDelete(evaluation);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!evalToDelete) return;
+
+    // Nota: Usamos la tabla 'exams' porque ahí se guardan tanto exámenes como tareas (campo type)
+    const { error } = await supabase.from('exams').delete().eq('id', evalToDelete.id);
+
+    if (error) {
+      console.error('Error al eliminar:', error);
+      alert('No se pudo eliminar la evaluación.');
+    } else {
+      await fetchEvaluations();
+      setIsDeleteModalOpen(false);
+      setEvalToDelete(null);
+    }
+  };
+
+  // Manejar Editar
+  const handleEditClick = (e: React.MouseEvent, evaluation: Evaluation) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveMenuId(null);
+    setEvalToEdit(evaluation);
+    setEditName(evaluation.name);
+    setIsEditModalOpen(true);
+  };
+
+  const confirmEdit = async () => {
+    if (!evalToEdit) return;
+    if (!editName.trim()) {
+      alert('El nombre no puede estar vacío');
+      return;
+    }
+
+    const { error } = await supabase
+      .from('exams')
+      .update({ name: editName })
+      .eq('id', evalToEdit.id);
+
+    if (error) {
+      console.error('Error al editar:', error);
+      alert('No se pudo actualizar la evaluación.');
+    } else {
+      await fetchEvaluations();
+      setIsEditModalOpen(false);
+      setEvalToEdit(null);
+      setEditName('');
+    }
+  };
+
+  // --- CREACIÓN ---
   const handleCreateEvaluation = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newEvaluationName.trim() || !classId) return
@@ -74,6 +168,7 @@ export default function ClassDetailPage() {
     }
   }
 
+  // --- CSV ---
   const generateCSVTemplate = () => {
     const csvContent = 'full_name,student_email,tutor_email\n'
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -88,18 +183,11 @@ export default function ClassDetailPage() {
     setIsProcessingCSV(true);
     try {
       const text = await file.text();
-
-      // Forzar refresh de la sesión
       const { data, error: refreshError } = await supabase.auth.refreshSession();
-
-      // --- CORRECCIÓN #1: Hacemos la comprobación más explícita ---
       if (refreshError || !data.session || !data.session.access_token) {
         throw new Error('Por favor, cierra sesión y vuelve a iniciar sesión');
       }
-
       const session = data.session;
-
-      console.log('✅ Sesión refrescada, token obtenido');
 
       const response = await fetch('/api/process-csv', {
         method: 'POST',
@@ -114,8 +202,6 @@ export default function ClassDetailPage() {
       });
 
       const result = await response.json();
-
-      // --- CORRECCIÓN #2: 'response' en minúscula ---
       if (!response.ok) {
         throw new Error(result.error || 'Error al procesar CSV');
       }
@@ -162,6 +248,39 @@ export default function ClassDetailPage() {
       </div>
     )
   }
+
+  // Componente reutilizable para el menú en las tarjetas
+  const EvaluationCardMenu = ({ item }: { item: Evaluation }) => (
+    <>
+      <div className="absolute top-4 right-4 z-10">
+        <button 
+          onClick={(e) => toggleMenu(e, item.id)}
+          className="p-1 rounded-full hover:bg-gray-100 text-gray-500"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+          </svg>
+        </button>
+
+        {activeMenuId === item.id && (
+          <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 border border-gray-100 overflow-hidden">
+            <button
+              onClick={(e) => handleEditClick(e, item)}
+              className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            >
+              Editar Nombre
+            </button>
+            <button
+              onClick={(e) => handleDeleteClick(e, item)}
+              className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+            >
+              Eliminar
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  );
 
   return (
     <div className="neu-container min-h-screen p-8">
@@ -219,11 +338,16 @@ export default function ClassDetailPage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {exams.map(exam => (
-                    <div key={exam.id} className="neu-card p-4">
-                      <h4 className="font-semibold text-gray-800">{exam.name}</h4>
+                    <div key={exam.id} className="neu-card p-4 relative">
+                      <EvaluationCardMenu item={exam} />
+
+                      <div className="pr-8"> {/* Padding para no chocar con el menú */}
+                         <h4 className="font-semibold text-gray-800 text-lg mb-4">{exam.name}</h4>
+                      </div>
+
                       <Link 
                         href={`/dashboard/class/${classId}/exam/${exam.id}`} 
-                        className="neu-button mt-4 text-center block"
+                        className="neu-button mt-2 text-center block"
                       >
                         Gestionar
                       </Link>
@@ -240,11 +364,16 @@ export default function ClassDetailPage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {assignments.map(task => (
-                    <div key={task.id} className="neu-card p-4">
-                      <h4 className="font-semibold text-gray-800">{task.name}</h4>
+                    <div key={task.id} className="neu-card p-4 relative">
+                       <EvaluationCardMenu item={task} />
+
+                      <div className="pr-8">
+                        <h4 className="font-semibold text-gray-800 text-lg mb-4">{task.name}</h4>
+                      </div>
+
                       <Link 
                         href={`/dashboard/class/${classId}/exam/${task.id}`} 
-                        className="neu-button mt-4 text-center block"
+                        className="neu-button mt-2 text-center block"
                       >
                         Gestionar
                       </Link>
@@ -306,14 +435,14 @@ export default function ClassDetailPage() {
         )}
       </div>
 
-      {/* Modal Crear Evaluación */}
+      {/* --- Modal Crear Evaluación --- */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div 
             className="absolute inset-0 bg-black/50" 
             onClick={() => setIsCreateModalOpen(false)} 
           />
-          <div className="relative neu-card p-8 w-full max-w-lg">
+          <div className="relative neu-card p-8 w-full max-w-lg bg-white">
             <h2 className="text-2xl font-bold mb-6 text-center">Crear Nueva Evaluación</h2>
             <form onSubmit={handleCreateEvaluation}>
               <div className="mb-6">
@@ -374,14 +503,74 @@ export default function ClassDetailPage() {
         </div>
       )}
 
-      {/* Modal Importar CSV */}
+      {/* --- Modal EDITAR Evaluación --- */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+           <div className="absolute inset-0 bg-black/50" onClick={() => setIsEditModalOpen(false)} />
+           <div className="relative neu-card p-6 w-full max-w-md bg-white z-50">
+             <h2 className="text-xl font-bold mb-4">Editar Nombre</h2>
+             <input
+               type="text"
+               value={editName}
+               onChange={(e) => setEditName(e.target.value)}
+               className="neu-input w-full p-3 mb-6"
+               placeholder="Nuevo nombre..."
+               autoFocus
+             />
+             <div className="flex justify-end gap-3">
+               <button 
+                 onClick={() => setIsEditModalOpen(false)}
+                 className="neu-button px-4 py-2 text-gray-600 text-sm"
+               >
+                 Cancelar
+               </button>
+               <button 
+                 onClick={confirmEdit}
+                 className="neu-button px-4 py-2 text-blue-600 font-bold text-sm"
+               >
+                 Guardar
+               </button>
+             </div>
+           </div>
+        </div>
+      )}
+
+      {/* --- Modal ELIMINAR Evaluación --- */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+           <div className="absolute inset-0 bg-black/50" onClick={() => setIsDeleteModalOpen(false)} />
+           <div className="relative neu-card p-6 w-full max-w-md bg-white z-50">
+             <h2 className="text-xl font-bold mb-2 text-red-600">Eliminar Evaluación</h2>
+             <p className="text-gray-600 mb-6">
+               ¿Estás seguro de que quieres eliminar <strong>{evalToDelete?.name}</strong>? 
+               <br/>Se perderán todos los datos asociados.
+             </p>
+             <div className="flex justify-end gap-3">
+               <button 
+                 onClick={() => setIsDeleteModalOpen(false)}
+                 className="neu-button px-4 py-2 text-gray-600 text-sm"
+               >
+                 Cancelar
+               </button>
+               <button 
+                 onClick={confirmDelete}
+                 className="neu-button px-4 py-2 text-red-600 font-bold text-sm"
+               >
+                 Eliminar
+               </button>
+             </div>
+           </div>
+        </div>
+      )}
+
+      {/* --- Modal Importar CSV (Sin cambios lógicos, solo renderizado) --- */}
       {isCSVModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div 
             className="absolute inset-0 bg-black/50" 
             onClick={() => setIsCSVModalOpen(false)} 
           />
-          <div className="relative neu-card p-8 max-w-2xl w-full mx-4">
+          <div className="relative neu-card p-8 max-w-2xl w-full mx-4 bg-white">
             <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">
               Importar Alumnos desde CSV
             </h2>
