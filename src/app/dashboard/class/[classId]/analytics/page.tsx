@@ -73,6 +73,16 @@ export default function ClassAnalyticsPage() {
         // Obtener sesión
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
+        // --- 1. CÓDIGO ESPÍA PARA SESIÓN ---
+        console.log("SESSION OBJECT:", session);
+        if (sessionError) console.error("Error al obtener la sesión:", sessionError);
+        if (!session) {
+          console.log("¡NO SE ENCONTRÓ SESIÓN!");
+        } else {
+          console.log("ACCESS TOKEN:", session.access_token);
+        }
+        // -----------------------------------
+
         if (sessionError || !session) {
           setError('No hay sesión activa. Por favor, inicia sesión.')
           setLoading(false)
@@ -86,7 +96,7 @@ export default function ClassAnalyticsPage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`
+            'Authorization': `Bearer ${session.access_token}` // Token asegurado
           },
           body: JSON.stringify({ classId })
         })
@@ -182,6 +192,13 @@ export default function ClassAnalyticsPage() {
     if (avg >= 60) return 'text-yellow-600'
     return 'text-red-600'
   }
+
+  // --- 2. CORRECCIÓN DE TIPOS PARA EL GRÁFICO ---
+  const errorTypeChartData = errorTypesFrequency.map(item => ({
+    name: item.name,
+    value: item.value
+  }));
+  // ----------------------------------------------
 
   return (
     <div className="neu-container min-h-screen p-8">
@@ -367,7 +384,7 @@ export default function ClassAnalyticsPage() {
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={errorTypesFrequency}
+                    data={errorTypeChartData} // <-- USO DE LA VARIABLE CORREGIDA
                     cx="50%"
                     cy="50%"
                     labelLine={false}
