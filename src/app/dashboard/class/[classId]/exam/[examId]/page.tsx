@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { useDropzone, FileWithPath } from 'react-dropzone'
 import { createClient } from '@/lib/supabaseClient'
-// 🔥🔥🔥 NUEVO: A. Importar el componente del escáner 🔥🔥🔥
 import CameraScannerModal from '@/components/CameraScannerModal'
 
 // --- Tipos de Datos ---
@@ -416,7 +415,7 @@ function SubmissionsManager({
   )
 }
 
-// --- Componente: CreateSubmissionModal (CON INTEGRACIÓN DEL ESCÁNER) ---
+// --- Componente: CreateSubmissionModal ---
 function CreateSubmissionModal({ 
   onClose, 
   examId, 
@@ -432,7 +431,6 @@ function CreateSubmissionModal({
   const [filesWithStudents, setFilesWithStudents] = useState<{ file: FileWithPath | File; studentId: string | null }[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [students, setStudents] = useState<Student[]>([])
-  // 🔥🔥🔥 NUEVO: B. Añadir estado para controlar el modal del escáner 🔥🔥🔥
   const [isScannerOpen, setIsScannerOpen] = useState(false)
 
   useEffect(() => {
@@ -463,13 +461,11 @@ function CreateSubmissionModal({
     accept: { 'application/pdf': ['.pdf'] } 
   })
 
-  // 🔥🔥🔥 NUEVO: D. Función para recibir el PDF escaneado 🔥🔥🔥
   const handleScanComplete = (scannedFile: File) => {
-    // Es necesario castear 'File' a 'FileWithPath' para que sea compatible
     const fileWithPath = scannedFile as FileWithPath
     const newFileEntry = { file: fileWithPath, studentId: null }
     setFilesWithStudents(prev => [...prev, newFileEntry])
-    setIsScannerOpen(false) // Cerrar el escáner automáticamente
+    setIsScannerOpen(false)
     console.log('✅ PDF escaneado agregado:', scannedFile.name)
   }
 
@@ -557,7 +553,6 @@ function CreateSubmissionModal({
           </p>
         </div>
 
-        {/* 🔥🔥🔥 NUEVO: C. Botón para abrir el escáner 🔥🔥🔥 */}
         <div className="text-center my-4">
           <p className="text-gray-500 text-sm mb-2">o</p>
           <button 
@@ -619,7 +614,6 @@ function CreateSubmissionModal({
         </div>
       </div>
 
-      {/* 🔥🔥🔥 NUEVO: E. Componente del modal del escáner 🔥🔥🔥 */}
       <CameraScannerModal 
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
@@ -629,7 +623,7 @@ function CreateSubmissionModal({
   )
 }
 
-// --- Componente: CreateSolutionModal ---
+// --- Componente: CreateSolutionModal (ACTUALIZADO) ---
 function CreateSolutionModal({ 
   examId, 
   onUploadSuccess, 
@@ -643,11 +637,20 @@ function CreateSolutionModal({
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
 
+  // 🔥 A. Nuevo estado para el escáner
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+
   const { getRootProps, getInputProps } = useDropzone({ 
     onDrop: (files) => setFile(files[0] || null), 
     multiple: false,
     accept: { 'application/pdf': ['.pdf'] }
   })
+
+  // 🔥 B. Función para manejar el archivo escaneado
+  const handleScanComplete = (scannedFile: File) => {
+    setFile(scannedFile)
+    setIsScannerOpen(false)
+  }
 
   const handleUpload = async () => {
     if (!file) return
@@ -702,7 +705,7 @@ function CreateSolutionModal({
 
         <div 
           {...getRootProps()} 
-          className="mb-6 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center hover:border-gray-600 transition-colors"
+          className="mb-4 neu-input p-6 border-2 border-dashed border-gray-400/50 cursor-pointer text-center hover:border-gray-600 transition-colors"
         >
           <input {...getInputProps()} />
           <p className="text-slate-700">
@@ -711,6 +714,18 @@ function CreateSolutionModal({
           <p className="text-sm text-gray-500 mt-2">
             Solo archivos PDF
           </p>
+        </div>
+
+        {/* 🔥 C. Botón para abrir el escáner */}
+        <div className="text-center my-4">
+          <p className="text-gray-500 text-sm mb-2">o</p>
+          <button 
+            type="button" 
+            onClick={() => setIsScannerOpen(true)}
+            className="neu-button py-2 px-4 text-sm text-slate-700 font-semibold hover:shadow-lg transition-shadow"
+          >
+            📷 Escanear con la cámara
+          </button>
         </div>
 
         {file && (
@@ -737,6 +752,13 @@ function CreateSolutionModal({
           </button>
         </div>
       </div>
+
+      {/* 🔥 D. Modal del Escáner */}
+      <CameraScannerModal 
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanComplete={handleScanComplete}
+      />
     </div>
   )
 }
