@@ -1,11 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link' // Importado para el modal
 import { createClient } from '@/lib/supabaseClient'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 // --- INTERFACES ---
+
+interface StudentSummary {
+  id: string
+  name: string
+}
+
 interface ClassInfo {
   id: string
   name: string
@@ -24,6 +31,7 @@ interface GradeDistribution {
   range: string
   count: number
   percentage: number
+  students: StudentSummary[] // Lista de estudiantes
 }
 
 interface QuestionError {
@@ -31,12 +39,14 @@ interface QuestionError {
   tema: string | null
   errorCount: number
   percentage: number
+  failingStudents: StudentSummary[] // Lista de estudiantes
 }
 
 interface ErrorTypeCount {
-  name: string  // Recharts espera 'name' en lugar de 'type'
-  value: number // Recharts espera 'value' en lugar de 'count'
+  name: string
+  value: number
   percentage: number
+  students?: StudentSummary[] // Opcional por ahora, preparado para el futuro
 }
 
 interface AnalyticsData {
@@ -48,16 +58,107 @@ interface AnalyticsData {
   errorTypesFrequency: ErrorTypeCount[]
 }
 
+interface ExamOption {
+  id: string
+  name: string
+}
+
+// --- COMPONENTE MODAL DE ESTUDIANTES ---
+const StudentListModal = ({ 
+  isOpen, 
+  onClose, 
+  title, 
+  students 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  title: string; 
+  students: StudentSummary[] 
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="neu-card bg-white w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+          <h3 className="text-xl font-bold text-gray-700">{title}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            ✕
+          </button>
+        </div>
+        <div className="p-6 overflow-y-auto flex-1">
+          {students && students.length > 0 ? (
+            <ul className="space-y-3">
+              {students.map((student) => (
+                <li key={student.id}>
+                  <Link 
+                    href={`/dashboard/student/${student.id}`}
+                    className="flex items-center p-3 rounded-lg hover:bg-blue-50 transition-colors group"
+                  >
+                    <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold mr-3 group-hover:bg-blue-200">
+                      {student.name.charAt(0)}
+                    </span>
+                    <span className="text-gray-700 font-medium group-hover:text-blue-700">
+                      {student.name}
+                    </span>
+                    <span className="ml-auto text-gray-400 text-sm">Ver →</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-center text-gray-500 py-8">No hay estudiantes en esta lista.</p>
+          )}
+        </div>
+        <div className="p-4 border-t border-gray-100 bg-gray-50 text-right">
+          <button onClick={onClose} className="neu-button py-2 px-4 text-sm">
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- PÁGINA PRINCIPAL ---
+
 export default function ClassAnalyticsPage() {
   const supabase = createClient()
   const params = useParams()
   const router = useRouter()
   const classId = params.classId as string
 
+  // Estados de Datos
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
+  const [examsList, setExamsList] = useState<ExamOption[]>([]) // Lista para el dropdown
+
+  // Estados de Control
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedExamId, setSelectedExamId] = useState<string>('all') // Filtro seleccionado
 
+  // Estados del Modal
+  const [modalState, setModalState] = useState<{ isOpen: boolean; title: string; students: StudentSummary[] }>({
+    isOpen: false,
+    title: '',
+    students: []
+  })
+
+  // 1. Cargar lista de exámenes para el dropdown
+  useEffect(() => {
+    const fetchExams = async () => {
+      const { data } = await supabase
+        .from('exams')
+        .select('id, name')
+        .eq('class_id', classId)
+        .order('created_at', { ascending: false });
+
+      if (data) setExamsList(data);
+    };
+    if (classId) fetchExams();
+  }, [classId, supabase]);
+
+  // 2. Cargar Analíticas (se ejecuta al montar y al cambiar el filtro)
   useEffect(() => {
     const fetchAnalytics = async () => {
       if (!classId) {
@@ -70,18 +171,13 @@ export default function ClassAnalyticsPage() {
         setLoading(true)
         setError(null)
 
-        // Obtener sesión
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
-        // --- 1. CÓDIGO ESPÍA PARA SESIÓN ---
+        // Código Espía
         console.log("SESSION OBJECT:", session);
         if (sessionError) console.error("Error al obtener la sesión:", sessionError);
-        if (!session) {
-          console.log("¡NO SE ENCONTRÓ SESIÓN!");
-        } else {
-          console.log("ACCESS TOKEN:", session.access_token);
-        }
-        // -----------------------------------
+        if (!session) console.log("¡NO SE ENCONTRÓ SESIÓN!");
+        else console.log("ACCESS TOKEN:", session.access_token);
 
         if (sessionError || !session) {
           setError('No hay sesión activa. Por favor, inicia sesión.')
@@ -89,16 +185,21 @@ export default function ClassAnalyticsPage() {
           return
         }
 
-        console.log('🔍 Obteniendo analíticas para clase:', classId)
+        console.log(`🔍 Obteniendo analíticas para clase: ${classId}, Examen: ${selectedExamId}`)
 
-        // Llamar a la API
+        // Body de la petición incluyendo el examId si es específico
+        const requestBody: any = { classId };
+        if (selectedExamId !== 'all') {
+          requestBody.examId = selectedExamId;
+        }
+
         const response = await fetch('/api/get-class-analytics', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}` // Token asegurado
+            'Authorization': `Bearer ${session.access_token}`
           },
-          body: JSON.stringify({ classId })
+          body: JSON.stringify(requestBody)
         })
 
         if (!response.ok) {
@@ -107,8 +208,6 @@ export default function ClassAnalyticsPage() {
         }
 
         const data: AnalyticsData = await response.json()
-        console.log('✅ Analíticas obtenidas:', data)
-
         setAnalytics(data)
       } catch (err) {
         console.error('❌ Error al cargar analíticas:', err)
@@ -119,25 +218,43 @@ export default function ClassAnalyticsPage() {
     }
 
     fetchAnalytics()
-  }, [classId, supabase])
+  }, [classId, selectedExamId, supabase]) // Dependencia agregada: selectedExamId
+
+  // Handlers para abrir el modal
+  const openStudentModal = (title: string, students: StudentSummary[]) => {
+    setModalState({ isOpen: true, title, students: students || [] });
+  };
+
+  const handleBarClick = (data: any) => {
+    if (data && data.payload && data.payload.students) {
+      openStudentModal(`Estudiantes en rango ${data.payload.range}`, data.payload.students);
+    }
+  };
+
+  const handlePieClick = (data: any) => {
+    // Nota: Asegúrate de que tu API devuelva 'students' en errorTypesFrequency para que esto funcione plenamente.
+    if (data && data.payload) {
+       const studentsList = data.payload.students || [];
+       openStudentModal(`Estudiantes con error: ${data.name}`, studentsList);
+    }
+  };
 
   // Colores para las gráficas
   const DISTRIBUTION_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#dc2626']
   const ERROR_COLORS = ['#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899']
 
-  // Estado de carga
+  // --- RENDERS DE CARGA Y ERROR ---
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600 text-lg">Analizando datos de la clase...</p>
+          <p className="text-gray-600 text-lg">Analizando datos...</p>
         </div>
       </div>
     )
   }
 
-  // Estado de error
   if (error) {
     return (
       <div className="flex h-screen items-center justify-center p-8">
@@ -145,129 +262,114 @@ export default function ClassAnalyticsPage() {
           <div className="text-6xl mb-4">⚠️</div>
           <h2 className="text-2xl font-bold text-red-600 mb-4">Error</h2>
           <p className="text-gray-700 mb-6">{error}</p>
-          <button 
-            onClick={() => router.back()} 
-            className="neu-button text-gray-700 font-semibold py-3 px-6"
-          >
-            ← Volver
-          </button>
+          <button onClick={() => router.back()} className="neu-button py-3 px-6">← Volver</button>
         </div>
       </div>
     )
   }
 
-  if (!analytics) {
-    return (
-      <div className="flex h-screen items-center justify-center p-8">
-        <div className="neu-card p-8 max-w-lg w-full text-center">
-          <div className="text-6xl mb-4">🤔</div>
-          <h2 className="text-2xl font-bold text-gray-700 mb-4">No se encontraron datos</h2>
-          <p className="text-gray-600 mb-6">No se pudo cargar la información del estudiante.</p>
-          <button 
-            onClick={() => router.back()} 
-            className="neu-button text-gray-700 font-semibold py-3 px-6"
-          >
-            ← Volver
-          </button>
-        </div>
-      </div>
-    )
-  }
+  if (!analytics) return null;
 
   const { classInfo, generalStats, gradeDistribution, topFailedQuestions, errorTypesFrequency } = analytics
 
-  // Formatear fecha
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('es-MX', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
-  }
-
-  // Función para obtener color según promedio
+  // Función auxiliar colores
   const getAverageColor = (avg: number) => {
     if (avg >= 80) return 'text-green-600'
     if (avg >= 60) return 'text-yellow-600'
     return 'text-red-600'
   }
 
-  // --- 2. CORRECCIÓN DE TIPOS PARA EL GRÁFICO ---
+  // Datos transformados para PieChart
   const errorTypeChartData = errorTypesFrequency.map(item => ({
     name: item.name,
-    value: item.value
+    value: item.value,
+    students: item.students // Pasamos la lista de estudiantes (si existe) al gráfico
   }));
-  // ----------------------------------------------
 
   return (
-    <div className="neu-container min-h-screen p-8">
-      {/* Encabezado */}
+    <div className="neu-container min-h-screen p-8 pb-20">
+      {/* Encabezado y Filtros */}
       <div className="mb-8">
-        <button 
-          onClick={() => router.back()} 
-          className="neu-button text-gray-700 font-medium py-2 px-4 mb-4 inline-flex items-center gap-2"
-        >
-          ← Volver
-        </button>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+          <button 
+            onClick={() => router.back()} 
+            className="neu-button text-gray-700 font-medium py-2 px-4 inline-flex items-center gap-2"
+          >
+            ← Volver
+          </button>
+
+          {/* --- FILTRO POR EVALUACIÓN --- */}
+          <div className="w-full md:w-auto">
+            <select 
+              value={selectedExamId}
+              onChange={(e) => setSelectedExamId(e.target.value)}
+              className="neu-input w-full md:w-64 p-3 bg-white cursor-pointer font-medium text-gray-700"
+            >
+              <option value="all">📊 Todas las Evaluaciones</option>
+              <optgroup label="Exámenes y Tareas">
+                {examsList.map((exam) => (
+                  <option key={exam.id} value={exam.id}>
+                    📝 {exam.name}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
+        </div>
 
         <div className="neu-card p-6">
           <h1 className="text-4xl font-bold text-gray-700 mb-2">
-            📊 Análisis de Rendimiento de la Clase
+            📊 Análisis de Rendimiento
           </h1>
-          <p className="text-2xl text-gray-600 font-semibold">{classInfo.name}</p>
-          <div className="flex gap-6 mt-4 text-sm text-gray-600">
-            <span>👥 {classInfo.totalStudents} estudiante{classInfo.totalStudents !== 1 ? 's' : ''}</span>
-            <span>📝 {classInfo.totalGrades} evaluación{classInfo.totalGrades !== 1 ? 'es' : ''}</span>
+          <div className="flex flex-col md:flex-row justify-between items-end">
+            <div>
+              <p className="text-2xl text-gray-600 font-semibold">{classInfo.name}</p>
+              <div className="flex gap-6 mt-2 text-sm text-gray-600">
+                <span>👥 {classInfo.totalStudents} estudiantes</span>
+                <span>📝 {classInfo.totalGrades} calificaciones analizadas</span>
+              </div>
+            </div>
+            {selectedExamId !== 'all' && (
+              <span className="mt-4 md:mt-0 px-4 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold">
+                Filtrado por: {examsList.find(e => e.id === selectedExamId)?.name}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Estadísticas Generales */}
+      {/* Estadísticas Generales (Cards) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {/* Promedio General */}
+        {/* ... (Cards de Estadísticas igual que antes) ... */}
         <div className="neu-card p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-700">Promedio General</h3>
+            <h3 className="text-lg font-semibold text-gray-700">Promedio</h3>
             <span className="text-3xl">📊</span>
           </div>
           <div className="text-center">
             <div className={`text-5xl font-bold ${getAverageColor(generalStats.classAverage)}`}>
               {generalStats.classAverage}%
             </div>
-            <p className="text-sm text-gray-500 mt-2">Calificación promedio</p>
           </div>
         </div>
-
-        {/* Calificación Más Alta */}
         <div className="neu-card p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-700">Mejor Nota</h3>
             <span className="text-3xl">🏆</span>
           </div>
           <div className="text-center">
-            <div className="text-5xl font-bold text-green-600">
-              {generalStats.highestScore}%
-            </div>
-            <p className="text-sm text-gray-500 mt-2">Calificación más alta</p>
+            <div className="text-5xl font-bold text-green-600">{generalStats.highestScore}%</div>
           </div>
         </div>
-
-        {/* Calificación Más Baja */}
         <div className="neu-card p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-700">Nota Más Baja</h3>
+            <h3 className="text-lg font-semibold text-gray-700">Nota Baja</h3>
             <span className="text-3xl">📉</span>
           </div>
           <div className="text-center">
-            <div className="text-5xl font-bold text-red-600">
-              {generalStats.lowestScore}%
-            </div>
-            <p className="text-sm text-gray-500 mt-2">Calificación más baja</p>
+            <div className="text-5xl font-bold text-red-600">{generalStats.lowestScore}%</div>
           </div>
         </div>
-
-        {/* Tasa de Aprobación */}
         <div className="neu-card p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-700">Aprobación</h3>
@@ -277,114 +379,88 @@ export default function ClassAnalyticsPage() {
             <div className={`text-5xl font-bold ${getAverageColor(generalStats.passingRate)}`}>
               {generalStats.passingRate}%
             </div>
-            <p className="text-sm text-gray-500 mt-2">Tasa de aprobación</p>
           </div>
         </div>
       </div>
 
-      {/* Gráfico de Distribución de Calificaciones */}
+      {/* Gráfico de Distribución (INTERACTIVO) */}
       <div className="neu-card p-6 mb-8">
-        <h2 className="text-2xl font-bold text-gray-700 mb-6">
-          📈 Distribución de Calificaciones
-        </h2>
+        <div className="flex items-center gap-2 mb-6">
+          <h2 className="text-2xl font-bold text-gray-700">📈 Distribución de Calificaciones</h2>
+          <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">Click en las barras para ver alumnos</span>
+        </div>
+
         {gradeDistribution.length > 0 ? (
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={gradeDistribution}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis 
-                dataKey="range" 
-                stroke="#6b7280"
-                style={{ fontSize: '14px' }}
-              />
-              <YAxis 
-                stroke="#6b7280"
-                style={{ fontSize: '14px' }}
-                label={{ value: 'Cantidad de Estudiantes', angle: -90, position: 'insideLeft' }}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#fff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                }}
-              />
+              <XAxis dataKey="range" stroke="#6b7280" style={{ fontSize: '14px' }} />
+              <YAxis stroke="#6b7280" style={{ fontSize: '14px' }} label={{ value: 'Cantidad', angle: -90, position: 'insideLeft' }} />
+              <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} contentStyle={{ borderRadius: '8px' }} />
               <Legend />
               <Bar 
                 dataKey="count" 
-                name="Estudiantes"
-                radius={[8, 8, 0, 0]}
+                name="Estudiantes" 
+                radius={[8, 8, 0, 0]} 
+                onClick={handleBarClick} // <--- CLICK HANDLER
+                className="cursor-pointer"
               >
                 {gradeDistribution.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={DISTRIBUTION_COLORS[index % DISTRIBUTION_COLORS.length]} />
+                  <Cell key={`cell-${index}`} fill={DISTRIBUTION_COLORS[index % DISTRIBUTION_COLORS.length]} className="hover:opacity-80 transition-opacity" />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <p className="text-center text-gray-600 py-12">No hay datos de distribución disponibles</p>
+          <p className="text-center text-gray-600 py-12">No hay datos disponibles</p>
         )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        {/* Top 3 Preguntas Más Falladas */}
+        {/* Top Preguntas (INTERACTIVO) */}
         <div className="neu-card p-6">
-          <h2 className="text-2xl font-bold text-gray-700 mb-6">
-            ❌ Las 3 Preguntas Más Falladas
-          </h2>
+          <h2 className="text-2xl font-bold text-gray-700 mb-6">❌ Preguntas Más Falladas</h2>
           {topFailedQuestions.length > 0 ? (
             <div className="space-y-4">
               {topFailedQuestions.map((question, index) => (
-                <div 
+                <button 
                   key={question.questionId} 
-                  className="neu-card p-4 bg-red-50/30"
+                  onClick={() => openStudentModal(`Alumnos que fallaron: ${question.questionId}`, question.failingStudents)}
+                  className="w-full text-left neu-card p-4 bg-red-50/30 hover:bg-red-100/50 transition-all transform hover:-translate-y-1 active:translate-y-0"
                 >
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between pointer-events-none"> {/* pointer-events-none para que el click lo capture el botón padre */}
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-2xl font-bold text-red-600">#{index + 1}</span>
-                        <h3 className="text-lg font-semibold text-gray-800">
-                          {question.questionId}
-                        </h3>
+                        <h3 className="text-lg font-semibold text-gray-800 break-all">{question.questionId}</h3>
                       </div>
-                      {question.tema && (
-                        <p className="text-sm text-gray-600 mb-2">
-                          📚 Tema: {question.tema}
-                        </p>
-                      )}
-                      <p className="text-sm text-gray-600">
-                        {question.errorCount} estudiante{question.errorCount !== 1 ? 's' : ''} la fallaron
+                      {question.tema && <p className="text-sm text-gray-600 mb-2">📚 Tema: {question.tema}</p>}
+                      <p className="text-sm text-blue-600 font-medium underline decoration-blue-300">
+                        Ver {question.errorCount} estudiante{question.errorCount !== 1 ? 's' : ''}
                       </p>
                     </div>
                     <div className="text-right">
-                      <div className="text-3xl font-bold text-red-600">
-                        {question.percentage}%
-                      </div>
+                      <div className="text-3xl font-bold text-red-600">{question.percentage}%</div>
                       <p className="text-xs text-gray-500">de error</p>
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           ) : (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">✨</div>
-              <p className="text-gray-600">¡Excelente! No hay preguntas con muchos errores</p>
-            </div>
+            <div className="text-center py-12"><div className="text-6xl mb-4">✨</div><p>¡Excelente! No hay preguntas críticas.</p></div>
           )}
         </div>
 
-        {/* Gráfico de Tipos de Error */}
+        {/* Gráfico de Errores (INTERACTIVO) */}
         <div className="neu-card p-6">
-          <h2 className="text-2xl font-bold text-gray-700 mb-6">
-            🎯 Tipos de Error Más Comunes
-          </h2>
+          <h2 className="text-2xl font-bold text-gray-700 mb-6">🎯 Tipos de Error</h2>
           {errorTypesFrequency.length > 0 ? (
             <>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={errorTypeChartData} // <-- USO DE LA VARIABLE CORREGIDA
+                    data={errorTypeChartData}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
@@ -392,95 +468,41 @@ export default function ClassAnalyticsPage() {
                     outerRadius={100}
                     fill="#8884d8"
                     dataKey="value"
+                    onClick={handlePieClick} // <--- CLICK HANDLER
+                    className="cursor-pointer"
                   >
-                    {errorTypesFrequency.map((entry: ErrorTypeCount, index: number) => (
-                      <Cell key={`cell-${index}`} fill={ERROR_COLORS[index % ERROR_COLORS.length]} />
+                    {errorTypesFrequency.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={ERROR_COLORS[index % ERROR_COLORS.length]} className="hover:opacity-80" />
                     ))}
                   </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#fff',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                  />
+                  <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
-
-              {/* Leyenda personalizada */}
               <div className="mt-6 space-y-2">
                 {errorTypesFrequency.map((error, index) => (
                   <div key={error.name} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div 
-                        className="w-4 h-4 rounded"
-                        style={{ backgroundColor: ERROR_COLORS[index % ERROR_COLORS.length] }}
-                      />
+                      <div className="w-4 h-4 rounded" style={{ backgroundColor: ERROR_COLORS[index % ERROR_COLORS.length] }} />
                       <span className="text-sm font-medium text-gray-700">{error.name}</span>
                     </div>
-                    <div className="text-right">
-                      <span className="text-sm font-bold text-gray-700">{error.value}</span>
-                      <span className="text-xs text-gray-500 ml-1">({error.percentage}%)</span>
-                    </div>
+                    <span className="text-sm font-bold text-gray-700">{error.percentage}%</span>
                   </div>
                 ))}
               </div>
             </>
           ) : (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">🎉</div>
-              <p className="text-gray-600">¡Perfecto! No se han registrado errores</p>
-            </div>
+            <div className="text-center py-12"><div className="text-6xl mb-4">🎉</div><p>Sin errores registrados.</p></div>
           )}
         </div>
       </div>
 
-      {/* Recomendaciones */}
-      {(topFailedQuestions.length > 0 || errorTypesFrequency.length > 0) && (
-        <div className="neu-card p-6">
-          <h2 className="text-2xl font-bold text-gray-700 mb-4">
-            💡 Recomendaciones
-          </h2>
-          <div className="space-y-3 text-gray-700">
-            {generalStats.classAverage < 70 && (
-              <p className="flex items-start gap-2">
-                <span className="text-xl">📌</span>
-                <span>
-                  El promedio de la clase está por debajo del 70%. Considera realizar sesiones de repaso o tutorías adicionales.
-                </span>
-              </p>
-            )}
-            {topFailedQuestions.length > 0 && (
-              <p className="flex items-start gap-2">
-                <span className="text-xl">📌</span>
-                <span>
-                  Las preguntas <strong>{topFailedQuestions.map(q => q.questionId).join(', ')}</strong> necesitan atención especial. 
-                  Considera explicar estos temas nuevamente en clase.
-                </span>
-              </p>
-            )}
-            {errorTypesFrequency.length > 0 && errorTypesFrequency[0].percentage > 40 && (
-              <p className="flex items-start gap-2">
-                <span className="text-xl">📌</span>
-                <span>
-                  Los errores de tipo <strong>{errorTypesFrequency[0].name}</strong> son muy frecuentes ({errorTypesFrequency[0].percentage}%). 
-                  Refuerza este aspecto en las próximas clases.
-                </span>
-              </p>
-            )}
-            {generalStats.passingRate < 70 && (
-              <p className="flex items-start gap-2">
-                <span className="text-xl">📌</span>
-                <span>
-                  La tasa de aprobación es del {generalStats.passingRate}%. Considera ajustar la dificultad de las evaluaciones 
-                  o proporcionar más recursos de estudio.
-                </span>
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+      {/* --- MODAL GLOBAL --- */}
+      <StudentListModal 
+        isOpen={modalState.isOpen} 
+        onClose={() => setModalState(prev => ({ ...prev, isOpen: false }))} 
+        title={modalState.title}
+        students={modalState.students}
+      />
     </div>
   )
 }
