@@ -284,6 +284,16 @@ export default function ClassDetailPage() {
 
   return (
     <div className="neu-container min-h-screen p-8">
+      {/* --- BOTÓN VOLVER (NUEVO) --- */}
+      <div className="mb-6">
+        <Link 
+          href="/dashboard"
+          className="neu-button inline-flex items-center text-gray-700 font-medium py-2 px-4 text-sm"
+        >
+          ← Volver al Dashboard
+        </Link>
+      </div>
+
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-gray-700 mb-2">{classDetails.name}</h1>
         {classDetails.subject && <p className="text-lg text-gray-600">{classDetails.subject}</p>}

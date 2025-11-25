@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
+import Link from 'next/link' // <--- IMPORTANTE: Importar Link
 import { useDropzone, FileWithPath } from 'react-dropzone'
 import { createClient } from '@/lib/supabaseClient'
 import CameraScannerModal from '@/components/CameraScannerModal'
@@ -241,6 +242,17 @@ export default function ExamManagementPage() {
 
   return (
     <div className="neu-container min-h-screen p-8">
+
+      {/* --- BOTÓN VOLVER (NUEVO) --- */}
+      <div className="mb-6">
+        <Link 
+          href={`/dashboard/class/${classId}`}
+          className="neu-button inline-flex items-center text-gray-700 font-medium py-2 px-4 text-sm"
+        >
+          ← Volver a la Clase
+        </Link>
+      </div>
+
       <h1 className="text-4xl font-bold text-gray-700 mb-2">{examDetails.name}</h1>
       <p className="text-lg text-gray-600 mb-8">Gestión del Examen</p>
 
@@ -623,7 +635,7 @@ function CreateSubmissionModal({
   )
 }
 
-// --- Componente: CreateSolutionModal (ACTUALIZADO) ---
+// --- Componente: CreateSolutionModal ---
 function CreateSolutionModal({ 
   examId, 
   onUploadSuccess, 
