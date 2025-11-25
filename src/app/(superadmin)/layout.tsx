@@ -1,3 +1,5 @@
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import React from 'react'
@@ -9,37 +11,45 @@ export default async function SuperAdminLayout({
 }) {
   console.log("--- [DEBUG] INICIANDO SUPERADMIN LAYOUT CHECK ---");
 
-  const supabase = createAdminClient()
+  // 1. Cliente para leer la sesión del usuario (cookies)
+  const cookieStore = await cookies()
 
-  // 1. Obtener el usuario actual
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const supabaseAuth = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+      },
+    }
+  )
 
-  if (authError) {
-    console.error("--- [DEBUG] Error al obtener usuario:", authError);
-  }
+  const { data: { user } } = await supabaseAuth.auth.getUser()
 
   console.log("--- [DEBUG] Usuario encontrado:", user?.id);
 
-  // Si no hay usuario, redirigir a login
   if (!user) {
     console.log('--- [DEBUG] Acceso denegado: No hay usuario. Redirigiendo a /login')
     return redirect('/login')
   }
 
-  // 2. Obtener el perfil para verificar el rol
+  // 2. Cliente Admin para consultar la base de datos con privilegios
+  const supabaseAdmin = createAdminClient()
+
   console.log("--- [DEBUG] Consultando perfil para usuario:", user.id);
-  const { data: profile, error: profileError } = await supabase
+
+  const { data: profile, error: profileError } = await supabaseAdmin
     .from('profiles')
     .select('role')
     .eq('id', user.id)
     .single()
 
   console.log("--- [DEBUG] Perfil encontrado:", profile);
-  console.log("--- [DEBUG] Error de perfil:", profileError);
 
   if (profile) {
     console.log("--- [DEBUG] Rol detectado:", profile.role);
-    console.log("--- [DEBUG] ¿Es superadmin?:", profile.role === 'superadmin');
   }
 
   // 3. Verificación de seguridad
@@ -50,6 +60,5 @@ export default async function SuperAdminLayout({
 
   console.log(`--- [DEBUG] Acceso concedido. Renderizando panel de admin.`)
 
-  // 4. Renderizar contenido si es superadmin
   return <>{children}</>
 }
