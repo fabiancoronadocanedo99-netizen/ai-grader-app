@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabaseClient' // Usamos el cliente del lado del cliente
+import { createClient } from '@/lib/supabaseClient'
 import Link from 'next/link'
 
 export default function SuperAdminDashboard() {
@@ -71,13 +71,18 @@ export default function SuperAdminDashboard() {
           <Link href="/dashboard" className={`${neuButton} text-blue-600`}>
             <span>📊</span> Dashboard
           </Link>
-          <Link href="/dashboard/organizations" className={neuButton}>
+
+          {/* 🔥 CORRECCIÓN: Enlace actualizado para apuntar a /admin/organizations */}
+          <Link href="/admin/organizations" className={neuButton}>
             <span>🏢</span> Organizaciones
           </Link>
-          <Link href="/dashboard/users" className={neuButton}>
+
+          {/* 🔥 CORRECCIÓN: Enlace actualizado para apuntar a /admin/users */}
+          <Link href="/admin/users" className={neuButton}>
             <span>👥</span> Usuarios
           </Link>
-          <Link href="/dashboard/settings" className={neuButton}>
+
+          <Link href="/admin/settings" className={neuButton}>
             <span>⚙️</span> Configuración
           </Link>
         </nav>

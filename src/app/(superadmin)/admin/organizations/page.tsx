@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabaseClient'
 import Link from 'next/link'
-import { createOrganization } from '@/actions/organization-actions' // <-- 1. Importamos la Server Action
+import { createOrganization } from '@/actions/organization-actions'
 
 // --- Tipos ---
 interface Organization {
@@ -25,7 +25,7 @@ export default function OrganizationsManagementPage() {
   const [newOrgName, setNewOrgName] = useState('')
   const [creating, setCreating] = useState(false)
 
-  // --- 1. Cargar Datos (Lectura sigue siendo del lado del cliente por ahora) ---
+  // --- 1. Cargar Datos ---
   const fetchOrganizations = async () => {
     try {
       setLoading(true)
@@ -48,7 +48,7 @@ export default function OrganizationsManagementPage() {
     fetchOrganizations()
   }, [])
 
-  // --- 2. Crear Organización (AHORA CON SERVER ACTION) ---
+  // --- 2. Crear Organización ---
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newOrgName.trim()) return
@@ -70,7 +70,11 @@ export default function OrganizationsManagementPage() {
       await fetchOrganizations() // Recargar la lista localmente
 
     } catch (error) {
-      console.error('Error al crear organización:', error)
+      // Si es una redirección de Next.js, la dejamos pasar (es éxito)
+      if ((error as Error).message === 'NEXT_REDIRECT') {
+        throw error;
+      }
+      // Si es otro error real, mostramos el alert
       alert(`Error al crear la organización: ${(error as Error).message}`)
     } finally {
       setCreating(false)
