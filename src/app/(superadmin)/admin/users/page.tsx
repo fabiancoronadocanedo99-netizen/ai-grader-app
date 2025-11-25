@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabaseClient'
 import Link from 'next/link'
 import { createUser } from '@/actions/user-actions'
+import { getOrganizations } from '@/actions/organization-actions' // <--- 1. Importamos la nueva función
 
 // --- Tipos ---
 interface Organization {
@@ -14,10 +15,9 @@ interface Organization {
 interface UserProfile {
   id: string
   full_name: string
-  email: string // Asumimos que guardas el email en profiles, o lo traemos de auth
+  email: string
   role: string
   organization_id: string | null
-  // Relación con organizaciones (Supabase devuelve esto como objeto o array)
   organizations: { name: string } | null
 }
 
@@ -44,7 +44,7 @@ export default function UsersManagementPage() {
     email: '',
     password: '',
     fullName: '',
-    role: 'teacher', // Valor por defecto
+    role: 'teacher',
     organizationId: ''
   })
 
@@ -53,17 +53,13 @@ export default function UsersManagementPage() {
     try {
       setLoading(true)
 
-      // A. Cargar Organizaciones (para el select)
-      const { data: orgsData, error: orgsError } = await supabase
-        .from('organizations')
-        .select('id, name')
-        .order('name')
-
-      if (orgsError) throw orgsError
+      // A. Cargar Organizaciones (USANDO SERVER ACTION PARA EVITAR RLS)
+      const orgsData = await getOrganizations()
       setOrganizations(orgsData || [])
 
       // B. Cargar Perfiles con nombre de Organización
-      // Nota: 'organizations(name)' hace el join
+      // Nota: Esto sigue usando el cliente del navegador. Si tienes problemas de RLS aquí también,
+      // deberíamos mover esto a una Server Action similar a 'getUsers'.
       const { data: usersData, error: usersError } = await supabase
         .from('profiles')
         .select('*, organizations(name)')
@@ -71,12 +67,11 @@ export default function UsersManagementPage() {
 
       if (usersError) throw usersError
 
-      // Casteamos para asegurar el tipo, ya que Supabase devuelve tipos complejos en joins
       setUsers((usersData as unknown) as UserProfile[] || [])
 
     } catch (error) {
       console.error('Error al cargar datos:', error)
-      alert('Error al cargar la lista de usuarios')
+      alert('Error al cargar la lista de usuarios. Revisa la consola.')
     } finally {
       setLoading(false)
     }
@@ -95,7 +90,6 @@ export default function UsersManagementPage() {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validaciones básicas
     if (!formData.email || !formData.password || !formData.fullName) {
       alert('Por favor completa todos los campos obligatorios.')
       return
@@ -104,14 +98,12 @@ export default function UsersManagementPage() {
     setIsSaving(true)
 
     try {
-      // Llamada a la Server Action
       const result = await createUser(formData)
 
       if (!result.success) {
         throw new Error(result.error)
       }
 
-      // Éxito
       alert('Usuario creado exitosamente')
       setIsModalOpen(false)
       setFormData({
@@ -121,10 +113,9 @@ export default function UsersManagementPage() {
         role: 'teacher',
         organizationId: ''
       })
-      await fetchData() // Recargar lista
+      await fetchData() 
 
     } catch (error) {
-      // Manejo de redirección de Next.js (edge case)
       if ((error as Error).message === 'NEXT_REDIRECT') {
         throw error;
       }

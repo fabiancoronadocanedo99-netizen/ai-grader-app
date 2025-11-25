@@ -3,21 +3,38 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+// Acción existente para crear organización
 export async function createOrganization(name: string) {
   const supabase = createAdminClient()
 
-  // 1. Verificar (opcional pero recomendado) si el usuario es superadmin
-  // Aunque el layout ya protege la página, doble seguridad nunca sobra.
+  try {
+    const { error } = await supabase
+      .from('organizations')
+      .insert([{ name }])
 
-  const { error } = await supabase
+    if (error) throw error
+
+    revalidatePath('/admin/organizations') // Opcional: Revalidar ruta si usas cache de Next.js
+    return { success: true }
+  } catch (error) {
+    console.error('Error en createOrganization:', error)
+    return { success: false, error: (error as Error).message }
+  }
+}
+
+// --- NUEVA FUNCIÓN: Obtener Organizaciones ---
+export async function getOrganizations() {
+  const supabase = createAdminClient()
+
+  const { data, error } = await supabase
     .from('organizations')
-    .insert({ name })
+    .select('id, name')
+    .order('name')
 
   if (error) {
-    console.error('Error creando organización:', error)
-    return { success: false, error: error.message }
+    console.error('Error obteniendo organizaciones:', error)
+    return []
   }
 
-  revalidatePath('/admin/organizations') // Refrescar la lista
-  return { success: true }
+  return data
 }
