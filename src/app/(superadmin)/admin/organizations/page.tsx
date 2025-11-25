@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabaseClient'
 import Link from 'next/link'
+import { createOrganization } from '@/actions/organization-actions' // <-- 1. Importamos la Server Action
 
 // --- Tipos ---
 interface Organization {
@@ -24,7 +25,7 @@ export default function OrganizationsManagementPage() {
   const [newOrgName, setNewOrgName] = useState('')
   const [creating, setCreating] = useState(false)
 
-  // --- 1. Cargar Datos ---
+  // --- 1. Cargar Datos (Lectura sigue siendo del lado del cliente por ahora) ---
   const fetchOrganizations = async () => {
     try {
       setLoading(true)
@@ -47,27 +48,30 @@ export default function OrganizationsManagementPage() {
     fetchOrganizations()
   }, [])
 
-  // --- 2. Crear Organización ---
+  // --- 2. Crear Organización (AHORA CON SERVER ACTION) ---
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newOrgName.trim()) return
 
-    try {
-      setCreating(true)
-      const { error } = await supabase
-        .from('organizations')
-        .insert([{ name: newOrgName }])
+    setCreating(true)
 
-      if (error) throw error
+    try {
+      // LLAMAMOS A LA SERVER ACTION
+      const result = await createOrganization(newOrgName)
+
+      if (!result.success) {
+        throw new Error(result.error)
+      }
 
       // Éxito
+      alert('Organización creada exitosamente')
       setNewOrgName('')
       setIsModalOpen(false)
-      await fetchOrganizations() // Recargar lista
+      await fetchOrganizations() // Recargar la lista localmente
 
     } catch (error) {
       console.error('Error al crear organización:', error)
-      alert('Error al crear la organización. Revisa la consola o los permisos.')
+      alert(`Error al crear la organización: ${(error as Error).message}`)
     } finally {
       setCreating(false)
     }
