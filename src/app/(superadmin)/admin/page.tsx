@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabaseClient'
 import Link from 'next/link'
+import { getAdminStats } from '@/actions/admin-stats' // <--- 1. Importamos la Server Action
 
 export default function SuperAdminDashboard() {
-  const supabase = createClient()
 
   // Estados para los conteos
   const [orgCount, setOrgCount] = useState<number>(0)
@@ -18,16 +17,13 @@ export default function SuperAdminDashboard() {
       try {
         setLoading(true)
 
-        // Ejecutamos las 3 consultas en paralelo para mayor velocidad
-        const [orgs, profiles, grades] = await Promise.all([
-          supabase.from('organizations').select('*', { count: 'exact', head: true }),
-          supabase.from('profiles').select('*', { count: 'exact', head: true }),
-          supabase.from('grades').select('*', { count: 'exact', head: true })
-        ])
+        // 2. Llamamos a la Server Action en lugar de Supabase Client
+        const stats = await getAdminStats()
 
-        if (orgs.count !== null) setOrgCount(orgs.count)
-        if (profiles.count !== null) setProfileCount(profiles.count)
-        if (grades.count !== null) setGradeCount(grades.count)
+        // 3. Actualizamos los estados con los datos seguros del servidor
+        setOrgCount(stats.organizations)
+        setProfileCount(stats.users)
+        setGradeCount(stats.evaluations)
 
       } catch (error) {
         console.error('Error al cargar estadísticas:', error)
@@ -37,7 +33,7 @@ export default function SuperAdminDashboard() {
     }
 
     fetchStats()
-  }, [supabase])
+  }, [])
 
   // Clases CSS reutilizables para el estilo Neumórfico
   const neuBase = "bg-[#e0e5ec] text-gray-700"
@@ -71,24 +67,18 @@ export default function SuperAdminDashboard() {
           <Link href="/dashboard" className={`${neuButton} text-blue-600`}>
             <span>📊</span> Dashboard
           </Link>
-
-          {/* 🔥 CORRECCIÓN: Enlace actualizado para apuntar a /admin/organizations */}
           <Link href="/admin/organizations" className={neuButton}>
             <span>🏢</span> Organizaciones
           </Link>
-
-          {/* 🔥 CORRECCIÓN: Enlace actualizado para apuntar a /admin/users */}
           <Link href="/admin/users" className={neuButton}>
             <span>👥</span> Usuarios
           </Link>
-
           <Link href="/admin/settings" className={neuButton}>
             <span>⚙️</span> Configuración
           </Link>
         </nav>
 
         <div className="mt-auto">
-           {/* Botón extra decorativo o logout */}
            <div className={`${neuCard} p-4 text-center text-sm`}>
              <p>Admin Conectado</p>
              <div className="w-3 h-3 bg-green-500 rounded-full mx-auto mt-2 shadow-[0_0_10px_#22c55e]"></div>
@@ -138,7 +128,7 @@ export default function SuperAdminDashboard() {
             <button className={`${neuButton} text-xs px-3 py-1`}>Ver Todo</button>
           </div>
 
-          {/* Placeholder para contenido futuro */}
+          {/* Placeholder */}
           <div className={`w-full h-64 ${neuInset} rounded-xl flex items-center justify-center flex-col gap-4 text-gray-400`}>
              <span className="text-5xl">📉</span>
              <p className="font-medium">Aquí irán las tablas y gráficos de actividad</p>
