@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabaseClient'
+// Eliminamos la dependencia de lectura de createClient
+import { createClient } from '@/lib/supabaseClient' 
 import Link from 'next/link'
-import { createUser } from '@/actions/user-actions'
-import { getOrganizations } from '@/actions/organization-actions' // <--- 1. Importamos la nueva función
+import { createUser, getUsers } from '@/actions/user-actions' // <--- Importamos getUsers
+import { getOrganizations } from '@/actions/organization-actions' // <--- Importamos getOrganizations
 
 // --- Tipos ---
 interface Organization {
@@ -30,7 +31,8 @@ interface UserFormData {
 }
 
 export default function UsersManagementPage() {
-  const supabase = createClient()
+  // Solo usamos este cliente para cosas triviales o Auth del navegador, NO para leer datos sensibles
+  const supabase = createClient() 
 
   // --- Estados ---
   const [users, setUsers] = useState<UserProfile[]>([])
@@ -48,30 +50,27 @@ export default function UsersManagementPage() {
     organizationId: ''
   })
 
-  // --- 1. Cargar Datos ---
+  // --- 1. Cargar Datos (USANDO SERVER ACTIONS) ---
   const fetchData = async () => {
     try {
       setLoading(true)
 
-      // A. Cargar Organizaciones (USANDO SERVER ACTION PARA EVITAR RLS)
-      const orgsData = await getOrganizations()
-      setOrganizations(orgsData || [])
+      // Ejecutamos ambas peticiones al servidor en paralelo
+      const [usersData, orgsData] = await Promise.all([
+        getUsers(),
+        getOrganizations()
+      ])
 
-      // B. Cargar Perfiles con nombre de Organización
-      // Nota: Esto sigue usando el cliente del navegador. Si tienes problemas de RLS aquí también,
-      // deberíamos mover esto a una Server Action similar a 'getUsers'.
-      const { data: usersData, error: usersError } = await supabase
-        .from('profiles')
-        .select('*, organizations(name)')
-        .order('created_at', { ascending: false })
+      console.log("✅ Usuarios cargados:", usersData?.length)
+      console.log("✅ Organizaciones cargadas:", orgsData?.length)
 
-      if (usersError) throw usersError
-
+      // Casteamos los datos porque vienen del servidor y TS puede quejarse de la estructura exacta del JOIN
       setUsers((usersData as unknown) as UserProfile[] || [])
+      setOrganizations(orgsData || [])
 
     } catch (error) {
       console.error('Error al cargar datos:', error)
-      alert('Error al cargar la lista de usuarios. Revisa la consola.')
+      alert('Error al cargar los datos. Revisa la consola.')
     } finally {
       setLoading(false)
     }
@@ -113,6 +112,8 @@ export default function UsersManagementPage() {
         role: 'teacher',
         organizationId: ''
       })
+
+      // Recargamos la lista usando la Server Action de nuevo
       await fetchData() 
 
     } catch (error) {
@@ -126,43 +127,29 @@ export default function UsersManagementPage() {
     }
   }
 
-  // --- Estilos Neumórficos ---
+  // --- Renderizado (Sin cambios visuales) ---
   const neuBase = "bg-[#e0e5ec] text-gray-700"
   const neuShadow = "shadow-[9px_9px_16px_rgb(163,177,198),-9px_-9px_16px_rgba(255,255,255,0.5)]"
   const neuInset = "shadow-[inset_6px_6px_10px_rgb(163,177,198),inset_-6px_-6px_10px_rgba(255,255,255,0.5)]"
-
   const neuCard = `${neuBase} ${neuShadow} rounded-2xl`
   const neuButton = `${neuBase} ${neuShadow} px-6 py-3 rounded-xl font-bold text-sm hover:translate-y-[2px] active:shadow-[inset_6px_6px_10px_rgb(163,177,198),inset_-6px_-6px_10px_rgba(255,255,255,0.5)] transition-all duration-200 text-blue-600`
   const neuInput = `${neuBase} ${neuInset} w-full p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-400/50 transition-all border border-transparent focus:border-blue-300`
 
   return (
     <div className={`min-h-screen ${neuBase} p-8 font-sans`}>
-
-      {/* --- Encabezado --- */}
       <header className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Usuarios</h1>
           <p className="text-gray-500 text-sm mt-1">Administra profesores, directores y admins</p>
         </div>
-
         <div className="flex gap-4">
-            <Link href="/dashboard" className={`${neuButton} !text-gray-600`}>
-                ← Volver
-            </Link>
-            <button 
-              onClick={() => setIsModalOpen(true)}
-              className={neuButton}
-            >
-              + Nuevo Usuario
-            </button>
+            <Link href="/dashboard" className={`${neuButton} !text-gray-600`}>← Volver</Link>
+            <button onClick={() => setIsModalOpen(true)} className={neuButton}>+ Nuevo Usuario</button>
         </div>
       </header>
 
-      {/* --- Contenido (Tabla Neumórfica) --- */}
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-500"></div>
-        </div>
+        <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-500"></div></div>
       ) : users.length === 0 ? (
         <div className={`${neuCard} p-10 text-center flex flex-col items-center justify-center min-h-[300px]`}>
           <span className="text-6xl mb-4">👥</span>
@@ -187,9 +174,7 @@ export default function UsersManagementPage() {
                   <tr key={user.id} className="hover:bg-gray-100/30 transition-colors border-b border-gray-300/20 last:border-0">
                     <td className="p-4 font-bold text-gray-700">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-white font-bold text-xs">
-                          {user.full_name?.charAt(0) || 'U'}
-                        </div>
+                        <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-white font-bold text-xs">{user.full_name?.charAt(0) || 'U'}</div>
                         {user.full_name}
                       </div>
                     </td>
@@ -202,14 +187,8 @@ export default function UsersManagementPage() {
                         {user.role}
                       </span>
                     </td>
-                    <td className="p-4 text-gray-600">
-                      {user.organizations?.name || <span className="text-gray-400 italic">Sin Asignar</span>}
-                    </td>
-                    <td className="p-4 text-right">
-                      <button className="text-gray-400 hover:text-blue-600 transition-colors">
-                        ✎
-                      </button>
-                    </td>
+                    <td className="p-4 text-gray-600">{user.organizations?.name || <span className="text-gray-400 italic">Sin Asignar</span>}</td>
+                    <td className="p-4 text-right"><button className="text-gray-400 hover:text-blue-600 transition-colors">✎</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -218,133 +197,52 @@ export default function UsersManagementPage() {
         </div>
       )}
 
-      {/* --- Modal Crear Usuario --- */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4">
           <div className={`${neuCard} bg-[#e0e5ec] w-full max-w-lg p-8 relative animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto`}>
-
             <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">Nuevo Usuario</h2>
-
             <form onSubmit={handleCreateUser} className="space-y-4">
-
-              {/* Nombre */}
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wide">
-                  Nombre Completo
-                </label>
-                <input
-                  type="text"
-                  name="fullName"
-                  value={formData.fullName}
-                  onChange={handleInputChange}
-                  className={neuInput}
-                  required
-                />
+                <label className="block text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wide">Nombre Completo</label>
+                <input type="text" name="fullName" value={formData.fullName} onChange={handleInputChange} className={neuInput} required />
               </div>
-
-              {/* Email */}
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wide">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  className={neuInput}
-                  required
-                />
+                <label className="block text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wide">Email</label>
+                <input type="email" name="email" value={formData.email} onChange={handleInputChange} className={neuInput} required />
               </div>
-
-              {/* Password */}
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wide">
-                  Contraseña
-                </label>
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  className={neuInput}
-                  required
-                  minLength={6}
-                />
+                <label className="block text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wide">Contraseña</label>
+                <input type="password" name="password" value={formData.password} onChange={handleInputChange} className={neuInput} required minLength={6} />
               </div>
-
-              {/* Rol */}
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wide">
-                  Rol
-                </label>
+                <label className="block text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wide">Rol</label>
                 <div className="relative">
-                  <select
-                    name="role"
-                    value={formData.role}
-                    onChange={handleInputChange}
-                    className={`${neuInput} appearance-none bg-transparent cursor-pointer`}
-                  >
+                  <select name="role" value={formData.role} onChange={handleInputChange} className={`${neuInput} appearance-none bg-transparent cursor-pointer`}>
                     <option value="teacher">Teacher (Profesor)</option>
                     <option value="admin">Admin (Administrador)</option>
                     <option value="director">Director</option>
                   </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
-                    ▼
-                  </div>
+                  <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">▼</div>
                 </div>
               </div>
-
-              {/* Organización */}
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wide">
-                  Organización
-                </label>
+                <label className="block text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wide">Organización</label>
                 <div className="relative">
-                  <select
-                    name="organizationId"
-                    value={formData.organizationId}
-                    onChange={handleInputChange}
-                    className={`${neuInput} appearance-none bg-transparent cursor-pointer`}
-                    required
-                  >
+                  <select name="organizationId" value={formData.organizationId} onChange={handleInputChange} className={`${neuInput} appearance-none bg-transparent cursor-pointer`} required>
                     <option value="">Selecciona una organización...</option>
-                    {organizations.map(org => (
-                      <option key={org.id} value={org.id}>
-                        {org.name}
-                      </option>
-                    ))}
+                    {organizations.map(org => (<option key={org.id} value={org.id}>{org.name}</option>))}
                   </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
-                    ▼
-                  </div>
+                  <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">▼</div>
                 </div>
               </div>
-
-              {/* Botones */}
               <div className="flex gap-4 mt-8 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className={`${neuButton} flex-1 !text-gray-500`}
-                  disabled={isSaving}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className={`${neuButton} flex-1 !text-blue-600`}
-                  disabled={isSaving}
-                >
-                  {isSaving ? 'Guardando...' : 'Crear Usuario'}
-                </button>
+                <button type="button" onClick={() => setIsModalOpen(false)} className={`${neuButton} flex-1 !text-gray-500`} disabled={isSaving}>Cancelar</button>
+                <button type="submit" className={`${neuButton} flex-1 !text-blue-600`} disabled={isSaving}>{isSaving ? 'Guardando...' : 'Crear Usuario'}</button>
               </div>
             </form>
-
           </div>
         </div>
       )}
-
     </div>
   )
 }

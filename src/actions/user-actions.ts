@@ -48,4 +48,19 @@ export async function createUser(data: {
 
   revalidatePath('/admin/users')
   return { success: true }
+} export async function getUsers() {
+  const supabase = createAdminClient()
+
+  // Seleccionamos perfiles y hacemos JOIN con organizaciones para traer el nombre
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*, organizations(name)')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error obteniendo usuarios:', error)
+    return []
+  }
+
+  return data
 }

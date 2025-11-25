@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabaseClient'
 import Link from 'next/link'
-import { createOrganization } from '@/actions/organization-actions'
+import { createOrganization, getOrganizations } from '@/actions/organization-actions' // <--- Importamos ambas acciones
 
 // --- Tipos ---
 interface Organization {
@@ -14,8 +13,6 @@ interface Organization {
 }
 
 export default function OrganizationsManagementPage() {
-  const supabase = createClient()
-
   // Estados
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [loading, setLoading] = useState(true)
@@ -25,17 +22,19 @@ export default function OrganizationsManagementPage() {
   const [newOrgName, setNewOrgName] = useState('')
   const [creating, setCreating] = useState(false)
 
-  // --- 1. Cargar Datos ---
+  // --- 1. Cargar Datos (USANDO SERVER ACTION) ---
   const fetchOrganizations = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
-        .from('organizations')
-        .select('*')
-        .order('created_at', { ascending: false })
 
-      if (error) throw error
-      setOrganizations(data || [])
+      // Llamada a la Server Action (se ejecuta en el servidor con permisos de admin)
+      const data = await getOrganizations()
+
+      console.log("✅ Organizaciones cargadas:", data?.length)
+
+      // Casteamos los datos porque vienen del servidor y TS puede ser estricto
+      setOrganizations((data as unknown) as Organization[] || [])
+
     } catch (error) {
       console.error('Error al cargar organizaciones:', error)
       alert('Error al cargar la lista de organizaciones')
@@ -56,7 +55,7 @@ export default function OrganizationsManagementPage() {
     setCreating(true)
 
     try {
-      // LLAMAMOS A LA SERVER ACTION
+      // Llamada a la Server Action de creación
       const result = await createOrganization(newOrgName)
 
       if (!result.success) {
@@ -67,14 +66,13 @@ export default function OrganizationsManagementPage() {
       alert('Organización creada exitosamente')
       setNewOrgName('')
       setIsModalOpen(false)
-      await fetchOrganizations() // Recargar la lista localmente
+      await fetchOrganizations() // Recargar lista usando la Server Action de lectura
 
     } catch (error) {
-      // Si es una redirección de Next.js, la dejamos pasar (es éxito)
+      // Manejo de redirección de Next.js
       if ((error as Error).message === 'NEXT_REDIRECT') {
         throw error;
       }
-      // Si es otro error real, mostramos el alert
       alert(`Error al crear la organización: ${(error as Error).message}`)
     } finally {
       setCreating(false)
