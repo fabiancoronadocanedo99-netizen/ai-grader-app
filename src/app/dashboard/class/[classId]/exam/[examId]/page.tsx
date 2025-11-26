@@ -489,6 +489,7 @@ function CreateSubmissionModal({
     )
   }
 
+  // ✅ --- FUNCIÓN CORREGIDA --- ✅
   const handleUpload = async () => {
     const filesToUpload = filesWithStudents.filter(f => f.studentId)
 
@@ -502,6 +503,19 @@ function CreateSubmissionModal({
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Usuario no autenticado.')
+
+      // 1. Obtener el organization_id de la clase actual
+      const { data: classData, error: classError } = await supabase
+        .from('classes')
+        .select('organization_id')
+        .eq('id', classId)
+        .single()
+
+      if (classError || !classData?.organization_id) {
+        throw new Error(classError?.message || 'No se pudo encontrar la organización para esta clase.')
+      }
+      // 2. Guardar el organization_id en una constante
+      const organizationId = classData.organization_id
 
       for (const item of filesToUpload) {
         const { file, studentId } = item
@@ -523,13 +537,19 @@ function CreateSubmissionModal({
 
         const publicUrl = urlData.publicUrl
 
-        await supabase.from('submissions').insert({
+        // 3. Añadir organization_id al 'insert' y manejar el error
+        const { error: insertError } = await supabase.from('submissions').insert({
           exam_id: examId,
           submission_file_url: publicUrl,
           student_id: studentId,
           student_name: selectedStudent.full_name,
-          user_id: user.id
+          user_id: user.id,
+          organization_id: organizationId // <--- CAMPO AÑADIDO
         })
+
+        if (insertError) {
+          throw insertError // Lanzar el error para que lo capture el catch principal
+        }
       }
 
       alert('Entregas subidas exitosamente!')
@@ -537,11 +557,13 @@ function CreateSubmissionModal({
       onUploadSuccess()
 
     } catch (error) {
-      alert(`Error: ${(error as Error).message}`)
+      console.error("Error al subir entregas:", error)
+      alert(`Error al subir las entregas: ${(error as Error).message}`)
     } finally {
       setIsUploading(false)
     }
   }
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
