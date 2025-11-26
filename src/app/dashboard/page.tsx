@@ -1,116 +1,128 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabaseClient'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import CreateClassModal from '@/components/CreateClassModal' // <-- ¡IMPORTANTE! Importamos el modal
 
-interface CreateClassModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onClassCreated: () => void
+// Definimos los tipos aquí
+interface Class {
+  id: string
+  name: string
+  created_at: string
 }
 
-export default function CreateClassModal({ isOpen, onClose, onClassCreated }: CreateClassModalProps) {
+interface Profile {
+  id: string
+  role: string
+}
+
+export default function DashboardPage() {
   const supabase = createClient()
-  const [className, setClassName] = useState('')
-  const [isCreating, setIsCreating] = useState(false)
+  const router = useRouter()
 
-  const handleCreateClass = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const [loading, setLoading] = useState(true)
+  const [classes, setClasses] = useState<Class[]>([])
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
-    if (!className.trim()) {
-      alert("Por favor, introduce un nombre para la clase.")
+  const fetchClasses = async () => {
+    const { data, error } = await supabase
+      .from('classes')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error("Error fetching classes:", error)
+      alert("No se pudieron cargar las clases.")
       return
     }
-
-    setIsCreating(true)
-
-    try {
-      // 1. Obtener usuario actual
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error("Usuario no encontrado")
-
-      // 2. --- PASO CLAVE: OBTENER EL PERFIL Y SU ORGANIZACIÓN ---
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .single()
-
-      if (profileError || !profile?.organization_id) {
-        throw new Error("No se pudo encontrar la organización asociada a tu usuario. Contacta al administrador.")
-      }
-
-      // 3. --- INSERTAR LA CLASE CON LA ORGANIZACIÓN ---
-      const { error } = await supabase.from('classes').insert({
-        name: className,
-        user_id: user.id,
-        organization_id: profile.organization_id, // <-- ¡CAMPO CRÍTICO!
-      })
-
-      if (error) throw error
-
-      // 4. Finalizar
-      alert("¡Clase creada con éxito!")
-      setClassName("")
-      onClassCreated() // Recargar la lista en el Dashboard
-      onClose() // Cerrar el modal
-
-    } catch (error) {
-      console.error(error)
-      alert(`Error al crear la clase: ${(error as Error).message}`)
-    } finally {
-      setIsCreating(false)
-    }
+    setClasses(data)
   }
 
-  if (!isOpen) return null
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      setLoading(true)
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (user) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('id, role')
+          .eq('id', user.id)
+          .single()
+
+        // --- Redirección por Rol ---
+        if (profileData?.role === 'superadmin') {
+          router.push('/admin')
+          return
+        }
+        setProfile(profileData)
+        await fetchClasses()
+      }
+
+      setLoading(false)
+    }
+    fetchInitialData()
+  }, [supabase, router])
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Cargando...</div>
+  }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md mx-4">
-        <h2 className="text-2xl font-bold mb-6 text-gray-800">Crear Nueva Clase</h2>
-
-        <form onSubmit={handleCreateClass}>
-          <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              Nombre de la Clase
-            </label>
-            <input
-              type="text"
-              value={className}
-              onChange={(e) => setClassName(e.target.value)}
-              className="shadow appearance-none border rounded w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:ring-2 focus:ring-blue-500"
-              placeholder="Ej. Matemáticas 101"
-              autoFocus
-            />
-          </div>
-
-          <div className="flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded font-medium transition-colors"
-              disabled={isCreating}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
-              disabled={isCreating}
-            >
-              {isCreating ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Creando...
-                </>
-              ) : (
-                'Crear Clase'
-              )}
-            </button>
-          </div>
-        </form>
+    <div className="p-8">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-4xl font-bold text-gray-800">Mis Clases</h1>
+          <p className="text-gray-500">Gestiona tus clases y evaluaciones</p>
+        </div>
+        <button
+          onClick={() => setIsCreateModalOpen(true)}
+          className="neu-button px-6 py-3 font-semibold"
+        >
+          Crear Nueva Clase
+        </button>
       </div>
+
+      {classes.length === 0 ? (
+        <div className="text-center py-20 neu-card">
+          <h2 className="text-2xl font-semibold mb-2">No tienes clases creadas aún</h2>
+          <p className="text-gray-600 mb-6">¡Crea tu primera clase para comenzar!</p>
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="neu-button-primary px-8 py-3 font-bold"
+          >
+            Crear Primera Clase
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {classes.map((clase) => (
+            <div key={clase.id} className="neu-card p-6 flex flex-col justify-between">
+              <div>
+                <h3 className="text-xl font-bold mb-2">{clase.name}</h3>
+                <p className="text-sm text-gray-500">Sin materia</p> 
+              </div>
+              <Link href={`/dashboard/class/${clase.id}`} passHref>
+                <div className="neu-button-white mt-6 text-center py-2 font-semibold cursor-pointer">
+                  Ver Exámenes
+                </div>
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* --- ¡IMPORTANTE! Aquí llamamos al componente modal --- */}
+      <CreateClassModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onClassCreated={() => {
+          fetchClasses() // Recargamos la lista cuando se crea una nueva
+        }}
+      />
     </div>
   )
 }
