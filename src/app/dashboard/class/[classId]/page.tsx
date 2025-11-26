@@ -154,17 +154,48 @@ export default function ClassDetailPage() {
     }
   };
 
-  // --- CREACIÓN ---
+  // --- CREACIÓN (MODIFICADA PARA INCLUIR organization_id) ---
   const handleCreateEvaluation = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newEvaluationName.trim() || !classId) return
-    const { error } = await supabase.from('exams').insert([{ name: newEvaluationName, class_id: classId, type: newEvaluationType }])
-    if (error) { alert(`Error: ${error.message}`) } 
-    else {
+
+    try {
+      // Obtener el usuario actual
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        throw new Error("Usuario no autenticado")
+      }
+
+      // PASO CLAVE: Obtener el organization_id de la clase actual
+      const { data: classData, error: classError } = await supabase
+        .from('classes')
+        .select('organization_id')
+        .eq('id', classId)
+        .single()
+
+      if (classError || !classData) {
+        throw new Error("No se pudo encontrar la clase para obtener la organización.")
+      }
+
+      // PASO CLAVE: Insertar con organization_id incluido
+      const { error } = await supabase.from('exams').insert([{ 
+        name: newEvaluationName, 
+        class_id: classId, 
+        type: newEvaluationType,
+        user_id: user.id,
+        organization_id: classData.organization_id // ← LA PIEZA QUE FALTABA
+      }])
+
+      if (error) throw error
+
+      // Limpiar y cerrar
       setNewEvaluationName('')
       setNewEvaluationType('exam')
       setIsCreateModalOpen(false)
       await fetchEvaluations()
+
+    } catch (error) {
+      alert(`Error al crear evaluación: ${(error as Error).message}`)
     }
   }
 
@@ -674,19 +705,19 @@ export default function ClassDetailPage() {
             </div>
 
             <div className="mt-6 p-4 neu-card bg-blue-50/30">
-              <h4 className="font-medium text-gray-700 mb-2">Formato requerido:</h4>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>• <strong>full_name:</strong> Nombre y apellidos del alumno</li>
-                <li>• <strong>student_email:</strong> Correo electrónico del estudiante</li>
-                <li>• <strong>tutor_email:</strong> Correo electrónico del padre/madre/tutor</li>
-              </ul>
-              <p className="text-xs text-gray-500 mt-3">
-                💡 Tip: La primera fila debe contener exactamente estos encabezados
-              </p>
+            <h4 className="font-medium text-gray-700 mb-2">Formato requerido:</h4>
+            <ul className="text-sm text-gray-600 space-y-1">
+            <li>• <strong>full_name:</strong> Nombre y apellidos del alumno</li>
+            <li>• <strong>student_email:</strong> Correo electrónico del estudiante</li>
+            <li>• <strong>tutor_email:</strong> Correo electrónico del padre/madre/tutor</li>
+            </ul>
+            <p className="text-xs text-gray-500 mt-3">
+            💡 Tip: La primera fila debe contener exactamente estos encabezados
+            </p>
             </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
+            </div>
+            </div>
+            )}
+            </div>
+            )
+            }
