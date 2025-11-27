@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabaseClient'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabaseClient'
 import CreateClassModal from '../../components/CreateClassModal'
 
 interface Class { id: string; name: string | null; subject: string | null; grade_level: string | null; }
@@ -13,27 +13,27 @@ export default function DashboardPage() {
   const router = useRouter()
   const supabase = createClient()
 
-  // Datos
+  // --- Estados de Datos ---
   const [classes, setClasses] = useState<Class[]>([])
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Modales y Menús
+  // --- Estados de UI (Modales y Menús) ---
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
-  // Estado para el menú desplegable (ID de la clase cuyo menú está abierto)
+  // Menú desplegable de la tarjeta
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
 
-  // Estado para Eliminar
+  // Modal de Eliminar
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [classToDelete, setClassToDelete] = useState<Class | null>(null)
 
-  // Estado para Editar
+  // Modal de Editar
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [classToEdit, setClassToEdit] = useState<Class | null>(null)
   const [newClassName, setNewClassName] = useState('')
 
-  // Cargar datos
+  // --- Lógica de Datos ---
   const fetchData = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -59,7 +59,9 @@ export default function DashboardPage() {
     fetchData();
   }, [fetchData]);
 
-  // Cerrar menú si se hace clic fuera
+  // --- Lógica de UI y CRUD ---
+
+  // Cierra el menú desplegable si se hace clic fuera
   useEffect(() => {
     const handleClickOutside = () => setActiveMenuId(null);
     if (activeMenuId) {
@@ -76,16 +78,42 @@ export default function DashboardPage() {
     }
   };
 
-  // --- Lógica del Menú ---
   const toggleMenu = (e: React.MouseEvent, classId: string) => {
-    e.stopPropagation(); // Evitar que el clic se propague al documento y cierre el menú inmediatamente
+    e.stopPropagation(); // Evita que el clic se propague y cierre el menú
     e.preventDefault();
     setActiveMenuId(activeMenuId === classId ? null : classId);
   };
 
-  // --- Lógica de Eliminar ---
+  // Funciones para Editar
+  const openEditModal = (e: React.MouseEvent, classItem: Class) => {
+    e.stopPropagation();
+    setActiveMenuId(null);
+    setClassToEdit(classItem);
+    setNewClassName(classItem.name || '');
+    setIsEditModalOpen(true);
+  };
+
+  const confirmEdit = async () => {
+    if (!classToEdit || !newClassName.trim()) return;
+
+    const { error } = await supabase
+      .from('classes')
+      .update({ name: newClassName })
+      .eq('id', classToEdit.id);
+
+    if (error) {
+      console.error('Error al actualizar:', error);
+      alert('Error al actualizar la clase.');
+    } else {
+      await fetchData(); // Recargar datos
+      setIsEditModalOpen(false);
+      setClassToEdit(null);
+    }
+  };
+
+  // Funciones para Eliminar
   const openDeleteModal = (e: React.MouseEvent, classItem: Class) => {
-    e.stopPropagation(); // Evitar navegación si el card es un link (aunque aquí el link es un botón aparte)
+    e.stopPropagation();
     setActiveMenuId(null);
     setClassToDelete(classItem);
     setIsDeleteModalOpen(true);
@@ -98,45 +126,19 @@ export default function DashboardPage() {
 
     if (error) {
       console.error('Error al eliminar:', error);
-      alert('Error al eliminar la clase');
+      alert('Error al eliminar la clase.');
     } else {
-      await fetchData(); // Refrescar lista
+      await fetchData(); // Recargar datos
       setIsDeleteModalOpen(false);
       setClassToDelete(null);
     }
   };
 
-  // --- Lógica de Editar ---
-  const openEditModal = (e: React.MouseEvent, classItem: Class) => {
-    e.stopPropagation();
-    setActiveMenuId(null);
-    setClassToEdit(classItem);
-    setNewClassName(classItem.name || '');
-    setIsEditModalOpen(true);
-  };
-
-  const confirmEdit = async () => {
-    if (!classToEdit) return;
-
-    const { error } = await supabase
-      .from('classes')
-      .update({ name: newClassName })
-      .eq('id', classToEdit.id);
-
-    if (error) {
-      console.error('Error al actualizar:', error);
-      alert('Error al actualizar la clase');
-    } else {
-      await fetchData(); // Refrescar lista
-      setIsEditModalOpen(false);
-      setClassToEdit(null);
-      setNewClassName('');
-    }
-  };
+  // --- Renderizado ---
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex h-screen items-center justify-center neu-container">
         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
@@ -174,21 +176,18 @@ export default function DashboardPage() {
           {classes.map((classItem) => (
             <div key={classItem.id} className="neu-card p-6 flex flex-col justify-between relative">
 
-              {/* --- Botón de Menú (Tres Puntos) --- */}
+              {/* --- Menú de Tres Puntos --- */}
               <div className="absolute top-4 right-4">
                 <button 
                   onClick={(e) => toggleMenu(e, classItem.id)}
-                  className="p-1 rounded-full hover:bg-gray-100 text-gray-500"
+                  className="p-1 rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
                 >
-                  {/* Icono 3 puntos vertical */}
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                   </svg>
                 </button>
-
-                {/* --- Menú Desplegable --- */}
                 {activeMenuId === classItem.id && (
-                  <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-10 border border-gray-100 overflow-hidden">
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-100 overflow-hidden">
                     <button
                       onClick={(e) => openEditModal(e, classItem)}
                       className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -199,17 +198,17 @@ export default function DashboardPage() {
                       onClick={(e) => openDeleteModal(e, classItem)}
                       className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                     >
-                      Eliminar
+                      Eliminar Clase
                     </button>
                   </div>
                 )}
               </div>
 
-              <div className="pr-8"> {/* Padding right para no chocar con el menú */}
-                <h3 className="text-xl font-semibold mb-2">{classItem.name}</h3>
+              <div className="pr-8"> {/* Padding para que el texto no choque con el menú */}
+                <h3 className="text-xl font-semibold mb-2 text-gray-800">{classItem.name}</h3>
                 <p className="text-sm text-gray-500 mb-4">{classItem.subject || 'Sin materia'}</p>
               </div>
-              <Link href={`/dashboard/class/${classItem.id}`} className="neu-button text-center block py-2 mt-2">
+              <Link href={`/dashboard/class/${classItem.id}`} className="neu-button-white text-center block py-2 mt-4 no-underline">
                 Ver Exámenes
               </Link>
             </div>
@@ -217,7 +216,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* --- Modal Crear Clase --- */}
+      {/* --- Modales --- */}
       {isCreateModalOpen && (
         <CreateClassModal
           isOpen={isCreateModalOpen}
@@ -226,59 +225,35 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* --- Modal Editar Clase --- */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md mx-4">
-            <h2 className="text-xl font-bold mb-4">Editar Clase</h2>
+            <h2 className="text-xl font-bold mb-4 text-gray-800">Editar Nombre de la Clase</h2>
             <input
               type="text"
               value={newClassName}
               onChange={(e) => setNewClassName(e.target.value)}
-              className="w-full p-2 border rounded mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Nombre de la clase"
+              className="w-full p-2 border rounded mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Nuevo nombre"
             />
-            <div className="flex justify-end gap-2">
-              <button 
-                onClick={() => setIsEditModalOpen(false)}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={confirmEdit}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                disabled={!newClassName.trim()}
-              >
-                Guardar
-              </button>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
+              <button onClick={confirmEdit} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700" disabled={!newClassName.trim()}>Guardar</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* --- Modal Eliminar Clase --- */}
       {isDeleteModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md mx-4">
-            <h2 className="text-xl font-bold mb-2 text-red-600">Eliminar Clase</h2>
+            <h2 className="text-xl font-bold mb-2 text-red-600">Confirmar Eliminación</h2>
             <p className="text-gray-600 mb-6">
-              ¿Estás seguro de que quieres eliminar la clase <strong>{classToDelete?.name}</strong>? 
-              Esta acción no se puede deshacer.
+              ¿Estás seguro de que quieres eliminar la clase <strong>"{classToDelete?.name}"</strong>? Esta acción no se puede deshacer.
             </p>
-            <div className="flex justify-end gap-2">
-              <button 
-                onClick={() => setIsDeleteModalOpen(false)}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={confirmDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-              >
-                Eliminar
-              </button>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setIsDeleteModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
+              <button onClick={confirmDelete} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Eliminar</button>
             </div>
           </div>
         </div>

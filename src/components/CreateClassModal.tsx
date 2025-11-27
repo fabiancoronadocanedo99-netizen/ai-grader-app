@@ -1,76 +1,115 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabaseClient' // <-- 1. CAMBIO IMPORTANTE
+import { createClient } from '@/lib/supabaseClient'
 
-interface Props {
-  isOpen: boolean;
-  onClose: () => void;
-  onClassCreated: () => void;
+interface CreateClassModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onClassCreated: () => void
 }
 
-export default function CreateClassModal({ isOpen, onClose, onClassCreated }: Props) {
-  const supabase = createClient(); // <-- 2. CAMBIO IMPORTANTE
-  const [newClassName, setNewClassName] = useState('');
-  const [loading, setLoading] = useState(false);
+export default function CreateClassModal(props: CreateClassModalProps) {
+  const { isOpen, onClose, onClassCreated } = props;
+  const supabase = createClient()
+  const [className, setClassName] = useState('')
+  const [isCreating, setIsCreating] = useState(false)
 
   const handleCreateClass = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newClassName.trim()) return;
-    setLoading(true);
+    e.preventDefault()
+
+    if (!className.trim()) {
+      alert("Por favor, introduce un nombre para la clase.")
+      return
+    }
+
+    setIsCreating(true)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuario no autenticado.");
+      // 1. Obtener usuario actual
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("Usuario no encontrado")
 
+      // 2. --- PASO CLAVE: LLAMAR A LA FUNCIÓN RPC ---
+      // Esta función se ejecuta en la base de datos y devuelve el organization_id del usuario actual.
+      const { data: orgId, error: rpcError } = await supabase.rpc('get_my_organization');
+
+      if (rpcError || !orgId) {
+        console.error("RPC Error:", rpcError);
+        throw new Error("No se pudo obtener la organización del usuario desde la base de datos.");
+      }
+
+      // 3. --- INSERTAR LA CLASE CON LA ORGANIZACIÓN OBTENIDA ---
       const { error } = await supabase.from('classes').insert({
-        name: newClassName.trim(),
-        user_id: user.id
-      });
+        name: className,
+        user_id: user.id,
+        organization_id: orgId, // <-- ¡Usamos el resultado de la RPC!
+      })
 
-      if (error) throw error;
+      if (error) throw error
 
-      alert('¡Clase creada con éxito!');
-      onClassCreated();
-      onClose();
+      // 4. Finalizar
+      alert("¡Clase creada con éxito!")
+      setClassName("")
+      onClassCreated() // Recargar la lista en el Dashboard
+      onClose() // Cerrar el modal
+
     } catch (error) {
-      alert(`Error al crear la clase: ${(error as Error).message}`);
+      console.error("Error al crear clase:", error);
+      alert(`Error al crear la clase: ${(error as Error).message}`)
     } finally {
-      setLoading(false);
+      setIsCreating(false)
     }
-  };
+  }
 
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="neu-card p-8 rounded-lg w-full max-w-md">
-        <h3 className="text-xl font-bold text-center mb-6">Crear Nueva Clase</h3>
+      <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md mx-4">
+        <h2 className="text-2xl font-bold mb-6 text-gray-800">Crear Nueva Clase</h2>
+
         <form onSubmit={handleCreateClass}>
-          <div className="mb-4">
-            <label htmlFor="className" className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="mb-6">
+            <label className="block text-gray-700 text-sm font-bold mb-2">
               Nombre de la Clase
             </label>
             <input
-              id="className"
               type="text"
-              value={newClassName}
-              onChange={(e) => setNewClassName(e.target.value)}
-              className="neu-input w-full p-3"
-              placeholder="Ej: Salón 101"
+              value={className}
+              onChange={(e) => setClassName(e.target.value)}
+              className="shadow appearance-none border rounded w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:ring-2 focus:ring-blue-500"
+              placeholder="Ej. Matemáticas 101"
               autoFocus
             />
           </div>
-          <div className="flex justify-end gap-4 mt-6">
-            <button type="button" onClick={onClose} className="neu-button px-4 py-2">
+
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded font-medium transition-colors"
+              disabled={isCreating}
+            >
               Cancelar
             </button>
-            <button type="submit" disabled={loading} className="neu-button px-4 py-2 disabled:opacity-50">
-              {loading ? 'Creando...' : 'Crear'}
+            <button
+              type="submit"
+              className="px-6 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
+              disabled={isCreating}
+            >
+              {isCreating ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Creando...
+                </>
+              ) : (
+                'Crear Clase'
+              )}
             </button>
           </div>
         </form>
       </div>
     </div>
-  );
+  )
 }

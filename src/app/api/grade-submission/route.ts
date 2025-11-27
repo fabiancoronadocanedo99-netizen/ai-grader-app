@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
 
     console.log(`Iniciando calificación para la entrega ID: ${submissionId}`);
 
+    // PASO 1: MODIFICAR EL TIPO Y LA CONSULTA PARA INCLUIR organization_id
     type SubmissionWithExam = {
       submission_file_url: string;
       student_id: string;
@@ -83,12 +84,13 @@ export async function POST(req: NextRequest) {
         id: string;
         solution_file_url: string;
         name: string;
+        organization_id: string; // Campo añadido al tipo
       } | null;
     };
 
     const { data: submission, error: subError } = await supabaseAdmin
       .from('submissions')
-      .select('submission_file_url, student_id, exam_id, exams!inner(id, solution_file_url, name)')
+      .select('submission_file_url, student_id, exam_id, exams!inner(id, solution_file_url, name, organization_id)') // Campo añadido a la consulta
       .eq('id', submissionId)
       .single<SubmissionWithExam>();
 
@@ -100,6 +102,12 @@ export async function POST(req: NextRequest) {
     if (!submission?.exams?.solution_file_url) {
       throw new Error('El examen no tiene un solucionario subido.');
     }
+
+    // PASO 2: EXTRAER Y VALIDAR EL organization_id
+    if (!submission.exams.organization_id) {
+        throw new Error('No se pudo encontrar el organization_id para este examen.');
+    }
+    const organizationId = submission.exams.organization_id;
 
     const solutionPath = new URL(submission.exams.solution_file_url).pathname.split('/exam_files/')[1];
     const submissionPath = new URL(submission.submission_file_url).pathname.split('/exam_files/')[1];
@@ -142,14 +150,17 @@ export async function POST(req: NextRequest) {
 
     console.log('Enviando petición a la API de Gemini...');
 
-    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify(requestBody),
-    });
+    const response = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify(requestBody),
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -175,10 +186,12 @@ export async function POST(req: NextRequest) {
       throw new Error(`Error al actualizar submission: ${updateError.message}`);
     }
 
+    // PASO 3: AÑADIR organization_id A LA INSERCIÓN EN LA TABLA 'grades'
     const { data: gradeData, error: gradeError } = await supabaseAdmin.from('grades').insert({
       submission_id: submissionId,
       student_id: submission.student_id,
       exam_id: submission.exam_id,
+      organization_id: organizationId, // Campo añadido a la inserción
       score_obtained: responseJson.informe_evaluacion.resumen_general.puntuacion_total_obtenida,
       score_possible: responseJson.informe_evaluacion.resumen_general.puntuacion_total_posible,
       ai_feedback: responseJson,
