@@ -16,39 +16,42 @@ export async function createUser(data: {
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email: data.email,
     password: data.password,
-    email_confirm: true, // Auto-confirmar para que puedan entrar ya
-    user_metadata: { full_name: data.fullName }
+    email_confirm: true,
   })
 
   if (authError) {
-    console.error('Error creando usuario auth:', authError)
+    console.error('Error creando usuario en Auth:', authError)
     return { success: false, error: authError.message }
   }
 
   if (!authData.user) {
-    return { success: false, error: 'No se pudo crear el usuario' }
+    return { success: false, error: 'No se pudo crear el usuario en Auth' }
   }
 
-  // 2. Actualizar el perfil con el rol y la organización
-  // (El trigger 'on_auth_user_created' ya creó la fila en 'profiles', ahora la actualizamos)
+  // --- ¡CAMBIO CRÍTICO! ---
+  // 2. Ahora hacemos un INSERT en profiles, ya que no hay trigger
   const { error: profileError } = await supabase
     .from('profiles')
-    .update({
+    .insert({
+      id: authData.user.id, // Usamos el ID del usuario recién creado
+      full_name: data.fullName,
       role: data.role,
       organization_id: data.organizationId,
-      full_name: data.fullName
+      onboarding_completed: true // Lo creamos ya completo
     })
-    .eq('id', authData.user.id)
 
   if (profileError) {
-    console.error('Error actualizando perfil:', profileError)
-    // Opcional: Podríamos borrar el usuario de auth si esto falla para no dejar basura
-    return { success: false, error: 'Usuario creado pero falló al asignar perfil: ' + profileError.message }
+    console.error('Error creando el perfil en la base de datos:', profileError)
+    // Limpieza: si falla el perfil, borramos el usuario de auth para no dejar basura
+    await supabase.auth.admin.deleteUser(authData.user.id)
+    return { success: false, error: 'Error de base de datos creando el perfil: ' + profileError.message }
   }
 
   revalidatePath('/admin/users')
   return { success: true }
-} export async function getUsers() {
+}
+
+export async function getUsers() {
   const supabase = createAdminClient()
 
   // Seleccionamos perfiles y hacemos JOIN con organizaciones para traer el nombre
@@ -62,5 +65,10 @@ export async function createUser(data: {
     return []
   }
 
-  return data
+  // Pequeña corrección para asegurar que el nombre de la organización sea accesible
+  return data.map(user => {
+    // @ts-ignore
+    const orgName = user.organizations ? user.organizations.name : 'Sin Asignar';
+    return { ...user, organization_name: orgName };
+  });
 }
