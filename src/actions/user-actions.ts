@@ -39,6 +39,9 @@ export async function createUser(data: {
   })
 
   if (authError) {
+    // --- ¡AÑADE ESTE LOG! ---
+    console.error(`--- [CREATE_USER] Error de Supabase Auth para ${data.email}:`, authError)
+    // --- FIN DEL LOG ---
     console.error('Error creando usuario en Auth:', authError)
     return { success: false, error: authError.message }
   }
@@ -164,6 +167,10 @@ export async function createUsersFromCSV(csvContent: string): Promise<BulkImport
     // 2. Parsear el CSV
     const users = Papa.parse(csvContent, { header: true, skipEmptyLines: true }).data as any[]
     console.log(`--- [BULK] CSV parseado. ${users.length} usuarios encontrados.`)
+
+    // --- ¡CÓDIGO ESPÍA ADICIONAL! ---
+    console.log("--- [BULK] ESTRUCTURA DEL PRIMER USUARIO:", users[0])
+    // --- FIN DEL CÓDIGO ESPÍA ---
 
     // 3. Procesar cada usuario
     for (const user of users) {
