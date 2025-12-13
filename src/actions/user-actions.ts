@@ -17,7 +17,7 @@ type BulkImportResult = {
   success: boolean
   createdCount: number
   failedCount: number
-  errors: Array<{ email: string; reason: string }>
+  errors: string[]
 }
 
 // --- FUNCIONES EXISTENTES ---
@@ -145,105 +145,73 @@ export async function deleteUser(userId: string) {
   }
 }
 
-// --- NUEVA FUNCIÓN: Creación Masiva ---
+// --- NUEVA FUNCIÓN: Creación Masiva CON LOGS DE DEPURACIÓN ---
 
 export async function createUsersFromCSV(csvContent: string): Promise<BulkImportResult> {
-  const supabase = createAdminClient()
-
-  // 1. Parsear el CSV
-  const parseResult = Papa.parse<CSVUser>(csvContent, {
-    header: true,
-    skipEmptyLines: true,
-    transformHeader: (header) => header.trim().toLowerCase().replace(/\s/g, '_'), // Normalizar headers
-  })
-
-  const rows = parseResult.data
-
+  console.log('--- [BULK] Iniciando proceso de CSV ---')
   let createdCount = 0
   let failedCount = 0
-  const errors: Array<{ email: string; reason: string }> = []
+  const errors: string[] = []
+  const supabase = createAdminClient()
 
-  // Si hay errores de parseo (formato CSV inválido global)
-  if (parseResult.errors.length > 0) {
-    return {
-      success: false,
-      createdCount: 0,
-      failedCount: 0,
-      errors: [{ email: 'GENERAL', reason: 'El archivo CSV tiene un formato inválido.' }]
-    }
-  }
+  try {
+    // 1. Cargar todas las organizaciones
+    const { data: allOrgs } = await supabase.from('organizations').select('id, name')
+    if (!allOrgs) throw new Error("No se pudieron cargar las organizaciones")
 
-  // 2. Iterar sobre cada usuario
-  for (const row of rows) {
-    const email = row.email?.trim()
-    const password = row.password?.trim()
-    const fullName = row.full_name?.trim()
-    const role = row.role?.trim()
-    const orgName = row.organization_name?.trim()
+    console.log(`--- [BULK] Organizaciones cargadas: ${allOrgs.length}`)
 
-    // Validación básica de campos obligatorios
-    if (!email || !password || !orgName) {
-      failedCount++
-      errors.push({ 
-        email: email || 'Desconocido', 
-        reason: 'Faltan campos obligatorios (email, password o organization_name)' 
-      })
-      continue
-    }
+    // 2. Parsear el CSV
+    const users = Papa.parse(csvContent, { header: true, skipEmptyLines: true }).data as any[]
+    console.log(`--- [BULK] CSV parseado. ${users.length} usuarios encontrados.`)
 
-    try {
-      // a. Buscar la organización por nombre
-      // Nota: Es sensible a mayúsculas/minúsculas exactas a menos que uses ilike o modifiques la BD.
-      // Usaremos ilike para ser un poco más flexibles con el nombre.
-      const { data: orgData, error: orgSearchError } = await supabase
-        .from('organizations')
-        .select('id')
-        .ilike('name', orgName) 
-        .maybeSingle() // maybeSingle evita error si no encuentra, devuelve null
+    // 3. Procesar cada usuario
+    for (const user of users) {
+      try {
+        console.log(`--- [BULK] Procesando usuario: ${user.email}`)
 
-      if (orgSearchError) {
+        // Buscar organización por nombre exacto
+        const org = allOrgs.find(o => o.name === user.organization_name)
+        if (!org) {
+          throw new Error(`Organización '${user.organization_name}' no encontrada.`)
+        }
+        console.log(`--- [BULK] Organización encontrada: ${org.name} (${org.id})`)
+
+        // Crear el usuario
+        const result = await createUser({
+          email: user.email,
+          password: user.password,
+          fullName: user.full_name,
+          role: user.role,
+          organizationId: org.id,
+        })
+
+        if (result.success) {
+          console.log(`--- [BULK] ÉXITO creando usuario: ${user.email}`)
+          createdCount++
+        } else {
+          throw new Error(result.error)
+        }
+      } catch (error) {
+        console.error(`--- [BULK] FALLO procesando usuario ${user.email}:`, (error as Error).message)
+        errors.push(`Fila para ${user.email}: ${(error as Error).message}`)
         failedCount++
-        errors.push({ email, reason: `Error buscando organización: ${orgSearchError.message}` })
-        continue
       }
-
-      if (!orgData) {
-        failedCount++
-        errors.push({ email, reason: `La organización "${orgName}" no existe.` })
-        continue
-      }
-
-      // b. Llamar a createUser con el ID encontrado
-      const result = await createUser({
-        email,
-        password,
-        role: role || 'user', // Rol por defecto si viene vacío
-        fullName: fullName || '',
-        organizationId: orgData.id
-      })
-
-      if (result.success) {
-        createdCount++
-      } else {
-        failedCount++
-        errors.push({ email, reason: result.error || 'Error desconocido al crear usuario' })
-      }
-
-    } catch (err) {
-      failedCount++
-      errors.push({ email, reason: `Excepción inesperada: ${(err as Error).message}` })
     }
-  }
 
-  // Revalidar rutas si hubo éxito
-  if (createdCount > 0) {
+    console.log('--- [BULK] Proceso de CSV finalizado ---')
+    console.log(`--- [BULK] Creados: ${createdCount}, Fallidos: ${failedCount}`)
+
     revalidatePath('/admin/users')
-  }
+    return { success: true, createdCount, failedCount, errors }
 
-  return {
-    success: true,
-    createdCount,
-    failedCount,
-    errors
+  } catch (error) {
+    console.error('--- [BULK] ERROR MAYOR en createUsersFromCSV:', error)
+    return { 
+      success: false, 
+      createdCount: 0, 
+      failedCount: 0, 
+      errors: [(error as Error).message] 
+    }
   }
 }
