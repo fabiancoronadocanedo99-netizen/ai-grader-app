@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
 
     console.log(`Iniciando calificación para la entrega ID: ${submissionId}`);
 
-    // PASO 1: MODIFICAR EL TIPO Y LA CONSULTA PARA INCLUIR organization_id
+    // PASO 1: OBTENER DATOS DE LA ENTREGA Y EL EXAMEN (INCLUYENDO organization_id)
     type SubmissionWithExam = {
       submission_file_url: string;
       student_id: string;
@@ -84,13 +84,13 @@ export async function POST(req: NextRequest) {
         id: string;
         solution_file_url: string;
         name: string;
-        organization_id: string; // Campo añadido al tipo
+        organization_id: string;
       } | null;
     };
 
     const { data: submission, error: subError } = await supabaseAdmin
       .from('submissions')
-      .select('submission_file_url, student_id, exam_id, exams!inner(id, solution_file_url, name, organization_id)') // Campo añadido a la consulta
+      .select('submission_file_url, student_id, exam_id, exams!inner(id, solution_file_url, name, organization_id)')
       .eq('id', submissionId)
       .single<SubmissionWithExam>();
 
@@ -103,12 +103,41 @@ export async function POST(req: NextRequest) {
       throw new Error('El examen no tiene un solucionario subido.');
     }
 
-    // PASO 2: EXTRAER Y VALIDAR EL organization_id
+    // PASO 2: VALIDAR Y EXTRAER organization_id
     if (!submission.exams.organization_id) {
-        throw new Error('No se pudo encontrar el organization_id para este examen.');
+      throw new Error('No se pudo encontrar el organization_id para este examen.');
     }
     const organizationId = submission.exams.organization_id;
+    console.log(`Organization ID encontrado: ${organizationId}`);
 
+    // PASO 3: VERIFICAR CRÉDITOS DISPONIBLES
+    const { data: orgData, error: orgError } = await supabaseAdmin
+      .from('organizations')
+      .select('credits_remaining, name')
+      .eq('id', organizationId)
+      .single();
+
+    if (orgError) {
+      console.error('Error al obtener créditos de la organización:', orgError);
+      throw new Error(`Error al obtener créditos: ${orgError.message}`);
+    }
+
+    console.log(`Créditos disponibles para ${orgData.name}: ${orgData.credits_remaining}`);
+
+    // PASO 4: VALIDAR CRÉDITOS SUFICIENTES
+    if (orgData.credits_remaining <= 0) {
+      console.warn(`⚠️ Créditos insuficientes para organización ${organizationId}`);
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Créditos insuficientes en la organización',
+          credits_remaining: orgData.credits_remaining,
+        },
+        { status: 402 } // 402 Payment Required
+      );
+    }
+
+    // CONTINUAR CON EL PROCESO DE CALIFICACIÓN...
     const solutionPath = new URL(submission.exams.solution_file_url).pathname.split('/exam_files/')[1];
     const submissionPath = new URL(submission.submission_file_url).pathname.split('/exam_files/')[1];
 
@@ -186,12 +215,12 @@ export async function POST(req: NextRequest) {
       throw new Error(`Error al actualizar submission: ${updateError.message}`);
     }
 
-    // PASO 3: AÑADIR organization_id A LA INSERCIÓN EN LA TABLA 'grades'
+    // INSERTAR CALIFICACIÓN EN LA TABLA 'grades'
     const { data: gradeData, error: gradeError } = await supabaseAdmin.from('grades').insert({
       submission_id: submissionId,
       student_id: submission.student_id,
       exam_id: submission.exam_id,
-      organization_id: organizationId, // Campo añadido a la inserción
+      organization_id: organizationId,
       score_obtained: responseJson.informe_evaluacion.resumen_general.puntuacion_total_obtenida,
       score_possible: responseJson.informe_evaluacion.resumen_general.puntuacion_total_posible,
       ai_feedback: responseJson,
@@ -204,10 +233,51 @@ export async function POST(req: NextRequest) {
 
     console.log('✅ Calificación completada! Grade ID:', gradeData?.id);
 
+    // PASO 5: DEDUCIR CRÉDITO DE LA ORGANIZACIÓN
+    console.log(`Deduciendo 1 crédito de la organización ${organizationId}...`);
+
+    const { error: creditDeductError } = await supabaseAdmin
+      .from('organizations')
+      .update({ credits_remaining: orgData.credits_remaining - 1 })
+      .eq('id', organizationId);
+
+    if (creditDeductError) {
+      console.error('⚠️ Error al deducir crédito (pero la calificación ya se completó):', creditDeductError);
+      // No lanzamos error aquí porque la calificación ya está guardada
+    } else {
+      console.log('✅ Crédito deducido exitosamente');
+    }
+
+    // PASO 6: REGISTRAR LA TRANSACCIÓN DE CRÉDITO
+    console.log('Registrando transacción de crédito...');
+
+    const { error: transactionError } = await supabaseAdmin
+      .from('credit_transactions')
+      .insert({
+        user_id: submission.student_id, // Nota: Aquí usamos student_id, pero podrías querer el ID del profesor que solicitó la calificación
+        organization_id: organizationId,
+        credits_deducted: 1,
+        action_type: 'grade_submission',
+        entity_id: gradeData.id, // ID de la calificación generada
+        metadata: {
+          submission_id: submissionId,
+          exam_id: submission.exam_id,
+          exam_name: submission.exams.name,
+        },
+      });
+
+    if (transactionError) {
+      console.error('⚠️ Error al registrar transacción (pero la calificación ya se completó):', transactionError);
+      // No lanzamos error porque la calificación y la deducción ya están hechas
+    } else {
+      console.log('✅ Transacción registrada exitosamente');
+    }
+
     return NextResponse.json({
       ok: true,
       feedback: responseJson,
       gradeId: gradeData?.id,
+      credits_remaining: orgData.credits_remaining - 1,
     });
   } catch (error: any) {
     console.error('[GRADE-SUBMISSION-ERROR]', error);
