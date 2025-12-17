@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getGeminiApiKey, getSupabaseConfig } from '@/config/env';
-// CORRECCIÓN AQUÍ: Importamos por defecto en lugar de "as *"
-// @ts-ignore
-import pdf from 'pdf-parse';
+
+// --- CORRECCIÓN CRÍTICA PARA EL BUILD ---
+// Cambiamos import ... from por require() para compatibilidad con CommonJS
+const pdf = require('pdf-parse'); 
 
 // ¡ESTA LÍNEA ES CRÍTICA!
 export const dynamic = 'force-dynamic';
@@ -136,7 +137,7 @@ export async function POST(req: NextRequest) {
 
     const submissionBuffer = Buffer.from(await submissionBlob.arrayBuffer());
 
-    // Al corregir el import, esta llamada ahora funcionará correctamente
+    // CORRECCIÓN: Uso directo de la librería importada con require
     const pdfData = await pdf(submissionBuffer);
     const creditCost = pdfData.numpages;
 
