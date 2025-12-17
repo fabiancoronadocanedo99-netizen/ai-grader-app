@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getGeminiApiKey, getSupabaseConfig } from '@/config/env';
-
-// --- CORRECCIÓN CRÍTICA PARA EL BUILD ---
-// Cambiamos import ... from por require() para compatibilidad con CommonJS
-const pdf = require('pdf-parse'); 
+// CAMBIO 1: Nueva librería importada
+import PDFParser from "pdf2json";
 
 // ¡ESTA LÍNEA ES CRÍTICA!
 export const dynamic = 'force-dynamic';
@@ -135,11 +133,31 @@ export async function POST(req: NextRequest) {
       throw new Error('Error al descargar el archivo PDF de la entrega.');
     }
 
+    // CAMBIO 2: Lógica completa reemplazada para usar pdf2json
     const submissionBuffer = Buffer.from(await submissionBlob.arrayBuffer());
 
-    // CORRECCIÓN: Uso directo de la librería importada con require
-    const pdfData = await pdf(submissionBuffer);
-    const creditCost = pdfData.numpages;
+    const pdfParser = new PDFParser();
+    let creditCost = 0;
+
+    // Envolvemos pdf2json en una Promesa porque funciona con eventos
+    await new Promise<void>((resolve, reject) => {
+      pdfParser.on("pdfParser_dataError", (errData: any) => {
+        console.error(errData.parserError);
+        reject(new Error("Error al parsear el PDF con pdf2json."));
+      });
+
+      pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
+        // pdf2json devuelve un objeto donde Pages es un array
+        if (pdfData && pdfData.Pages) {
+          creditCost = pdfData.Pages.length;
+          resolve();
+        } else {
+          reject(new Error("Formato de PDF inesperado (no pages found)."));
+        }
+      });
+
+      pdfParser.parseBuffer(submissionBuffer);
+    });
 
     console.log(`💳 Costo calculado: ${creditCost} créditos (${creditCost} páginas)`);
 
