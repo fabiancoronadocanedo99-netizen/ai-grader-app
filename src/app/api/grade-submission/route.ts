@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getGeminiApiKey, getSupabaseConfig } from '@/config/env';
-// CAMBIO 1: Nueva librería importada
 import PDFParser from "pdf2json";
 
 // ¡ESTA LÍNEA ES CRÍTICA!
@@ -89,13 +88,14 @@ export async function POST(req: NextRequest) {
         solution_file_url: string;
         name: string;
         organization_id: string;
-        teacher_id: string;
+        user_id: string; // <-- CORREGIDO: user_id en lugar de teacher_id
       } | null;
     };
 
+    // CORREGIDO: Seleccionamos user_id en la relación inner join
     const { data: submission, error: subError } = await supabaseAdmin
       .from('submissions')
-      .select('submission_file_url, student_id, exam_id, exams!inner(id, solution_file_url, name, organization_id, teacher_id)')
+      .select('submission_file_url, student_id, exam_id, exams!inner(id, solution_file_url, name, organization_id, user_id)')
       .eq('id', submissionId)
       .single<SubmissionWithExam>();
 
@@ -108,15 +108,17 @@ export async function POST(req: NextRequest) {
       throw new Error('El examen no tiene un solucionario subido.');
     }
 
-    if (!submission.exams.organization_id || !submission.exams.teacher_id) {
-      throw new Error('Faltan datos de organización o maestro en el examen.');
+    // CORREGIDO: Verificamos user_id
+    if (!submission.exams.organization_id || !submission.exams.user_id) {
+      throw new Error('Faltan datos de organización o maestro (user_id) en el examen.');
     }
 
     const organizationId = submission.exams.organization_id;
-    const teacherId = submission.exams.teacher_id;
+    // CORREGIDO: Asignamos user_id a la variable teacherId
+    const teacherId = submission.exams.user_id;
 
     console.log(`📋 Organization ID: ${organizationId}`);
-    console.log(`👨‍🏫 Teacher ID: ${teacherId}`);
+    console.log(`👨‍🏫 Teacher ID (User ID): ${teacherId}`);
 
     // =========================================================================
     // PASO 2: CALCULAR EL COSTO EN CRÉDITOS (NÚMERO DE PÁGINAS DEL PDF)
@@ -133,13 +135,11 @@ export async function POST(req: NextRequest) {
       throw new Error('Error al descargar el archivo PDF de la entrega.');
     }
 
-    // CAMBIO 2: Lógica completa reemplazada para usar pdf2json
     const submissionBuffer = Buffer.from(await submissionBlob.arrayBuffer());
 
     const pdfParser = new PDFParser();
     let creditCost = 0;
 
-    // Envolvemos pdf2json en una Promesa porque funciona con eventos
     await new Promise<void>((resolve, reject) => {
       pdfParser.on("pdfParser_dataError", (errData: any) => {
         console.error(errData.parserError);
@@ -147,7 +147,6 @@ export async function POST(req: NextRequest) {
       });
 
       pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
-        // pdf2json devuelve un objeto donde Pages es un array
         if (pdfData && pdfData.Pages) {
           creditCost = pdfData.Pages.length;
           resolve();
@@ -181,6 +180,7 @@ export async function POST(req: NextRequest) {
 
     console.log('👨‍🏫 Consultando límite y uso del maestro...');
 
+    // Usamos teacherId (que contiene el user_id) para buscar el perfil
     const { data: profileData, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('monthly_credit_limit, monthly_credits_used, full_name')
