@@ -30,6 +30,7 @@ export default function OrganizationsManagementPage() {
 
   // Estados para edición
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null)
+feature/credit-system
   const [editFormData, setEditFormData] = useState({
     name: '',
     subscription_plan: '',
@@ -37,6 +38,9 @@ export default function OrganizationsManagementPage() {
     credits_remaining: 0,
     next_renewal_date: ''
   })
+
+  const [editOrgName, setEditOrgName] = useState('')
+main
   const [updating, setUpdating] = useState(false)
 
   // Estados para eliminación
@@ -94,6 +98,7 @@ export default function OrganizationsManagementPage() {
   // --- 3. Editar Organización ---
   const openEditModal = (org: Organization) => {
     setEditingOrg(org)
+feature/credit-system
     setEditFormData({
       name: org.name,
       subscription_plan: org.subscription_plan || '',
@@ -115,10 +120,19 @@ export default function OrganizationsManagementPage() {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingOrg || !editFormData.name.trim()) return
+    setEditOrgName(org.name)
+    setIsEditModalOpen(true)
+  }
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editOrgName.trim() || !editingOrg) return
+ main
 
     setUpdating(true)
 
     try {
+feature/credit-system
       const result = await updateOrganization(editingOrg.id, {
         name: editFormData.name,
         subscription_plan: editFormData.subscription_plan,
@@ -127,6 +141,9 @@ export default function OrganizationsManagementPage() {
         next_renewal_date: editFormData.next_renewal_date || undefined
       })
 
+      const result = await updateOrganization(editingOrg.id, editOrgName)
+main
+
       if (!result.success) {
         throw new Error(result.error)
       }
@@ -134,6 +151,10 @@ export default function OrganizationsManagementPage() {
       alert('Organización actualizada exitosamente')
       setIsEditModalOpen(false)
       setEditingOrg(null)
+feature/credit-system
+
+      setEditOrgName('')
+main
       await fetchOrganizations()
 
     } catch (error) {
@@ -179,7 +200,11 @@ export default function OrganizationsManagementPage() {
     }
   }
 
+ feature/credit-system
   // --- Estilos Neumórficos ---
+
+  // --- Estilos Neumórficos (Reutilizables) ---
+ main
   const neuBase = "bg-[#e0e5ec] text-gray-700"
   const neuShadow = "shadow-[9px_9px_16px_rgb(163,177,198),-9px_-9px_16px_rgba(255,255,255,0.5)]"
   const neuInset = "shadow-[inset_6px_6px_10px_rgb(163,177,198),inset_-6px_-6px_10px_rgba(255,255,255,0.5)]"
@@ -283,7 +308,10 @@ export default function OrganizationsManagementPage() {
                 </div>
               </div>
 
+ feature/credit-system
               <div className="mt-4 pt-4 border-t border-gray-300/30 flex justify-between items-center">
+              <div className="mt-6 pt-4 border-t border-gray-300/30 flex justify-between items-center">
+ main
                   <div className="flex gap-2">
                     {/* Botón Editar */}
                     <button 
@@ -366,6 +394,7 @@ export default function OrganizationsManagementPage() {
       {/* --- Modal Editar Organización --- */}
       {isEditModalOpen && editingOrg && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4">
+ feature/credit-system
           <div className={`${neuCard} bg-[#e0e5ec] w-full max-w-lg p-8 relative animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto`}>
 
             <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">Editar Organización</h2>
@@ -373,19 +402,36 @@ export default function OrganizationsManagementPage() {
             <form onSubmit={handleUpdate} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-2 ml-1 uppercase tracking-wide">
+
+          <div className={`${neuCard} bg-[#e0e5ec] w-full max-w-md p-8 relative animate-in fade-in zoom-in duration-200`}>
+
+            <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">Editar Organización</h2>
+
+            <form onSubmit={handleUpdate}>
+              <div className="mb-6">
+                <label className="block text-sm font-bold text-gray-600 mb-2 ml-1">
+ main
                   Nombre de la Institución
                 </label>
                 <input
                   type="text"
+feature/credit-system
                   name="name"
                   value={editFormData.name}
                   onChange={handleEditInputChange}
                   placeholder="Ej. Colegio San Agustín"
                   className={neuInput}
+                  value={editOrgName}
+                  onChange={(e) => setEditOrgName(e.target.value)}
+                  placeholder="Ej. Colegio San Agustín"
+                  className={neuInput}
+                  autoFocus
+ main
                   required
                 />
               </div>
 
+ feature/credit-system
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-2 ml-1 uppercase tracking-wide">
                   Plan de Suscripción
@@ -450,11 +496,17 @@ export default function OrganizationsManagementPage() {
               </div>
 
               <div className="flex gap-4 mt-8 pt-4">
+              <div className="flex gap-4 mt-8">
+main
                 <button
                   type="button"
                   onClick={() => {
                     setIsEditModalOpen(false)
                     setEditingOrg(null)
+ feature/credit-system
+
+                    setEditOrgName('')
+ main
                   }}
                   className={`${neuButton} flex-1 !text-gray-500`}
                   disabled={updating}
@@ -464,7 +516,10 @@ export default function OrganizationsManagementPage() {
                 <button
                   type="submit"
                   className={`${neuButton} flex-1 !text-blue-600`}
+ feature/credit-system
                   disabled={updating}
+                  disabled={updating || !editOrgName.trim()}
+main
                 >
                   {updating ? 'Guardando...' : 'Guardar Cambios'}
                 </button>
