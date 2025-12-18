@@ -10,6 +10,10 @@ interface Organization {
   name: string
   logo_url?: string | null
   created_at: string
+  subscription_plan?: string | null
+  credits_per_period?: number | null
+  credits_remaining?: number | null
+  next_renewal_date?: string | null
 }
 
 export default function OrganizationsManagementPage() {
@@ -26,7 +30,17 @@ export default function OrganizationsManagementPage() {
 
   // Estados para edición
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null)
+feature/credit-system
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    subscription_plan: '',
+    credits_per_period: 0,
+    credits_remaining: 0,
+    next_renewal_date: ''
+  })
+
   const [editOrgName, setEditOrgName] = useState('')
+main
   const [updating, setUpdating] = useState(false)
 
   // Estados para eliminación
@@ -84,6 +98,28 @@ export default function OrganizationsManagementPage() {
   // --- 3. Editar Organización ---
   const openEditModal = (org: Organization) => {
     setEditingOrg(org)
+feature/credit-system
+    setEditFormData({
+      name: org.name,
+      subscription_plan: org.subscription_plan || '',
+      credits_per_period: org.credits_per_period || 0,
+      credits_remaining: org.credits_remaining || 0,
+      next_renewal_date: org.next_renewal_date ? org.next_renewal_date.split('T')[0] : ''
+    })
+    setIsEditModalOpen(true)
+  }
+
+  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target
+    setEditFormData(prev => ({
+      ...prev,
+      [name]: name.includes('credits') ? parseInt(value) || 0 : value
+    }))
+  }
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingOrg || !editFormData.name.trim()) return
     setEditOrgName(org.name)
     setIsEditModalOpen(true)
   }
@@ -91,11 +127,22 @@ export default function OrganizationsManagementPage() {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editOrgName.trim() || !editingOrg) return
+ main
 
     setUpdating(true)
 
     try {
+feature/credit-system
+      const result = await updateOrganization(editingOrg.id, {
+        name: editFormData.name,
+        subscription_plan: editFormData.subscription_plan,
+        credits_per_period: editFormData.credits_per_period,
+        credits_remaining: editFormData.credits_remaining,
+        next_renewal_date: editFormData.next_renewal_date || undefined
+      })
+
       const result = await updateOrganization(editingOrg.id, editOrgName)
+main
 
       if (!result.success) {
         throw new Error(result.error)
@@ -104,7 +151,10 @@ export default function OrganizationsManagementPage() {
       alert('Organización actualizada exitosamente')
       setIsEditModalOpen(false)
       setEditingOrg(null)
+feature/credit-system
+
       setEditOrgName('')
+main
       await fetchOrganizations()
 
     } catch (error) {
@@ -150,7 +200,11 @@ export default function OrganizationsManagementPage() {
     }
   }
 
+ feature/credit-system
+  // --- Estilos Neumórficos ---
+
   // --- Estilos Neumórficos (Reutilizables) ---
+ main
   const neuBase = "bg-[#e0e5ec] text-gray-700"
   const neuShadow = "shadow-[9px_9px_16px_rgb(163,177,198),-9px_-9px_16px_rgba(255,255,255,0.5)]"
   const neuInset = "shadow-[inset_6px_6px_10px_rgb(163,177,198),inset_-6px_-6px_10px_rgba(255,255,255,0.5)]"
@@ -216,12 +270,48 @@ export default function OrganizationsManagementPage() {
 
               <div>
                 <h3 className="text-xl font-bold text-gray-800 mb-1">{org.name}</h3>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 mb-3">
                   Creada el: {new Date(org.created_at).toLocaleDateString()}
                 </p>
+
+                {/* Información de Créditos */}
+                <div className={`${neuInset} p-3 rounded-lg space-y-2 mb-3`}>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-500 font-semibold">Plan:</span>
+                    <span className={`px-2 py-1 rounded-full font-bold ${
+                      org.subscription_plan === 'enterprise' ? 'bg-purple-100 text-purple-600' :
+                      org.subscription_plan === 'pro' ? 'bg-blue-100 text-blue-600' :
+                      org.subscription_plan === 'basic' ? 'bg-green-100 text-green-600' :
+                      'bg-gray-100 text-gray-500'
+                    }`}>
+                      {org.subscription_plan || 'Sin plan'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-500 font-semibold">Créditos:</span>
+                    <span className={`font-bold ${
+                      (org.credits_remaining || 0) > 50 ? 'text-green-600' :
+                      (org.credits_remaining || 0) > 10 ? 'text-orange-600' :
+                      'text-red-600'
+                    }`}>
+                      {org.credits_remaining || 0} / {org.credits_per_period || 0}
+                    </span>
+                  </div>
+                  {org.next_renewal_date && (
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-gray-500 font-semibold">Renovación:</span>
+                      <span className="text-gray-600">
+                        {new Date(org.next_renewal_date).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
 
+ feature/credit-system
+              <div className="mt-4 pt-4 border-t border-gray-300/30 flex justify-between items-center">
               <div className="mt-6 pt-4 border-t border-gray-300/30 flex justify-between items-center">
+ main
                   <div className="flex gap-2">
                     {/* Botón Editar */}
                     <button 
@@ -304,6 +394,15 @@ export default function OrganizationsManagementPage() {
       {/* --- Modal Editar Organización --- */}
       {isEditModalOpen && editingOrg && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4">
+ feature/credit-system
+          <div className={`${neuCard} bg-[#e0e5ec] w-full max-w-lg p-8 relative animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto`}>
+
+            <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">Editar Organización</h2>
+
+            <form onSubmit={handleUpdate} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-2 ml-1 uppercase tracking-wide">
+
           <div className={`${neuCard} bg-[#e0e5ec] w-full max-w-md p-8 relative animate-in fade-in zoom-in duration-200`}>
 
             <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">Editar Organización</h2>
@@ -311,26 +410,103 @@ export default function OrganizationsManagementPage() {
             <form onSubmit={handleUpdate}>
               <div className="mb-6">
                 <label className="block text-sm font-bold text-gray-600 mb-2 ml-1">
+ main
                   Nombre de la Institución
                 </label>
                 <input
                   type="text"
+feature/credit-system
+                  name="name"
+                  value={editFormData.name}
+                  onChange={handleEditInputChange}
+                  placeholder="Ej. Colegio San Agustín"
+                  className={neuInput}
                   value={editOrgName}
                   onChange={(e) => setEditOrgName(e.target.value)}
                   placeholder="Ej. Colegio San Agustín"
                   className={neuInput}
                   autoFocus
+ main
                   required
                 />
               </div>
 
+ feature/credit-system
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-2 ml-1 uppercase tracking-wide">
+                  Plan de Suscripción
+                </label>
+                <div className="relative">
+                  <select
+                    name="subscription_plan"
+                    value={editFormData.subscription_plan}
+                    onChange={handleEditInputChange}
+                    className={`${neuInput} appearance-none cursor-pointer`}
+                  >
+                    <option value="">Sin plan</option>
+                    <option value="basic">Basic</option>
+                    <option value="pro">Pro</option>
+                    <option value="enterprise">Enterprise</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">▼</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-2 ml-1 uppercase tracking-wide">
+                    Créditos por Periodo
+                  </label>
+                  <input
+                    type="number"
+                    name="credits_per_period"
+                    value={editFormData.credits_per_period}
+                    onChange={handleEditInputChange}
+                    min="0"
+                    className={neuInput}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-2 ml-1 uppercase tracking-wide">
+                    Créditos Restantes
+                  </label>
+                  <input
+                    type="number"
+                    name="credits_remaining"
+                    value={editFormData.credits_remaining}
+                    onChange={handleEditInputChange}
+                    min="0"
+                    className={neuInput}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-2 ml-1 uppercase tracking-wide">
+                  Fecha de Renovación
+                </label>
+                <input
+                  type="date"
+                  name="next_renewal_date"
+                  value={editFormData.next_renewal_date}
+                  onChange={handleEditInputChange}
+                  className={neuInput}
+                />
+              </div>
+
+              <div className="flex gap-4 mt-8 pt-4">
               <div className="flex gap-4 mt-8">
+main
                 <button
                   type="button"
                   onClick={() => {
                     setIsEditModalOpen(false)
                     setEditingOrg(null)
+ feature/credit-system
+
                     setEditOrgName('')
+ main
                   }}
                   className={`${neuButton} flex-1 !text-gray-500`}
                   disabled={updating}
@@ -340,7 +516,10 @@ export default function OrganizationsManagementPage() {
                 <button
                   type="submit"
                   className={`${neuButton} flex-1 !text-blue-600`}
+ feature/credit-system
+                  disabled={updating}
                   disabled={updating || !editOrgName.trim()}
+main
                 >
                   {updating ? 'Guardando...' : 'Guardar Cambios'}
                 </button>

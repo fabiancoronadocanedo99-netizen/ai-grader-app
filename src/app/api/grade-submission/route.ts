@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getGeminiApiKey, getSupabaseConfig } from '@/config/env';
+import PDFParser from "pdf2json";
 
 // ¡ESTA LÍNEA ES CRÍTICA!
 export const dynamic = 'force-dynamic';
@@ -73,9 +74,11 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    console.log(`Iniciando calificación para la entrega ID: ${submissionId}`);
+    console.log(`🚀 Iniciando calificación para la entrega ID: ${submissionId}`);
 
-    // PASO 1: MODIFICAR EL TIPO Y LA CONSULTA PARA INCLUIR organization_id
+    // =========================================================================
+    // PASO 1: OBTENER DATOS DE LA ENTREGA Y EL EXAMEN
+    // =========================================================================
     type SubmissionWithExam = {
       submission_file_url: string;
       student_id: string;
@@ -84,18 +87,20 @@ export async function POST(req: NextRequest) {
         id: string;
         solution_file_url: string;
         name: string;
-        organization_id: string; // Campo añadido al tipo
+        organization_id: string;
+        user_id: string; // <-- CORREGIDO: user_id en lugar de teacher_id
       } | null;
     };
 
+    // CORREGIDO: Seleccionamos user_id en la relación inner join
     const { data: submission, error: subError } = await supabaseAdmin
       .from('submissions')
-      .select('submission_file_url, student_id, exam_id, exams!inner(id, solution_file_url, name, organization_id)') // Campo añadido a la consulta
+      .select('submission_file_url, student_id, exam_id, exams!inner(id, solution_file_url, name, organization_id, user_id)')
       .eq('id', submissionId)
       .single<SubmissionWithExam>();
 
     if (subError) {
-      console.error('Error al buscar la entrega:', subError);
+      console.error('❌ Error al buscar la entrega:', subError);
       throw new Error(`Error al buscar la entrega: ${subError.message}`);
     }
 
@@ -103,35 +108,187 @@ export async function POST(req: NextRequest) {
       throw new Error('El examen no tiene un solucionario subido.');
     }
 
-    // PASO 2: EXTRAER Y VALIDAR EL organization_id
-    if (!submission.exams.organization_id) {
-        throw new Error('No se pudo encontrar el organization_id para este examen.');
+    // CORREGIDO: Verificamos user_id
+    if (!submission.exams.organization_id || !submission.exams.user_id) {
+      throw new Error('Faltan datos de organización o maestro (user_id) en el examen.');
     }
+
     const organizationId = submission.exams.organization_id;
+    // CORREGIDO: Asignamos user_id a la variable teacherId
+    const teacherId = submission.exams.user_id;
+
+    console.log(`📋 Organization ID: ${organizationId}`);
+    console.log(`👨‍🏫 Teacher ID (User ID): ${teacherId}`);
+
+    // =========================================================================
+    // PASO 2: CALCULAR EL COSTO EN CRÉDITOS (NÚMERO DE PÁGINAS DEL PDF)
+    // =========================================================================
+    console.log('📄 Descargando PDF de la entrega para calcular páginas...');
+
+    const submissionPath = new URL(submission.submission_file_url).pathname.split('/exam_files/')[1];
+    const { data: submissionBlob, error: submissionDownloadError } = await supabaseAdmin.storage
+      .from('exam_files')
+      .download(submissionPath);
+
+    if (submissionDownloadError || !submissionBlob) {
+      console.error('❌ Error al descargar el PDF de la entrega:', submissionDownloadError);
+      throw new Error('Error al descargar el archivo PDF de la entrega.');
+    }
+
+    const submissionBuffer = Buffer.from(await submissionBlob.arrayBuffer());
+
+    const pdfParser = new PDFParser();
+    let creditCost = 0;
+
+    await new Promise<void>((resolve, reject) => {
+      pdfParser.on("pdfParser_dataError", (errData: any) => {
+        console.error(errData.parserError);
+        reject(new Error("Error al parsear el PDF con pdf2json."));
+      });
+
+      pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
+        if (pdfData && pdfData.Pages) {
+          creditCost = pdfData.Pages.length;
+          resolve();
+        } else {
+          reject(new Error("Formato de PDF inesperado (no pages found)."));
+        }
+      });
+
+      pdfParser.parseBuffer(submissionBuffer);
+    });
+
+    console.log(`💳 Costo calculado: ${creditCost} créditos (${creditCost} páginas)`);
+
+    // =========================================================================
+    // PASO 3: OBTENER BALANCES DE ORGANIZACIÓN Y MAESTRO
+    // =========================================================================
+    console.log('🏢 Consultando créditos de la organización...');
+
+    const { data: orgData, error: orgError } = await supabaseAdmin
+      .from('organizations')
+      .select('credits_remaining, name')
+      .eq('id', organizationId)
+      .single();
+
+    if (orgError) {
+      console.error('❌ Error al obtener créditos de la organización:', orgError);
+      throw new Error(`Error al obtener créditos: ${orgError.message}`);
+    }
+
+    console.log(`🏢 ${orgData.name} - Créditos disponibles: ${orgData.credits_remaining}`);
+
+    console.log('👨‍🏫 Consultando límite y uso del maestro...');
+
+    // Usamos teacherId (que contiene el user_id) para buscar el perfil
+    const { data: profileData, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('monthly_credit_limit, monthly_credits_used, full_name')
+      .eq('id', teacherId)
+      .single();
+
+    if (profileError) {
+      console.error('❌ Error al obtener datos del maestro:', profileError);
+      throw new Error(`Error al obtener datos del maestro: ${profileError.message}`);
+    }
+
+    console.log(`👨‍🏫 ${profileData.full_name} - Límite: ${profileData.monthly_credit_limit}, Usados: ${profileData.monthly_credits_used}`);
+
+    // =========================================================================
+    // PASO 4: VERIFICAR CRÉDITOS DISPONIBLES
+    // =========================================================================
+    console.log('🔍 Verificando disponibilidad de créditos...');
+
+    // Verificar créditos de la organización
+    if (orgData.credits_remaining < creditCost) {
+      console.warn(`⚠️ Créditos insuficientes en la organización`);
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'La institución no tiene suficientes créditos.',
+          credits_needed: creditCost,
+          credits_available: orgData.credits_remaining,
+        },
+        { status: 402 }
+      );
+    }
+
+    // Verificar límite mensual del maestro
+    const teacherCreditsAfter = profileData.monthly_credits_used + creditCost;
+    if (teacherCreditsAfter > profileData.monthly_credit_limit) {
+      console.warn(`⚠️ El maestro ha excedido su límite mensual`);
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'El maestro ha excedido su límite mensual de créditos.',
+          credits_needed: creditCost,
+          credits_used: profileData.monthly_credits_used,
+          monthly_limit: profileData.monthly_credit_limit,
+        },
+        { status: 403 }
+      );
+    }
+
+    console.log('✅ Créditos suficientes. Procediendo con el descuento...');
+
+    // =========================================================================
+    // PASO 5: DESCONTAR CRÉDITOS (¡EL PASO CLAVE!)
+    // =========================================================================
+    console.log(`💰 Descontando ${creditCost} créditos de la organización...`);
+
+    const { error: orgUpdateError } = await supabaseAdmin
+      .from('organizations')
+      .update({ credits_remaining: orgData.credits_remaining - creditCost })
+      .eq('id', organizationId);
+
+    if (orgUpdateError) {
+      console.error('❌ Error al descontar créditos de la organización:', orgUpdateError);
+      throw new Error(`Error al descontar créditos de la organización: ${orgUpdateError.message}`);
+    }
+
+    console.log(`✅ Créditos descontados de la organización (quedan ${orgData.credits_remaining - creditCost})`);
+
+    console.log(`📊 Actualizando uso mensual del maestro...`);
+
+    const { error: profileUpdateError } = await supabaseAdmin
+      .from('profiles')
+      .update({ monthly_credits_used: teacherCreditsAfter })
+      .eq('id', teacherId);
+
+    if (profileUpdateError) {
+      console.error('❌ Error al actualizar uso del maestro:', profileUpdateError);
+      // Intentar revertir el descuento de la organización
+      await supabaseAdmin
+        .from('organizations')
+        .update({ credits_remaining: orgData.credits_remaining })
+        .eq('id', organizationId);
+      throw new Error(`Error al actualizar uso del maestro: ${profileUpdateError.message}`);
+    }
+
+    console.log(`✅ Uso del maestro actualizado (${teacherCreditsAfter}/${profileData.monthly_credit_limit})`);
+
+    // =========================================================================
+    // PASO 6: CONTINUAR CON LA CALIFICACIÓN
+    // =========================================================================
+    console.log('🤖 Preparando archivos para Gemini...');
 
     const solutionPath = new URL(submission.exams.solution_file_url).pathname.split('/exam_files/')[1];
-    const submissionPath = new URL(submission.submission_file_url).pathname.split('/exam_files/')[1];
+    const { data: solutionBlob, error: solutionError } = await supabaseAdmin.storage
+      .from('exam_files')
+      .download(solutionPath);
 
-    console.log('Descargando archivos desde Supabase Storage...');
-
-    const { data: solutionBlob, error: solutionError } = await supabaseAdmin.storage.from('exam_files').download(solutionPath);
-    const { data: submissionBlob, error: submissionError } = await supabaseAdmin.storage.from('exam_files').download(submissionPath);
-
-    if (solutionError || submissionError) {
-      console.error('Error al descargar archivos:', { solutionError, submissionError });
-      throw new Error('Error al descargar uno de los archivos PDF.');
+    if (solutionError || !solutionBlob) {
+      console.error('❌ Error al descargar el solucionario:', solutionError);
+      throw new Error('Error al descargar el solucionario.');
     }
-
-    if (!solutionBlob || !submissionBlob) {
-      throw new Error('Uno de los archivos descargados está vacío.');
-    }
-
-    console.log('Archivos descargados exitosamente');
-
-    const finalPrompt = MASTER_PROMPT.replace('"YYYY-MM-DD"', `"${new Date().toISOString().split('T')[0]}"`).replace('"ID_DEL_EXAMEN"', `"${submission.exams.name}"`);
 
     const solutionBuffer = Buffer.from(await solutionBlob.arrayBuffer());
-    const submissionBuffer = Buffer.from(await submissionBlob.arrayBuffer());
+
+    console.log('📝 Construyendo prompt para Gemini...');
+
+    const finalPrompt = MASTER_PROMPT
+      .replace('"YYYY-MM-DD"', `"${new Date().toISOString().split('T')[0]}"`)
+      .replace('"ID_DEL_EXAMEN"', `"${submission.exams.name}"`);
 
     const requestBody = {
       contents: [
@@ -148,7 +305,7 @@ export async function POST(req: NextRequest) {
       ],
     };
 
-    console.log('Enviando petición a la API de Gemini...');
+    console.log('🚀 Enviando petición a la API de Gemini...');
 
     const response = await fetch(
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
@@ -164,53 +321,93 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('Error de la API de Gemini:', JSON.stringify(errorData, null, 2));
+      console.error('❌ Error de la API de Gemini:', JSON.stringify(errorData, null, 2));
       throw new Error(`Error de la API de Gemini: ${errorData.error?.message || 'Error desconocido'}`);
     }
 
     const data = await response.json();
-    console.log('Respuesta recibida de Gemini');
+    console.log('✅ Respuesta recibida de Gemini');
 
     const responseText = data.candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim();
     const responseJson = JSON.parse(responseText);
 
-    console.log('Actualizando base de datos...');
+    console.log('💾 Actualizando base de datos...');
 
-    const { error: updateError } = await supabaseAdmin.from('submissions').update({
-      status: 'graded',
-      ai_feedback: responseJson,
-    }).eq('id', submissionId);
+    // Actualizar el estado de la submission
+    const { error: updateError } = await supabaseAdmin
+      .from('submissions')
+      .update({
+        status: 'graded',
+        ai_feedback: responseJson,
+      })
+      .eq('id', submissionId);
 
     if (updateError) {
-      console.error('Error al actualizar submission:', updateError);
+      console.error('❌ Error al actualizar submission:', updateError);
       throw new Error(`Error al actualizar submission: ${updateError.message}`);
     }
 
-    // PASO 3: AÑADIR organization_id A LA INSERCIÓN EN LA TABLA 'grades'
-    const { data: gradeData, error: gradeError } = await supabaseAdmin.from('grades').insert({
-      submission_id: submissionId,
-      student_id: submission.student_id,
-      exam_id: submission.exam_id,
-      organization_id: organizationId, // Campo añadido a la inserción
-      score_obtained: responseJson.informe_evaluacion.resumen_general.puntuacion_total_obtenida,
-      score_possible: responseJson.informe_evaluacion.resumen_general.puntuacion_total_posible,
-      ai_feedback: responseJson,
-    }).select().single();
+    // Insertar la calificación en la tabla grades
+    const { data: gradeData, error: gradeError } = await supabaseAdmin
+      .from('grades')
+      .insert({
+        submission_id: submissionId,
+        student_id: submission.student_id,
+        exam_id: submission.exam_id,
+        organization_id: organizationId,
+        score_obtained: responseJson.informe_evaluacion.resumen_general.puntuacion_total_obtenida,
+        score_possible: responseJson.informe_evaluacion.resumen_general.puntuacion_total_posible,
+        ai_feedback: responseJson,
+      })
+      .select()
+      .single();
 
     if (gradeError) {
-      console.error('Error al insertar grade:', gradeError);
+      console.error('❌ Error al insertar grade:', gradeError);
       throw new Error(`Error al insertar grade: ${gradeError.message}`);
     }
 
-    console.log('✅ Calificación completada! Grade ID:', gradeData?.id);
+    console.log('✅ Calificación guardada! Grade ID:', gradeData?.id);
+
+    // Registrar la transacción de crédito
+    console.log('📝 Registrando transacción de crédito...');
+
+    const { error: transactionError } = await supabaseAdmin
+      .from('credit_transactions')
+      .insert({
+        user_id: teacherId,
+        organization_id: organizationId,
+        credits_deducted: creditCost,
+        action_type: 'grade_submission',
+        entity_id: gradeData.id,
+        metadata: {
+          submission_id: submissionId,
+          exam_id: submission.exam_id,
+          exam_name: submission.exams.name,
+          pages: creditCost,
+          student_id: submission.student_id,
+        },
+      });
+
+    if (transactionError) {
+      console.error('⚠️ Error al registrar transacción:', transactionError);
+    } else {
+      console.log('✅ Transacción registrada exitosamente');
+    }
+
+    console.log('🎉 Proceso de calificación completado exitosamente');
 
     return NextResponse.json({
       ok: true,
       feedback: responseJson,
       gradeId: gradeData?.id,
+      credits_deducted: creditCost,
+      credits_remaining: orgData.credits_remaining - creditCost,
+      teacher_credits_used: teacherCreditsAfter,
+      teacher_credit_limit: profileData.monthly_credit_limit,
     });
   } catch (error: any) {
-    console.error('[GRADE-SUBMISSION-ERROR]', error);
+    console.error('💥 [GRADE-SUBMISSION-ERROR]', error);
     return NextResponse.json(
       {
         ok: false,
