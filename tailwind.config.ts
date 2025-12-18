@@ -8,10 +8,14 @@ const config: Config = {
   ],
   theme: {
     extend: {
-      backgroundImage: {
-        "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
-        "gradient-conic":
-          "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
+      colors: {
+        'primary': '#e0e5ec',
+        'primary-dark': '#a3b1c6',
+        'primary-light': '#ffffff',
+      },
+      boxShadow: {
+        'neu': '9px 9px 16px #a3b1c6, -9px -9px 16px #ffffff',
+        'neu-inset': 'inset 5px 5px 10px #a3b1c6, inset -5px -5px 10px #ffffff',
       },
     },
   },
