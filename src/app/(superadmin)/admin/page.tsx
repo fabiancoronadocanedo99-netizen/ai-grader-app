@@ -2,11 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { getAdminStats } from '@/actions/admin-stats' // <--- 1. Importamos la Server Action
+import { getAdminStats } from '@/actions/admin-stats'
 
 export default function SuperAdminDashboard() {
 
-  // Estados para los conteos
   const [orgCount, setOrgCount] = useState<number>(0)
   const [profileCount, setProfileCount] = useState<number>(0)
   const [gradeCount, setGradeCount] = useState<number>(0)
@@ -16,30 +15,22 @@ export default function SuperAdminDashboard() {
     const fetchStats = async () => {
       try {
         setLoading(true)
-
-        // 2. Llamamos a la Server Action en lugar de Supabase Client
         const stats = await getAdminStats()
-
-        // 3. Actualizamos los estados con los datos seguros del servidor
         setOrgCount(stats.organizations)
         setProfileCount(stats.users)
         setGradeCount(stats.evaluations)
-
       } catch (error) {
         console.error('Error al cargar estadísticas:', error)
       } finally {
         setLoading(false)
       }
     }
-
     fetchStats()
   }, [])
 
-  // Clases CSS reutilizables para el estilo Neumórfico
   const neuBase = "bg-[#e0e5ec] text-gray-700"
   const neuShadow = "shadow-[9px_9px_16px_rgb(163,177,198),-9px_-9px_16px_rgba(255,255,255,0.5)]"
   const neuInset = "shadow-[inset_6px_6px_10px_rgb(163,177,198),inset_-6px_-6px_10px_rgba(255,255,255,0.5)]"
-
   const neuCard = `${neuBase} ${neuShadow} rounded-2xl`
   const neuButton = `${neuBase} ${neuShadow} px-6 py-3 rounded-xl font-semibold hover:translate-y-[2px] active:shadow-[inset_6px_6px_10px_rgb(163,177,198),inset_-6px_-6px_10px_rgba(255,255,255,0.5)] transition-all duration-200 flex items-center gap-2`
 
@@ -63,8 +54,9 @@ export default function SuperAdminDashboard() {
           <p className="text-xs text-gray-500 mt-1">Panel de Control</p>
         </div>
 
+        {/* --- ¡AQUÍ ESTÁ LA CORRECCIÓN! --- */}
         <nav className="flex flex-col gap-4">
-          <Link href="/dashboard" className={`${neuButton} text-blue-600`}>
+          <Link href="/admin" className={`${neuButton} text-blue-600`}>
             <span>📊</span> Dashboard
           </Link>
           <Link href="/admin/organizations" className={neuButton}>
@@ -72,6 +64,10 @@ export default function SuperAdminDashboard() {
           </Link>
           <Link href="/admin/users" className={neuButton}>
             <span>👥</span> Usuarios
+          </Link>
+          {/* --- ¡NUEVO ENLACE AÑADIDO! --- */}
+          <Link href="/admin/bulk-users" className={neuButton}>
+            <span>📤</span> Creación Masiva
           </Link>
           <Link href="/admin/settings" className={neuButton}>
             <span>⚙️</span> Configuración

@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+feature/credit-system
     "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-visually-hidden": "^1.0.3",
     "@supabase/auth-helpers-nextjs": "^0.15.0",
@@ -23,9 +24,31 @@
     "react-dom": "^18",
     "react-dropzone": "^14.2.3",
     "recharts": "^2.12.7"
+    "@radix-ui/react-visually-hidden": "^1.2.3",
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
+    "@supabase/auth-helpers-shared": "^0.7.0",
+    "@supabase/ssr": "^0.7.0",
+    "@supabase/supabase-js": "^2.75.0",
+    "@types/pg": "^8.15.5",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "jspdf": "^3.0.3",
+    "lucide-react": "^0.561.0",
+    "next": "^16.0.10",
+ feature/credit-system
+    "pdf2json": "^4.0.0",
+    "papaparse": "^5.5.3", main
+    "pg": "^8.16.3",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-dropzone": "^14.3.8",
+    "recharts": "^3.3.0",
+    "tailwind-merge": "^3.4.0"
+ main
   },
   "devDependencies": {
     "@types/node": "^20",
+feature/credit-system
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.23",
@@ -33,6 +56,13 @@
     "eslint-config-next": "14.2.3",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
+    "@types/papaparse": "^5.5.1",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.2",
+    "tailwindcss": "^4",
+ main
     "typescript": "^5"
   }
 }
