@@ -11,6 +11,6 @@ const nextConfig = {
     // Es útil para desplegar, pero es recomendable arreglar los warnings.
     ignoreDuringBuilds: true,
   },
-}
+};
 
-export default nextConfig
+module.exports = nextConfig; // <-- La única línea que cambia
