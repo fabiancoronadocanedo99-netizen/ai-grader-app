@@ -1,8 +1,33 @@
 'use server'
 
-import { createAdminClient } from '@/lib/supabase/server'
+// Importamos createClient para la nueva función y createAdminClient para las existentes
+import { createClient } from '@/lib/supabase/server' // Para getCurrentUserProfile
+import { createAdminClient } from '@/lib/supabase/server' // Para las acciones administrativas
 import { revalidatePath } from 'next/cache'
-import Papa from 'papaparse' // Importamos la librería para CSV
+import Papa from 'papaparse'
+
+// --- NUEVA FUNCIÓN: Obtener Perfil del Usuario Actual ---
+export async function getCurrentUserProfile() {
+  const supabase = createClient() // Usamos el cliente normal (no admin)
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    // console.error("Error obteniendo usuario autenticado:", authError?.message); // Opcional: para depuración
+    return null
+  }
+
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('*') // <-- ¡Pedimos TODAS las columnas!
+    .eq('id', user.id)
+    .single()
+
+  if (error) {
+    console.error("Error fetching profile for user:", user.id, error)
+    return null
+  }
+  return profile
+}
 
 // --- Tipos para el CSV ---
 type CSVUser = {
