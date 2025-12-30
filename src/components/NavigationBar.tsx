@@ -1,16 +1,14 @@
 'use client'
 
 import { useRouter, usePathname } from 'next/navigation'
-// CORRECCIÓN: Importamos directamente de la librería que instalaste
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+// CORRECCIÓN AQUÍ: Ruta ajustada
+import { createClient } from '@/lib/supabaseClient' 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { LayoutDashboard, ChevronLeft, ChevronRight } from 'lucide-react'
 
 export default function NavigationBar() {
-  // CORRECCIÓN: Usamos el hook de la librería
-  const supabase = createClientComponentClient();
-
+  const supabase = createClient();
   const router = useRouter()
   const pathname = usePathname()
 
@@ -73,7 +71,7 @@ export default function NavigationBar() {
         <div className="flex items-center justify-between h-16">
 
           {/* Navegación Back/Forward */}
-          <div className="flex items-center space-x-3 w-24"> 
+          <div className="flex items-center space-x-3 w-24"> {/* Fijamos ancho para equilibrar */}
             <button
               onClick={handleBack}
               className="neu-button p-2 text-gray-700 hover:text-blue-600 transition-colors active:scale-95"
@@ -110,6 +108,7 @@ export default function NavigationBar() {
                 </button>
               </Link>
             ) : (
+              // Espacio vacío para mantener el título centrado si no es admin
               <div className="w-24"></div>
             )}
           </div>

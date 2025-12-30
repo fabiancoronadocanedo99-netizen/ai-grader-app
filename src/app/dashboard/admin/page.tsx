@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client'; // Cliente para actualizaciones
+// CORRECCIÓN AQUÍ: Ruta ajustada
+import { createClient } from '@/lib/supabaseClient'; 
 import Link from 'next/link';
 import { 
   Users, 
@@ -35,7 +36,7 @@ type Organization = {
 type UserProfile = {
   id: string;
   full_name: string;
-  email: string; // Supabase a veces no devuelve email en profile, depende de tu trigger. Asumiremos que está o lo traemos de auth.
+  email: string;
   role: string;
   monthly_credit_limit: number;
   monthly_credits_used: number;
