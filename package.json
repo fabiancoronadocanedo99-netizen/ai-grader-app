@@ -14,7 +14,7 @@
     "@radix-ui/react-visually-hidden": "^1.0.3",
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/ssr": "^0.3.0",
-    "@supabase/supabase-js": "^2.43.4",
+    "@supabase/supabase-js": "^2.89.0",
     "cmdk": "^1.0.0",
     "jspdf": "^2.5.1",
     "lucide-react": "^0.562.0",

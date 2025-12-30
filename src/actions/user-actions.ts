@@ -39,10 +39,7 @@ export async function createUser(data: {
   })
 
   if (authError) {
-    // --- ¡AÑADE ESTE LOG! ---
     console.error(`--- [CREATE_USER] Error de Supabase Auth para ${data.email}:`, authError)
-    // --- FIN DEL LOG ---
-    console.error('Error creando usuario en Auth:', authError)
     return { success: false, error: authError.message }
   }
 
@@ -148,7 +145,7 @@ export async function deleteUser(userId: string) {
   }
 }
 
-// --- NUEVA FUNCIÓN: Creación Masiva CON LOGS DE DEPURACIÓN ---
+// --- CREACIÓN MASIVA (CSV) ---
 
 export async function createUsersFromCSV(csvContent: string): Promise<BulkImportResult> {
   console.log('--- [BULK] Iniciando proceso de CSV ---')
@@ -158,33 +155,21 @@ export async function createUsersFromCSV(csvContent: string): Promise<BulkImport
   const supabase = createAdminClient()
 
   try {
-    // 1. Cargar todas las organizaciones
     const { data: allOrgs } = await supabase.from('organizations').select('id, name')
     if (!allOrgs) throw new Error("No se pudieron cargar las organizaciones")
 
     console.log(`--- [BULK] Organizaciones cargadas: ${allOrgs.length}`)
 
-    // 2. Parsear el CSV
     const users = Papa.parse(csvContent, { header: true, skipEmptyLines: true }).data as any[]
     console.log(`--- [BULK] CSV parseado. ${users.length} usuarios encontrados.`)
 
-    // --- ¡CÓDIGO ESPÍA ADICIONAL! ---
-    console.log("--- [BULK] ESTRUCTURA DEL PRIMER USUARIO:", users[0])
-    // --- FIN DEL CÓDIGO ESPÍA ---
-
-    // 3. Procesar cada usuario
     for (const user of users) {
       try {
-        console.log(`--- [BULK] Procesando usuario: ${user.email}`)
-
-        // Buscar organización por nombre exacto
         const org = allOrgs.find(o => o.name === user.organization_name)
         if (!org) {
           throw new Error(`Organización '${user.organization_name}' no encontrada.`)
         }
-        console.log(`--- [BULK] Organización encontrada: ${org.name} (${org.id})`)
 
-        // Crear el usuario
         const result = await createUser({
           email: user.email,
           password: user.password,
@@ -194,20 +179,15 @@ export async function createUsersFromCSV(csvContent: string): Promise<BulkImport
         })
 
         if (result.success) {
-          console.log(`--- [BULK] ÉXITO creando usuario: ${user.email}`)
           createdCount++
         } else {
           throw new Error(result.error)
         }
       } catch (error) {
-        console.error(`--- [BULK] FALLO procesando usuario ${user.email}:`, (error as Error).message)
         errors.push(`Fila para ${user.email}: ${(error as Error).message}`)
         failedCount++
       }
     }
-
-    console.log('--- [BULK] Proceso de CSV finalizado ---')
-    console.log(`--- [BULK] Creados: ${createdCount}, Fallidos: ${failedCount}`)
 
     revalidatePath('/admin/users')
     return { success: true, createdCount, failedCount, errors }
@@ -220,5 +200,70 @@ export async function createUsersFromCSV(csvContent: string): Promise<BulkImport
       failedCount: 0, 
       errors: [(error as Error).message] 
     }
+  }
+}
+
+// --- NUEVA FUNCIÓN: Actualizar Límite de Crédito (Seguro) ---
+export async function updateUserCreditLimit(targetUserId: string, newLimit: number) {
+  const supabase = createAdminClient()
+
+  try {
+    // 1. Obtener al usuario que llama a la función (Admin actual)
+    const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !currentUser) {
+      throw new Error('No estás autenticado.')
+    }
+
+    // 2. Verificar que el usuario actual es ADMIN y obtener su Organization ID
+    const { data: adminProfile, error: adminProfileError } = await supabase
+      .from('profiles')
+      .select('role, organization_id')
+      .eq('id', currentUser.id)
+      .single()
+
+    if (adminProfileError || !adminProfile) {
+      throw new Error('No se pudo obtener tu perfil de administrador.')
+    }
+
+    if (adminProfile.role !== 'admin') {
+      throw new Error('Permisos insuficientes. Solo los administradores pueden realizar esta acción.')
+    }
+
+    // 3. Verificar al usuario OBJETIVO (Target)
+    const { data: targetProfile, error: targetProfileError } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', targetUserId)
+      .single()
+
+    if (targetProfileError || !targetProfile) {
+      throw new Error('Usuario objetivo no encontrado.')
+    }
+
+    // 4. Verificación de Seguridad: ¿Pertenecen a la misma organización?
+    // Esto evita que un admin modifique usuarios de otra escuela.
+    if (adminProfile.organization_id !== targetProfile.organization_id) {
+      throw new Error('Acceso denegado: No puedes modificar usuarios que no pertenecen a tu organización.')
+    }
+
+    // 5. Ejecutar la actualización
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ monthly_credit_limit: newLimit })
+      .eq('id', targetUserId)
+
+    if (updateError) {
+      throw updateError
+    }
+
+    // 6. Revalidar la página del dashboard
+    revalidatePath('/dashboard/admin')
+
+    return { success: true }
+
+  } catch (error) {
+    console.error('Error en updateUserCreditLimit:', error)
+    return { success: false, error: (error as Error).message }
   }
 }
