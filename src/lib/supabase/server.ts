@@ -1,14 +1,27 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-// 1. Cliente para el USUARIO ACTUAL (Usa cookies de sesión)
-// Este es el que necesitamos para que getCurrentUserProfile funcione.
+// Helper para obtener variables de entorno de forma segura
+const getEnvVar = (key: string, backupKey?: string) => {
+  const value = process.env[key] || (backupKey ? process.env[backupKey] : undefined);
+  if (!value) {
+    // Si estamos en build time, no lanzamos error, pero en runtime sí es crítico
+    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'production') {
+      console.warn(`[Supabase Config] Advertencia: Variable ${key} no encontrada.`);
+    }
+  }
+  return value || '';
+}
+
 export function createClient() {
   const cookieStore = cookies()
 
+  const supabaseUrl = getEnvVar('NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_URL');
+  const supabaseAnonKey = getEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY');
+
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         get(name: string) {
@@ -18,14 +31,14 @@ export function createClient() {
           try {
             cookieStore.set({ name, value, ...options })
           } catch (error) {
-            // Se ignora si se llama desde un Server Component (es normal)
+            // Ignorar en Server Components
           }
         },
         remove(name: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value: '', ...options })
           } catch (error) {
-            // Se ignora si se llama desde un Server Component
+            // Ignorar en Server Components
           }
         },
       },
@@ -33,25 +46,22 @@ export function createClient() {
   )
 }
 
-// 2. Cliente ADMIN (Usa Service Role Key)
-// Este lo mantenemos porque lo usan tus otras funciones de administración.
 export function createAdminClient() {
   const cookieStore = cookies()
 
+  const supabaseUrl = getEnvVar('NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_URL');
+  const supabaseServiceKey = getEnvVar('SUPABASE_SERVICE_ROLE_KEY');
+
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!, 
+    supabaseUrl,
+    supabaseServiceKey, 
     {
       cookies: {
         get(name: string) {
           return cookieStore.get(name)?.value
         },
-        set(name: string, value: string, options: CookieOptions) {
-          // No suele ser necesario setear cookies con el admin
-        },
-        remove(name: string, options: CookieOptions) {
-          // No suele ser necesario borrar cookies con el admin
-        },
+        set(name: string, value: string, options: CookieOptions) {},
+        remove(name: string, options: CookieOptions) {},
       },
     }
   )
