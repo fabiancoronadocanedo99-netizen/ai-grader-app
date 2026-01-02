@@ -8,45 +8,26 @@ export async function GET(req: NextRequest) {
   try {
     const cookieStore = cookies();
 
-    // --- 1. PREPARACIÓN DE VARIABLES DE ENTORNO ---
-    // Buscamos la URL y la Key en cualquiera de sus variantes para evitar errores de nombres en Vercel
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    // Logs de depuración para ver qué está leyendo el servidor (sin mostrar claves completas)
-    console.log("--- DEBUG ENV VARS ---");
-    console.log("URL Defined:", !!supabaseUrl);
-    console.log("Anon Key Defined:", !!supabaseAnonKey);
-    console.log("Service Key Defined:", !!supabaseServiceKey);
-    // Verificamos que la Service Key no sea igual a la Anon Key (error común)
-    if (supabaseServiceKey === supabaseAnonKey) {
-      console.error("CRITICAL: La Service Role Key es idéntica a la Anon Key. Revisa tus variables en Vercel.");
-    }
-
-    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
-      return NextResponse.json({ error: 'Error de configuración del servidor: Faltan variables de entorno.' }, { status: 500 });
-    }
-
-    // --- 2. CLIENTES SUPABASE ---
-
-    // Cliente AUTH (Identidad del usuario)
+    // 1. Cliente para AUTENTICACIÓN (Usa cookies y Anon Key)
+    // Este verifica QUIÉN es el usuario legítimamente.
     const supabaseAuth = createServerClient(
-      supabaseUrl,
-      supabaseAnonKey,
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          get(name) { return cookieStore.get(name)?.value },
-          set(name, value, options) {}, // Auth solo lee en GET
-          remove(name, options) {},
+          get(name: string) { return cookieStore.get(name)?.value },
+          set(name, value, options) { try { cookieStore.set({ name, value, ...options }) } catch (e) {} },
+          remove(name, options) { try { cookieStore.set({ name, value: '', ...options }) } catch (e) {} },
         },
       }
     );
 
-    // Cliente DATA (Modo Admin / Service Role)
+    // 2. Cliente para DATOS (Usa Service Role Key)
+    // Este se salta las políticas RLS para asegurar que obtenemos los datos
+    // una vez que sabemos que el usuario es Admin.
     const supabaseData = createServerClient(
-      supabaseUrl,
-      supabaseServiceKey,
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!, // <--- CLAVE MAESTRA
       {
         cookies: {
           get(name) { return cookieStore.get(name)?.value },
@@ -56,15 +37,15 @@ export async function GET(req: NextRequest) {
       }
     );
 
-    // --- 3. LÓGICA DE NEGOCIO ---
+    // --- VERIFICACIÓN DE IDENTIDAD ---
 
-    // A. Verificar Usuario
     const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+
     if (authError || !user) {
       return NextResponse.json({ error: 'No autorizado - Sesión no encontrada' }, { status: 401 });
     }
 
-    // B. Obtener Perfil (Usando MODO ADMIN para asegurar lectura)
+    // Obtenemos el perfil usando el cliente Admin para evitar bloqueos RLS en la tabla profiles
     const { data: profile, error: profileError } = await supabaseData
       .from('profiles')
       .select('role, organization_id')
@@ -72,11 +53,10 @@ export async function GET(req: NextRequest) {
       .single();
 
     if (profileError || !profile) {
-      console.error("Error cargando perfil:", profileError);
+      console.error("Error perfil:", profileError);
       return NextResponse.json({ error: 'No se pudo cargar el perfil del usuario' }, { status: 500 });
     }
 
-    // C. Validaciones
     if (profile.role !== 'admin') {
       return NextResponse.json({ error: 'Acceso denegado: No eres admin' }, { status: 403 });
     }
@@ -87,32 +67,24 @@ export async function GET(req: NextRequest) {
 
     const orgId = profile.organization_id;
 
-    // D. Obtener Organización (Usando MODO ADMIN)
-    console.log(`--- DEBUG: Buscando Org ID: ${orgId} ---`);
+    // --- OBTENCIÓN DE DATOS (Con Cliente Admin) ---
 
-    const orgRes = await supabaseData
-      .from('organizations')
-      .select('*')
-      .eq('id', orgId)
-      .maybeSingle(); // maybeSingle no explota si es null
-
-    if (orgRes.error) {
-      console.error("DB Error Org:", orgRes.error);
-      throw new Error("Error consultando base de datos: " + orgRes.error.message);
-    }
-
-    if (!orgRes.data) {
-      console.error(`CRITICAL: Org ID ${orgId} no encontrada en DB (URL: ${supabaseUrl})`);
-      return NextResponse.json({ 
-        error: `La organización (ID: ${orgId}) asignada a tu usuario no existe en la base de datos conectada.` 
-      }, { status: 404 });
-    }
-
-    // E. Obtener resto de datos
-    const [usersRes, classesRes] = await Promise.all([
+    // Usamos maybeSingle() en lugar de single() para manejar mejor si no existe
+    const [orgRes, usersRes, classesRes] = await Promise.all([
+      supabaseData.from('organizations').select('*').eq('id', orgId).maybeSingle(),
       supabaseData.from('profiles').select('*').eq('organization_id', orgId),
       supabaseData.from('classes').select('*').eq('organization_id', orgId)
     ]);
+
+    if (orgRes.error) throw new Error(`Org Error: ${orgRes.error.message}`);
+
+    // Si orgRes.data es null, significa que el ID no existe en la BD
+    if (!orgRes.data) {
+       throw new Error(`La organización con ID ${orgId} no existe en la base de datos.`);
+    }
+
+    if (usersRes.error) throw new Error(`Users Error: ${usersRes.error.message}`);
+    if (classesRes.error) throw new Error(`Classes Error: ${classesRes.error.message}`);
 
     return NextResponse.json({
       organization: orgRes.data,
