@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+// Usamos el cliente de SSR solo para leer la cookie del usuario
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+// Usamos el cliente RAW de Supabase para los datos (Garantiza Bypass RLS)
+import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
@@ -9,25 +12,17 @@ export async function GET(req: NextRequest) {
     const cookieStore = cookies();
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    // --- CLIENTE DATA (MODO DIOS) ---
-    const supabaseData = createServerClient(
-      supabaseUrl!,
-      supabaseServiceKey!,
-      {
-        cookies: {
-          get(name) { return cookieStore.get(name)?.value },
-          set(name, value, options) {},
-          remove(name, options) {},
-        },
-      }
-    );
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return NextResponse.json({ error: 'Faltan variables de entorno (URL o Service Key)' }, { status: 500 });
+    }
 
-    // --- CLIENTE AUTH ---
+    // 1. CLIENTE AUTH (Identifica al usuario que hace la petición)
     const supabaseAuth = createServerClient(
-      supabaseUrl!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      supabaseUrl,
+      supabaseAnonKey!,
       {
         cookies: {
           get(name) { return cookieStore.get(name)?.value },
@@ -37,56 +32,77 @@ export async function GET(req: NextRequest) {
       }
     );
 
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'No Session' }, { status: 401 });
+    // 2. CLIENTE DATA (MODO DIOS REAL)
+    // Usamos la librería base 'supabase-js' que respeta estrictamente la Service Key
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
 
-    const { data: profile } = await supabaseData
+    // --- A. Verificar quién llama ---
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'No autorizado - Sesión no encontrada' }, { status: 401 });
+    }
+
+    // --- B. Obtener Perfil (Usando Admin) ---
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('role, organization_id')
       .eq('id', user.id)
       .single();
 
-    if (!profile) return NextResponse.json({ error: 'No Profile' }, { status: 500 });
+    if (profileError || !profile) {
+      console.error("Error perfil:", profileError);
+      return NextResponse.json({ error: 'No se pudo cargar el perfil' }, { status: 500 });
+    }
 
-    // --- LA PRUEBA DE LA VERDAD ---
+    if (profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Acceso denegado: No eres admin' }, { status: 403 });
+    }
+
     const orgId = profile.organization_id;
 
-    console.log(`--- DEBUG: Buscando Org ID: "${orgId}" ---`); // Las comillas revelarán espacios
-
-    const orgRes = await supabaseData
+    // --- C. Obtener Organización (Usando Admin) ---
+    const { data: orgData, error: orgError } = await supabaseAdmin
       .from('organizations')
       .select('*')
       .eq('id', orgId)
       .maybeSingle();
 
-    // SI NO LA ENCUENTRA, LISTAMOS QUÉ HAY EN LA BD
-    if (!orgRes.data) {
-      // Consultamos las primeras 5 organizaciones que SÍ existen
-      const allOrgs = await supabaseData.from('organizations').select('id, name').limit(5);
+    if (orgError) {
+      throw new Error("Error DB Org: " + orgError.message);
+    }
 
-      console.error("--- DEBUG CRÍTICO: CONTENIDO REAL DE LA BD ---");
-      console.table(allOrgs.data);
-
+    // Si sigue saliendo null aquí, es un problema de ID incorrecto en la BD 100%
+    if (!orgData) {
+      // Intento de debug final: listar todo lo que ve el admin
+      const { data: allOrgs } = await supabaseAdmin.from('organizations').select('id, name');
       return NextResponse.json({ 
-        error: `ERROR DE CONEXIÓN/DATOS. Buscábamos ID: ${orgId}. 
-        La Base de Datos conectada (${supabaseUrl}) contiene estas organizaciones: 
-        ${JSON.stringify(allOrgs.data)}` 
+        error: `Organización ${orgId} no encontrada. El Admin ve estas organizaciones: ${JSON.stringify(allOrgs)}` 
       }, { status: 404 });
     }
 
-    // Si llegamos aquí, todo está bien
+    // --- D. Cargar resto de datos ---
     const [usersRes, classesRes] = await Promise.all([
-      supabaseData.from('profiles').select('*').eq('organization_id', orgId),
-      supabaseData.from('classes').select('*').eq('organization_id', orgId)
+      supabaseAdmin.from('profiles').select('*').eq('organization_id', orgId),
+      supabaseAdmin.from('classes').select('*').eq('organization_id', orgId)
     ]);
 
     return NextResponse.json({
-      organization: orgRes.data,
+      organization: orgData,
       users: usersRes.data || [],
       classes: classesRes.data || [],
     });
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('API ERROR:', error);
+    return NextResponse.json(
+      { error: error.message || 'Error interno' },
+      { status: 500 }
+    );
   }
 }
