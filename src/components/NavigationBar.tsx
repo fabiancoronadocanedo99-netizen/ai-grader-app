@@ -1,25 +1,42 @@
-// src/components/NavigationBar.tsx
+'use client'
+
+import { useEffect, useState } from 'react'
+// Importamos la Server Action
 import { getCurrentUserProfile } from '@/actions/user-actions'
+// Importamos el cliente visual
 import NavigationClient from './NavigationClient'
 
-export default async function NavigationBar() {
-  let userRole = undefined;
-  let userEmail = undefined;
+export default function NavigationBar() {
+  // Estado local para los datos
+  const [userRole, setUserRole] = useState<string | undefined>(undefined);
+  const [userEmail, setUserEmail] = useState<string | undefined>(undefined);
 
-  try {
-    // Intentamos obtener el perfil
-    const profile = await getCurrentUserProfile();
+  useEffect(() => {
+    // Llamamos a la Server Action desde el cliente
+    const loadProfile = async () => {
+      try {
+        console.log("NAVBAR: Solicitando perfil al servidor...");
+        const profile = await getCurrentUserProfile();
 
-    if (profile) {
-      userRole = profile.role;
-      userEmail = profile.email; // Asegúrate de que tu tabla profiles tenga columna email, si no, usa auth
-    }
-  } catch (error) {
-    // Si falla, lo registramos en el servidor pero NO rompemos la UI
-    console.error("CRITICAL NAVBAR ERROR:", error);
-  }
+        if (profile) {
+          console.log("NAVBAR: Perfil recibido:", profile);
+          setUserRole(profile.role);
+          // Si tu tabla profiles no tiene email, esto será undefined, pero no romperá nada
+          setUserEmail(profile.email); 
+        } else {
+          console.warn("NAVBAR: Perfil es null");
+        }
+      } catch (error) {
+        console.error("NAVBAR: Error al cargar perfil", error);
+      }
+    };
 
-  // Renderizamos el cliente pase lo que pase
+    loadProfile();
+  }, []);
+
+  // Renderizamos el cliente. 
+  // Al ser Client Component, esto se dibuja INMEDIATAMENTE, 
+  // por lo que las flechas y el cuadro negro deberían aparecer sí o sí.
   return (
     <NavigationClient 
       userRole={userRole} 
