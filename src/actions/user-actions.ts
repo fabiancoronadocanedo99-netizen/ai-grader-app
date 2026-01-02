@@ -21,27 +21,17 @@ type BulkImportResult = {
   errors: string[]
 }
 
-// --- NUEVA FUNCIÓN: Obtener Perfil del Usuario Actual (ROBUSTA) ---
+// --- OBTENER PERFIL (LIMPIO) ---
 export async function getCurrentUserProfile() {
-  // 1. Forzamos modo dinámico leyendo cookies (sin asignar variable para evitar warnings)
-  cookies();
-
-  // 2. Creamos el cliente con contexto
+  const cookieStore = cookies();
   const supabase = createClient()
 
-  console.log("--- [PROFILE_ACTION] Buscando sesión de usuario... ---")
-
-  // 3. Obtenemos el usuario
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    console.log("--- [PROFILE_ACTION] No hay usuario activo o error auth:", authError?.message)
     return null
   }
 
-  console.log(`--- [PROFILE_ACTION] Usuario encontrado: ${user.id}`)
-
-  // 4. Obtenemos el perfil completo
   const { data: profile, error } = await supabase
     .from('profiles')
     .select('*')
@@ -49,11 +39,9 @@ export async function getCurrentUserProfile() {
     .single()
 
   if (error) {
-    console.error("--- [PROFILE_ACTION] Error buscando perfil en DB:", error.message)
     return null
   }
 
-  console.log(`--- [PROFILE_ACTION] Perfil cargado. Rol: ${profile.role}`)
   return profile
 }
 
@@ -75,7 +63,6 @@ export async function createUser(data: {
   })
 
   if (authError) {
-    console.error(`--- [CREATE_USER] Error de Supabase Auth para ${data.email}:`, authError)
     return { success: false, error: authError.message }
   }
 
@@ -94,7 +81,6 @@ export async function createUser(data: {
     })
 
   if (profileError) {
-    console.error('Error creando el perfil en la base de datos:', profileError)
     await supabase.auth.admin.deleteUser(authData.user.id)
     return { success: false, error: 'Error de base de datos creando el perfil: ' + profileError.message }
   }
@@ -112,7 +98,6 @@ export async function getUsers() {
     .order('created_at', { ascending: false })
 
   if (error) {
-    console.error('Error obteniendo usuarios:', error)
     return []
   }
 
@@ -150,7 +135,6 @@ export async function updateUser(
     revalidatePath('/admin/users')
     return { success: true }
   } catch (error) {
-    console.error('Error en updateUser:', error)
     return { success: false, error: (error as Error).message }
   }
 }
@@ -174,7 +158,6 @@ export async function deleteUser(userId: string) {
     revalidatePath('/admin/users')
     return { success: true }
   } catch (error) {
-    console.error('Error en deleteUser:', error)
     return { success: false, error: (error as Error).message }
   }
 }
@@ -182,7 +165,6 @@ export async function deleteUser(userId: string) {
 // --- CREACIÓN MASIVA (CSV) ---
 
 export async function createUsersFromCSV(csvContent: string): Promise<BulkImportResult> {
-  console.log('--- [BULK] Iniciando proceso de CSV ---')
   let createdCount = 0
   let failedCount = 0
   const errors: string[] = []
@@ -192,13 +174,8 @@ export async function createUsersFromCSV(csvContent: string): Promise<BulkImport
     const { data: allOrgs } = await supabase.from('organizations').select('id, name')
     if (!allOrgs) throw new Error("No se pudieron cargar las organizaciones")
 
-    console.log(`--- [BULK] Organizaciones cargadas: ${allOrgs.length}`)
-
-    // Usamos el tipo CSVUser para evitar advertencias de variables no usadas
     const parseResult = Papa.parse<CSVUser>(csvContent, { header: true, skipEmptyLines: true });
     const users = parseResult.data;
-
-    console.log(`--- [BULK] CSV parseado. ${users.length} usuarios encontrados.`)
 
     for (const user of users) {
       try {
@@ -230,7 +207,6 @@ export async function createUsersFromCSV(csvContent: string): Promise<BulkImport
     return { success: true, createdCount, failedCount, errors }
 
   } catch (error) {
-    console.error('--- [BULK] ERROR MAYOR en createUsersFromCSV:', error)
     return { 
       success: false, 
       createdCount: 0, 
@@ -240,11 +216,9 @@ export async function createUsersFromCSV(csvContent: string): Promise<BulkImport
   }
 }
 
-// --- NUEVA FUNCIÓN: Actualizar Límite de Crédito (Seguro) ---
+// --- ACTUALIZAR LÍMITE (Seguro) ---
 export async function updateUserCreditLimit(targetUserId: string, newLimit: number) {
   try {
-    // 1. Obtener al usuario que llama a la función (Admin actual)
-    // Usamos el cliente normal para verificar la sesión
     const supabaseAuth = createClient();
     const { data: { user: currentUser }, error: authError } = await supabaseAuth.auth.getUser()
 
@@ -252,10 +226,8 @@ export async function updateUserCreditLimit(targetUserId: string, newLimit: numb
       throw new Error('No estás autenticado.')
     }
 
-    // 2. Usamos Admin Client para leer/escribir datos sin restricciones de RLS
     const supabaseAdmin = createAdminClient();
 
-    // 3. Verificar que el usuario actual es ADMIN y obtener su Organization ID
     const { data: adminProfile, error: adminProfileError } = await supabaseAdmin
       .from('profiles')
       .select('role, organization_id')
@@ -267,10 +239,9 @@ export async function updateUserCreditLimit(targetUserId: string, newLimit: numb
     }
 
     if (adminProfile.role !== 'admin') {
-      throw new Error('Permisos insuficientes. Solo los administradores pueden realizar esta acción.')
+      throw new Error('Permisos insuficientes.')
     }
 
-    // 4. Verificar al usuario OBJETIVO (Target)
     const { data: targetProfile, error: targetProfileError } = await supabaseAdmin
       .from('profiles')
       .select('organization_id')
@@ -281,12 +252,10 @@ export async function updateUserCreditLimit(targetUserId: string, newLimit: numb
       throw new Error('Usuario objetivo no encontrado.')
     }
 
-    // 5. Verificación de Seguridad: ¿Pertenecen a la misma organización?
     if (adminProfile.organization_id !== targetProfile.organization_id) {
-      throw new Error('Acceso denegado: No puedes modificar usuarios que no pertenecen a tu organización.')
+      throw new Error('Acceso denegado.')
     }
 
-    // 6. Ejecutar la actualización
     const { error: updateError } = await supabaseAdmin
       .from('profiles')
       .update({ monthly_credit_limit: newLimit })
@@ -297,11 +266,9 @@ export async function updateUserCreditLimit(targetUserId: string, newLimit: numb
     }
 
     revalidatePath('/dashboard/admin')
-
     return { success: true }
 
   } catch (error) {
-    console.error('Error en updateUserCreditLimit:', error)
     return { success: false, error: (error as Error).message }
   }
 }
