@@ -34,8 +34,8 @@ export default function ClassDetailPage() {
   const [csvFile, setCSVFile] = useState<File | null>(null)
   const [isProcessingCSV, setIsProcessingCSV] = useState(false)
 
-  // --- ESTADOS NUEVOS PARA EDITAR/ELIMINAR ---
-  const [activeMenuId, setActiveMenuId] = useState<string | null>(null) // Menú desplegable activo
+  // --- ESTADOS PARA EDITAR/ELIMINAR ---
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
 
   // Eliminar
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
@@ -96,7 +96,6 @@ export default function ClassDetailPage() {
     setActiveMenuId(activeMenuId === id ? null : id);
   };
 
-  // Manejar Eliminar
   const handleDeleteClick = (e: React.MouseEvent, evaluation: Evaluation) => {
     e.preventDefault();
     e.stopPropagation();
@@ -107,10 +106,7 @@ export default function ClassDetailPage() {
 
   const confirmDelete = async () => {
     if (!evalToDelete) return;
-
-    // Nota: Usamos la tabla 'exams' porque ahí se guardan tanto exámenes como tareas (campo type)
     const { error } = await supabase.from('exams').delete().eq('id', evalToDelete.id);
-
     if (error) {
       console.error('Error al eliminar:', error);
       alert('No se pudo eliminar la evaluación.');
@@ -121,7 +117,6 @@ export default function ClassDetailPage() {
     }
   };
 
-  // Manejar Editar
   const handleEditClick = (e: React.MouseEvent, evaluation: Evaluation) => {
     e.preventDefault();
     e.stopPropagation();
@@ -137,12 +132,10 @@ export default function ClassDetailPage() {
       alert('El nombre no puede estar vacío');
       return;
     }
-
     const { error } = await supabase
       .from('exams')
       .update({ name: editName })
       .eq('id', evalToEdit.id);
-
     if (error) {
       console.error('Error al editar:', error);
       alert('No se pudo actualizar la evaluación.');
@@ -154,52 +147,39 @@ export default function ClassDetailPage() {
     }
   };
 
-  // --- CREACIÓN (MODIFICADA PARA INCLUIR organization_id) ---
   const handleCreateEvaluation = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newEvaluationName.trim() || !classId) return
-
     try {
-      // Obtener el usuario actual
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError || !user) {
         throw new Error("Usuario no autenticado")
       }
-
-      // PASO CLAVE: Obtener el organization_id de la clase actual
       const { data: classData, error: classError } = await supabase
         .from('classes')
         .select('organization_id')
         .eq('id', classId)
         .single()
-
       if (classError || !classData) {
         throw new Error("No se pudo encontrar la clase para obtener la organización.")
       }
-
-      // PASO CLAVE: Insertar con organization_id incluido
       const { error } = await supabase.from('exams').insert([{ 
         name: newEvaluationName, 
         class_id: classId, 
         type: newEvaluationType,
         user_id: user.id,
-        organization_id: classData.organization_id // ← LA PIEZA QUE FALTABA
+        organization_id: classData.organization_id
       }])
-
       if (error) throw error
-
-      // Limpiar y cerrar
       setNewEvaluationName('')
       setNewEvaluationType('exam')
       setIsCreateModalOpen(false)
       await fetchEvaluations()
-
     } catch (error) {
       alert(`Error al crear evaluación: ${(error as Error).message}`)
     }
   }
 
-  // --- CSV ---
   const generateCSVTemplate = () => {
     const csvContent = 'full_name,student_email,tutor_email\n'
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -219,7 +199,6 @@ export default function ClassDetailPage() {
         throw new Error('Por favor, cierra sesión y vuelve a iniciar sesión');
       }
       const session = data.session;
-
       const response = await fetch('/api/process-csv', {
         method: 'POST',
         headers: { 
@@ -231,17 +210,14 @@ export default function ClassDetailPage() {
           classId: classId 
         })
       });
-
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result.error || 'Error al procesar CSV');
       }
-
       alert(`✅ CSV procesado: ${result.studentsAdded} alumnos añadidos.`);
       await fetchStudents();
       setIsCSVModalOpen(false);
       setCSVFile(null);
-
     } catch (error) {
       console.error('Error al procesar CSV:', error)
       alert(`❌ Error al procesar CSV: ${(error as Error).message}`)
@@ -280,7 +256,6 @@ export default function ClassDetailPage() {
     )
   }
 
-  // Componente reutilizable para el menú en las tarjetas
   const EvaluationCardMenu = ({ item }: { item: Evaluation }) => (
     <>
       <div className="absolute top-4 right-4 z-10">
@@ -292,7 +267,6 @@ export default function ClassDetailPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
           </svg>
         </button>
-
         {activeMenuId === item.id && (
           <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 border border-gray-100 overflow-hidden">
             <button
@@ -314,81 +288,92 @@ export default function ClassDetailPage() {
   );
 
   return (
-    <div className="neu-container min-h-screen p-8">
-      {/* --- BOTÓN VOLVER (NUEVO) --- */}
-      <div className="mb-6">
+    <div className="neu-container min-h-screen p-4 sm:p-8">
+      <div className="mb-4 sm:mb-6">
         <Link 
           href="/dashboard"
-          className="neu-button inline-flex items-center text-gray-700 font-medium py-2 px-4 text-sm"
+          className="neu-button inline-flex items-center text-gray-700 font-medium py-2 px-3 sm:px-4 text-sm"
         >
           ← Volver al Dashboard
         </Link>
       </div>
 
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-700 mb-2">{classDetails.name}</h1>
-        {classDetails.subject && <p className="text-lg text-gray-600">{classDetails.subject}</p>}
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-700 mb-2 break-words">
+          {classDetails.name}
+        </h1>
+        {classDetails.subject && (
+          <p className="text-base sm:text-lg text-gray-600">{classDetails.subject}</p>
+        )}
       </div>
 
-      <div className="neu-card p-6">
-        <div className="flex border-b border-gray-200 mb-6">
-          <button 
-            onClick={() => setActiveTab('evaluations')} 
-            className={`px-6 py-3 font-semibold ${
-              activeTab === 'evaluations' 
-                ? 'border-b-2 border-blue-500 text-blue-600' 
-                : 'text-gray-500'
-            }`}
-          >
-            Evaluaciones
-          </button>
-          <button 
-            onClick={() => setActiveTab('students')} 
-            className={`px-6 py-3 font-semibold ${
-              activeTab === 'students' 
-                ? 'border-b-2 border-blue-500 text-blue-600' 
-                : 'text-gray-500'
-            }`}
-          >
-            Alumnos
-          </button>
-          <Link 
-            href={`/dashboard/class/${classId}/analytics`} 
-            className="px-6 py-3 font-semibold text-gray-500 hover:text-blue-600"
-          >
-            📊 Analíticas
-          </Link>
+      <div className="neu-card p-4 sm:p-6">
+        {/* PESTAÑAS RESPONSIVE CON SCROLL HORIZONTAL */}
+        <div className="w-full overflow-x-auto border-b border-gray-200 mb-6">
+          <div className="flex -mb-px whitespace-nowrap min-w-max">
+            <button 
+              onClick={() => setActiveTab('evaluations')} 
+              className={`px-4 sm:px-6 py-3 font-semibold text-sm sm:text-base ${
+                activeTab === 'evaluations' 
+                  ? 'border-b-2 border-blue-500 text-blue-600' 
+                  : 'text-gray-500'
+              }`}
+            >
+              Evaluaciones
+            </button>
+            <button 
+              onClick={() => setActiveTab('students')} 
+              className={`px-4 sm:px-6 py-3 font-semibold text-sm sm:text-base ${
+                activeTab === 'students' 
+                  ? 'border-b-2 border-blue-500 text-blue-600' 
+                  : 'text-gray-500'
+              }`}
+            >
+              Alumnos
+            </button>
+            <Link 
+              href={`/dashboard/class/${classId}/analytics`} 
+              className="px-4 sm:px-6 py-3 font-semibold text-sm sm:text-base text-gray-500 hover:text-blue-600"
+            >
+              📊 Analíticas
+            </Link>
+          </div>
         </div>
 
         {activeTab === 'evaluations' && (
           <>
-            <div className="flex justify-between items-center mb-8">
-              <h2 className="text-2xl font-bold text-gray-700">Gestión de Evaluaciones</h2>
+            {/* ENCABEZADO RESPONSIVE - flex-col en móvil, flex-row en desktop */}
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-700">
+                Gestión de Evaluaciones
+              </h2>
               <button 
                 onClick={() => setIsCreateModalOpen(true)} 
-                className="neu-button text-gray-700 font-semibold py-3 px-6"
+                className="neu-button text-gray-700 font-semibold py-3 px-4 sm:px-6 text-sm sm:text-base w-full sm:w-auto"
               >
                 Crear Nueva Evaluación
               </button>
             </div>
 
             <section className="mb-10">
-              <h3 className="text-xl font-semibold text-gray-600 mb-4">📝 Exámenes</h3>
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-600 mb-4">📝 Exámenes</h3>
               {exams.length === 0 ? (
-                <p className="text-center text-gray-500 py-4">No hay exámenes para esta clase.</p>
+                <p className="text-center text-gray-500 py-4 text-sm sm:text-base">
+                  No hay exámenes para esta clase.
+                </p>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   {exams.map(exam => (
                     <div key={exam.id} className="neu-card p-4 relative">
                       <EvaluationCardMenu item={exam} />
-
-                      <div className="pr-8"> {/* Padding para no chocar con el menú */}
-                         <h4 className="font-semibold text-gray-800 text-lg mb-4">{exam.name}</h4>
+                      <div className="pr-8">
+                         <h4 className="font-semibold text-gray-800 text-base sm:text-lg mb-4 break-words">
+                           {exam.name}
+                         </h4>
                       </div>
-
                       <Link 
                         href={`/dashboard/class/${classId}/exam/${exam.id}`} 
-                        className="neu-button mt-2 text-center block"
+                        className="neu-button mt-2 text-center block text-sm sm:text-base"
                       >
                         Gestionar
                       </Link>
@@ -399,22 +384,24 @@ export default function ClassDetailPage() {
             </section>
 
             <section>
-              <h3 className="text-xl font-semibold text-gray-600 mb-4">📚 Tareas</h3>
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-600 mb-4">📚 Tareas</h3>
               {assignments.length === 0 ? (
-                <p className="text-center text-gray-500 py-4">No hay tareas para esta clase.</p>
+                <p className="text-center text-gray-500 py-4 text-sm sm:text-base">
+                  No hay tareas para esta clase.
+                </p>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   {assignments.map(task => (
                     <div key={task.id} className="neu-card p-4 relative">
                        <EvaluationCardMenu item={task} />
-
                       <div className="pr-8">
-                        <h4 className="font-semibold text-gray-800 text-lg mb-4">{task.name}</h4>
+                        <h4 className="font-semibold text-gray-800 text-base sm:text-lg mb-4 break-words">
+                          {task.name}
+                        </h4>
                       </div>
-
                       <Link 
                         href={`/dashboard/class/${classId}/exam/${task.id}`} 
-                        className="neu-button mt-2 text-center block"
+                        className="neu-button mt-2 text-center block text-sm sm:text-base"
                       >
                         Gestionar
                       </Link>
@@ -428,43 +415,59 @@ export default function ClassDetailPage() {
 
         {activeTab === 'students' && (
           <>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-700">Gestión de Alumnos</h2>
+            {/* ENCABEZADO RESPONSIVE - flex-col en móvil, flex-row en desktop */}
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-700">
+                Gestión de Alumnos
+              </h2>
               <button 
                 onClick={() => setIsCSVModalOpen(true)} 
-                className="neu-button text-gray-700 font-semibold py-3 px-6"
+                className="neu-button text-gray-700 font-semibold py-3 px-4 sm:px-6 text-sm sm:text-base w-full sm:w-auto"
               >
                 📤 Importar CSV
               </button>
             </div>
 
-            <div className="neu-card p-4">
+            <div className="neu-card p-2 sm:p-4">
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-[600px]">
                   <thead>
                     <tr className="border-b border-gray-200">
-                      <th className="text-left py-4 px-4 font-semibold text-gray-700">Nombre Completo</th>
-                      <th className="text-left py-4 px-4 font-semibold text-gray-700">Email Alumno</th>
-                      <th className="text-left py-4 px-4 font-semibold text-gray-700">Email Tutor</th>
+                      <th className="text-left py-3 sm:py-4 px-2 sm:px-4 font-semibold text-gray-700 text-sm sm:text-base">
+                        Nombre Completo
+                      </th>
+                      <th className="text-left py-3 sm:py-4 px-2 sm:px-4 font-semibold text-gray-700 text-sm sm:text-base">
+                        Email Alumno
+                      </th>
+                      <th className="text-left py-3 sm:py-4 px-2 sm:px-4 font-semibold text-gray-700 text-sm sm:text-base">
+                        Email Tutor
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {students.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="text-center py-12 text-gray-600">
+                        <td colSpan={3} className="text-center py-8 sm:py-12 text-gray-600 text-sm sm:text-base px-4">
                           Aún no hay alumnos en esta clase. ¡Impórtalos desde un CSV!
                         </td>
                       </tr>
                     ) : (
                       students.map((student) => (
                         <tr key={student.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                          <td className="py-4 px-4 text-gray-700 font-medium">
-                            <Link href={`/dashboard/student/${student.id}`} className="hover:underline text-blue-600">
+                          <td className="py-3 sm:py-4 px-2 sm:px-4 text-gray-700 font-medium text-sm sm:text-base">
+                            <Link 
+                              href={`/dashboard/student/${student.id}`} 
+                              className="hover:underline text-blue-600 break-words"
+                            >
                               {student.full_name}
                             </Link>
                           </td>
-                          <td className="py-4 px-4 text-gray-600">{student.student_email}</td>
-                          <td className="py-4 px-4 text-gray-600">{student.tutor_email || 'No especificado'}</td>
+                          <td className="py-3 sm:py-4 px-2 sm:px-4 text-gray-600 text-sm sm:text-base break-all">
+                            {student.student_email}
+                          </td>
+                          <td className="py-3 sm:py-4 px-2 sm:px-4 text-gray-600 text-sm sm:text-base break-all">
+                            {student.tutor_email || 'No especificado'}
+                          </td>
                         </tr>
                       ))
                     )}
@@ -476,23 +479,25 @@ export default function ClassDetailPage() {
         )}
       </div>
 
-      {/* --- Modal Crear Evaluación --- */}
+      {/* MODAL CREAR */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
             className="absolute inset-0 bg-black/50" 
             onClick={() => setIsCreateModalOpen(false)} 
           />
-          <div className="relative neu-card p-8 w-full max-w-lg bg-white">
-            <h2 className="text-2xl font-bold mb-6 text-center">Crear Nueva Evaluación</h2>
+          <div className="relative neu-card p-6 sm:p-8 w-full max-w-lg bg-white">
+            <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-center">
+              Crear Nueva Evaluación
+            </h2>
             <form onSubmit={handleCreateEvaluation}>
-              <div className="mb-6">
+              <div className="mb-4 sm:mb-6">
                 <label className="block text-sm font-bold mb-3">Tipo de Evaluación</label>
-                <div className="flex space-x-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <button 
                     type="button" 
                     onClick={() => setNewEvaluationType('exam')} 
-                    className={`flex-1 py-3 rounded-lg font-semibold ${
+                    className={`flex-1 py-3 rounded-lg font-semibold text-sm sm:text-base ${
                       newEvaluationType === 'exam' 
                         ? 'neu-button-active shadow-inner' 
                         : 'neu-button'
@@ -503,7 +508,7 @@ export default function ClassDetailPage() {
                   <button 
                     type="button" 
                     onClick={() => setNewEvaluationType('assignment')} 
-                    className={`flex-1 py-3 rounded-lg font-semibold ${
+                    className={`flex-1 py-3 rounded-lg font-semibold text-sm sm:text-base ${
                       newEvaluationType === 'assignment' 
                         ? 'neu-button-active shadow-inner' 
                         : 'neu-button'
@@ -522,20 +527,20 @@ export default function ClassDetailPage() {
                   type="text" 
                   value={newEvaluationName} 
                   onChange={(e) => setNewEvaluationName(e.target.value)} 
-                  className="neu-input w-full p-4" 
+                  className="neu-input w-full p-3 sm:p-4 text-sm sm:text-base" 
                   placeholder={newEvaluationType === 'exam' ? "Ej: Parcial de Álgebra" : "Ej: Guía Capítulo 5"} 
                   required 
                 />
               </div>
-              <div className="flex space-x-4 mt-6">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-4 sm:mt-6">
                 <button 
                   type="button" 
                   onClick={() => setIsCreateModalOpen(false)} 
-                  className="flex-1 neu-button"
+                  className="flex-1 neu-button text-sm sm:text-base py-3"
                 >
                   Cancelar
                 </button>
-                <button type="submit" className="flex-1 neu-button">
+                <button type="submit" className="flex-1 neu-button text-sm sm:text-base py-3">
                   Crear
                 </button>
               </div>
@@ -544,30 +549,30 @@ export default function ClassDetailPage() {
         </div>
       )}
 
-      {/* --- Modal EDITAR Evaluación --- */}
+      {/* MODAL EDITAR */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
            <div className="absolute inset-0 bg-black/50" onClick={() => setIsEditModalOpen(false)} />
            <div className="relative neu-card p-6 w-full max-w-md bg-white z-50">
-             <h2 className="text-xl font-bold mb-4">Editar Nombre</h2>
+             <h2 className="text-lg sm:text-xl font-bold mb-4">Editar Nombre</h2>
              <input
                type="text"
                value={editName}
                onChange={(e) => setEditName(e.target.value)}
-               className="neu-input w-full p-3 mb-6"
+               className="neu-input w-full p-3 mb-6 text-sm sm:text-base"
                placeholder="Nuevo nombre..."
                autoFocus
              />
-             <div className="flex justify-end gap-3">
+             <div className="flex flex-col sm:flex-row justify-end gap-3">
                <button 
                  onClick={() => setIsEditModalOpen(false)}
-                 className="neu-button px-4 py-2 text-gray-600 text-sm"
+                 className="neu-button px-4 py-2 text-gray-600 text-sm sm:text-base"
                >
                  Cancelar
                </button>
                <button 
                  onClick={confirmEdit}
-                 className="neu-button px-4 py-2 text-blue-600 font-bold text-sm"
+                 className="neu-button px-4 py-2 text-blue-600 font-bold text-sm sm:text-base"
                >
                  Guardar
                </button>
@@ -576,26 +581,28 @@ export default function ClassDetailPage() {
         </div>
       )}
 
-      {/* --- Modal ELIMINAR Evaluación --- */}
+      {/* MODAL ELIMINAR */}
       {isDeleteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
            <div className="absolute inset-0 bg-black/50" onClick={() => setIsDeleteModalOpen(false)} />
            <div className="relative neu-card p-6 w-full max-w-md bg-white z-50">
-             <h2 className="text-xl font-bold mb-2 text-red-600">Eliminar Evaluación</h2>
-             <p className="text-gray-600 mb-6">
+             <h2 className="text-lg sm:text-xl font-bold mb-2 text-red-600">
+               Eliminar Evaluación
+             </h2>
+             <p className="text-gray-600 mb-6 text-sm sm:text-base">
                ¿Estás seguro de que quieres eliminar <strong>{evalToDelete?.name}</strong>? 
                <br/>Se perderán todos los datos asociados.
              </p>
-             <div className="flex justify-end gap-3">
+             <div className="flex flex-col sm:flex-row justify-end gap-3">
                <button 
                  onClick={() => setIsDeleteModalOpen(false)}
-                 className="neu-button px-4 py-2 text-gray-600 text-sm"
+                 className="neu-button px-4 py-2 text-gray-600 text-sm sm:text-base"
                >
                  Cancelar
                </button>
                <button 
                  onClick={confirmDelete}
-                 className="neu-button px-4 py-2 text-red-600 font-bold text-sm"
+                 className="neu-button px-4 py-2 text-red-600 font-bold text-sm sm:text-base"
                >
                  Eliminar
                </button>
@@ -604,26 +611,28 @@ export default function ClassDetailPage() {
         </div>
       )}
 
-      {/* --- Modal Importar CSV (Sin cambios lógicos, solo renderizado) --- */}
+      {/* MODAL CSV */}
       {isCSVModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
             className="absolute inset-0 bg-black/50" 
             onClick={() => setIsCSVModalOpen(false)} 
           />
-          <div className="relative neu-card p-8 max-w-2xl w-full mx-4 bg-white">
-            <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">
+          <div className="relative neu-card p-6 sm:p-8 max-w-2xl w-full bg-white max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-700 mb-4 sm:mb-6 text-center">
               Importar Alumnos desde CSV
             </h2>
 
             <div className="mb-6 p-4 neu-card">
-              <h3 className="font-semibold text-gray-700 mb-2">Descargar Plantilla</h3>
-              <p className="text-sm text-gray-600 mb-3">
+              <h3 className="font-semibold text-gray-700 mb-2 text-sm sm:text-base">
+                Descargar Plantilla
+              </h3>
+              <p className="text-xs sm:text-sm text-gray-600 mb-3">
                 Descarga la plantilla CSV de ejemplo para asegurarte de que tu archivo tenga el formato correcto.
               </p>
               <button 
                 onClick={generateCSVTemplate} 
-                className="neu-button text-gray-700 font-medium py-2 px-4 text-sm"
+                className="neu-button text-gray-700 font-medium py-2 px-4 text-xs sm:text-sm w-full sm:w-auto"
               >
                 📥 Descargar plantilla_alumnos.csv
               </button>
@@ -631,7 +640,7 @@ export default function ClassDetailPage() {
 
             <div 
               {...getRootProps()} 
-              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors duration-200 cursor-pointer ${
+              className={`border-2 border-dashed rounded-lg p-6 sm:p-8 text-center transition-colors duration-200 cursor-pointer ${
                 isDragActive 
                   ? 'border-blue-400 bg-blue-50' 
                   : csvFile 
@@ -642,20 +651,30 @@ export default function ClassDetailPage() {
               <input {...getInputProps()} />
               {csvFile ? (
                 <div className="space-y-2">
-                  <div className="text-4xl">📄</div>
-                  <p className="text-lg font-medium text-green-700">Archivo seleccionado</p>
-                  <p className="text-sm text-gray-600">{csvFile.name}</p>
-                  <p className="text-xs text-gray-500">Tamaño: {(csvFile.size / 1024).toFixed(2)} KB</p>
+                  <div className="text-3xl sm:text-4xl">📄</div>
+                  <p className="text-base sm:text-lg font-medium text-green-700">
+                    Archivo seleccionado
+                  </p>
+                  <p className="text-xs sm:text-sm text-gray-600 break-all">{csvFile.name}</p>
+                  <p className="text-xs text-gray-500">
+                    Tamaño: {(csvFile.size / 1024).toFixed(2)} KB
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <div className="text-4xl text-gray-400">📎</div>
+                  <div className="text-3xl sm:text-4xl text-gray-400">📎</div>
                   {isDragActive ? (
-                    <p className="text-lg text-blue-600">Suelta el archivo CSV aquí...</p>
+                    <p className="text-base sm:text-lg text-blue-600">
+                      Suelta el archivo CSV aquí...
+                    </p>
                   ) : (
                     <>
-                      <p className="text-lg text-gray-600">Arrastra y suelta tu archivo CSV aquí</p>
-                      <p className="text-sm text-gray-500">o haz clic para seleccionar un archivo</p>
+                      <p className="text-base sm:text-lg text-gray-600">
+                        Arrastra y suelta tu archivo CSV aquí
+                      </p>
+                      <p className="text-xs sm:text-sm text-gray-500">
+                        o haz clic para seleccionar un archivo
+                      </p>
                     </>
                   )}
                   <p className="text-xs text-gray-400 mt-2">Solo se permiten archivos .csv</p>
@@ -663,14 +682,14 @@ export default function ClassDetailPage() {
               )}
             </div>
 
-            <div className="flex space-x-4 mt-6">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-6">
               <button 
                 type="button" 
                 onClick={() => { 
                   setIsCSVModalOpen(false)
                   setCSVFile(null)
                 }} 
-                className="flex-1 neu-button text-gray-700 font-semibold py-3 px-4" 
+                className="flex-1 neu-button text-gray-700 font-semibold py-3 px-4 text-sm sm:text-base" 
                 disabled={isProcessingCSV}
               >
                 Cancelar
@@ -678,7 +697,7 @@ export default function ClassDetailPage() {
               {csvFile && (
                 <button 
                   onClick={() => setCSVFile(null)} 
-                  className="neu-button text-gray-700 font-medium py-3 px-4" 
+                  className="neu-button text-gray-700 font-medium py-3 px-4 text-sm sm:text-base" 
                   disabled={isProcessingCSV}
                 >
                   🗑️ Quitar
@@ -687,7 +706,7 @@ export default function ClassDetailPage() {
               <button 
                 onClick={handleCSVUpload} 
                 disabled={!csvFile || isProcessingCSV} 
-                className={`flex-1 font-semibold py-3 px-4 ${
+                className={`flex-1 font-semibold py-3 px-4 text-sm sm:text-base ${
                   !csvFile || isProcessingCSV 
                     ? 'neu-button text-gray-400 cursor-not-allowed opacity-50' 
                     : 'neu-button text-gray-700'
@@ -705,19 +724,21 @@ export default function ClassDetailPage() {
             </div>
 
             <div className="mt-6 p-4 neu-card bg-blue-50/30">
-            <h4 className="font-medium text-gray-700 mb-2">Formato requerido:</h4>
-            <ul className="text-sm text-gray-600 space-y-1">
-            <li>• <strong>full_name:</strong> Nombre y apellidos del alumno</li>
-            <li>• <strong>student_email:</strong> Correo electrónico del estudiante</li>
-            <li>• <strong>tutor_email:</strong> Correo electrónico del padre/madre/tutor</li>
-            </ul>
-            <p className="text-xs text-gray-500 mt-3">
-            💡 Tip: La primera fila debe contener exactamente estos encabezados
-            </p>
+              <h4 className="font-medium text-gray-700 mb-2 text-sm sm:text-base">
+                Formato requerido:
+              </h4>
+              <ul className="text-xs sm:text-sm text-gray-600 space-y-1">
+                <li>• <strong>full_name:</strong> Nombre y apellidos del alumno</li>
+                <li>• <strong>student_email:</strong> Correo electrónico del estudiante</li>
+                <li>• <strong>tutor_email:</strong> Correo electrónico del padre/madre/tutor</li>
+              </ul>
+              <p className="text-xs text-gray-500 mt-3">
+                💡 Tip: La primera fila debe contener exactamente estos encabezados
+              </p>
             </div>
-            </div>
-            </div>
-            )}
-            </div>
-            )
-            }
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
