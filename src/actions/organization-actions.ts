@@ -11,7 +11,6 @@ export async function getOrganizationDetails(id: string) {
   const supabase = createAdminClient()
 
   try {
-    // Obtener datos de la organización
     const { data: organization, error: orgError } = await supabase
       .from('organizations')
       .select('*')
@@ -20,7 +19,6 @@ export async function getOrganizationDetails(id: string) {
 
     if (orgError) throw orgError
 
-    // Obtener perfiles asociados a esta organización
     const { data: users, error: usersError } = await supabase
       .from('profiles')
       .select('*')
@@ -36,7 +34,6 @@ export async function getOrganizationDetails(id: string) {
 }
 
 // --- 2. Actualizar detalles genéricos de la organización ---
-// (Refactorizada para ser más flexible y revalidar la ruta específica)
 export async function updateOrganizationDetails(id: string, updates: any) {
   const supabase = createAdminClient()
 
@@ -57,14 +54,61 @@ export async function updateOrganizationDetails(id: string, updates: any) {
   }
 }
 
-// --- 3. Asignar Plan a la Organización ---
+// --- 3. NUEVA ACCIÓN: Subir Logo de Organización ---
+export async function uploadOrganizationLogo(organizationId: string, formData: FormData) {
+  const supabase = createAdminClient()
+  const file = formData.get('logo') as File
+
+  if (!file) {
+    return { success: false, error: 'No se ha seleccionado ningún archivo.' }
+  }
+
+  try {
+    // 1. Definir nombre único para el archivo
+    const fileExtension = file.name.split('.').pop()
+    const fileName = `logo_${organizationId}_${Date.now()}.${fileExtension}`
+    const filePath = `${organizationId}/${fileName}`
+
+    // 2. Subir el archivo al bucket 'organization_logos'
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('organization_logos')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true
+      })
+
+    if (uploadError) throw uploadError
+
+    // 3. Obtener la URL pública del logo
+    const { data: { publicUrl } } = supabase.storage
+      .from('organization_logos')
+      .getPublicUrl(filePath)
+
+    // 4. Actualizar la URL en la tabla de organizaciones
+    const { error: updateError } = await supabase
+      .from('organizations')
+      .update({ logo_url: publicUrl })
+      .eq('id', organizationId)
+
+    if (updateError) throw updateError
+
+    revalidatePath(`/admin/organizations/${organizationId}`)
+    revalidatePath('/admin/organizations')
+
+    return { success: true, publicUrl }
+  } catch (error) {
+    console.error('Error en uploadOrganizationLogo:', error)
+    return { success: false, error: (error as Error).message }
+  }
+}
+
+// --- 4. Asignar Plan a la Organización ---
 export async function assignPlanToOrganization(
   organizationId: string, 
   plan: 'Basic' | 'Pro' | 'Enterprise'
 ) {
   const supabase = createAdminClient()
 
-  // Definir límites de créditos según el plan
   const planConfig = {
     Basic: 15000,
     Pro: 30000,
@@ -72,8 +116,6 @@ export async function assignPlanToOrganization(
   }
 
   const credits = planConfig[plan]
-
-  // Calcular fecha de renovación (hoy + 1 mes)
   const nextRenewalDate = new Date()
   nextRenewalDate.setMonth(nextRenewalDate.getMonth() + 1)
 
@@ -98,12 +140,11 @@ export async function assignPlanToOrganization(
   }
 }
 
-// --- 4. Generar y enviar pre-factura por email ---
+// --- 5. Generar y enviar pre-factura por email ---
 export async function generatePreInvoice(organizationId: string) {
   const supabase = createAdminClient()
 
   try {
-    // 1. Obtener datos necesarios
     const { data: org, error: fetchError } = await supabase
       .from('organizations')
       .select('name, subscription_plan, finance_contact_email, billing_address, tax_id, credits_per_period')
@@ -113,7 +154,6 @@ export async function generatePreInvoice(organizationId: string) {
     if (fetchError || !org) throw new Error('No se encontró la organización o sus datos de facturación')
     if (!org.finance_contact_email) throw new Error('La organización no tiene un email de contacto financiero configurado.')
 
-    // 2. Construir el HTML del Email
     const emailHtml = `
       <div style="font-family: sans-serif; padding: 20px; color: #333;">
         <h2>Pre-Factura de Servicio</h2>
@@ -130,9 +170,8 @@ export async function generatePreInvoice(organizationId: string) {
       </div>
     `
 
-    // 3. Enviar email con Resend
     const { data, error: sendError } = await resend.emails.send({
-      from: 'Admin <noreply@tudominio.com>', // Asegúrate de configurar este dominio en Resend
+      from: 'Admin <noreply@tudominio.com>', 
       to: [org.finance_contact_email],
       subject: `Pre-Factura: ${org.name} - Plan ${org.subscription_plan}`,
       html: emailHtml,
@@ -147,7 +186,7 @@ export async function generatePreInvoice(organizationId: string) {
   }
 }
 
-// --- Acciones de legado (mantenidas por compatibilidad) ---
+// --- Acciones de legado ---
 
 export async function createOrganization(name: string) {
   const supabase = createAdminClient()
