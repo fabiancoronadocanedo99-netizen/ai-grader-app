@@ -10,29 +10,32 @@ interface BillingInfoCardProps {
 export default function BillingInfoCard({ initialData }: BillingInfoCardProps) {
   const [loading, setLoading] = useState(false)
   const [sendingEmail, setSendingEmail] = useState(false)
-  const [formData, setFormData] = useState({
-    billing_name: initialData.billing_name || '',
-    billing_address: initialData.billing_address || '',
-    tax_id: initialData.tax_id || '', // RFC / Tax ID
-  })
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
-  }
+  // Estados para cada campo
+  const [billingName, setBillingName] = useState(initialData.billing_name || '')
+  const [billingAddress, setBillingAddress] = useState(initialData.billing_address || '')
+  const [taxId, setTaxId] = useState(initialData.tax_id || '')
 
   const handleUpdate = async () => {
     setLoading(true)
-    const res = await updateOrganizationDetails(initialData.id, formData)
+    const res = await updateOrganizationDetails(initialData.id, {
+      billing_name: billingName,
+      billing_address: billingAddress,
+      tax_id: taxId
+    })
     setLoading(false)
-    if (res.success) alert("Datos fiscales actualizados")
+
+    if (res.success) alert("Datos fiscales actualizados correctamente")
+    else alert("Error al actualizar: " + res.error)
   }
 
-  const handleSendInvoice = async () => {
+  const handleSendPreInvoice = async () => {
     setSendingEmail(true)
     const res = await generatePreInvoice(initialData.id)
     setSendingEmail(false)
-    if (res.success) alert("Email de pre-factura enviado con éxito")
-    else alert("Error: " + res.error)
+
+    if (res.success) alert("Email de pre-factura enviado al contacto financiero")
+    else alert("Error al enviar email: " + res.error)
   }
 
   const neuInset = "shadow-[inset_6px_6px_10px_rgb(163,177,198),inset_-6px_-6px_10px_rgba(255,255,255,0.5)]"
@@ -48,10 +51,9 @@ export default function BillingInfoCard({ initialData }: BillingInfoCardProps) {
         <div>
           <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-2 block mb-2">Razón Social</label>
           <input
-            name="billing_name"
-            value={formData.billing_name}
-            onChange={handleChange}
-            placeholder="Nombre legal de la empresa"
+            value={billingName}
+            onChange={(e) => setBillingName(e.target.value)}
+            placeholder="Nombre legal de la institución"
             className={`w-full p-4 rounded-xl bg-[#e0e5ec] outline-none text-gray-700 ${neuInset}`}
           />
         </div>
@@ -59,9 +61,8 @@ export default function BillingInfoCard({ initialData }: BillingInfoCardProps) {
         <div>
           <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-2 block mb-2">RFC / Tax ID</label>
           <input
-            name="tax_id"
-            value={formData.tax_id}
-            onChange={handleChange}
+            value={taxId}
+            onChange={(e) => setTaxId(e.target.value)}
             placeholder="Ej. ABC123456XYZ"
             className={`w-full p-4 rounded-xl bg-[#e0e5ec] outline-none text-gray-700 ${neuInset}`}
           />
@@ -70,30 +71,28 @@ export default function BillingInfoCard({ initialData }: BillingInfoCardProps) {
         <div>
           <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-2 block mb-2">Dirección Fiscal</label>
           <textarea
-            name="billing_address"
-            value={formData.billing_address}
-            onChange={handleChange}
+            value={billingAddress}
+            onChange={(e) => setBillingAddress(e.target.value)}
             rows={3}
-            placeholder="Calle, Número, Ciudad, CP"
+            placeholder="Calle, Número, Colonia, CP"
             className={`w-full p-4 rounded-xl bg-[#e0e5ec] outline-none text-gray-700 resize-none ${neuInset}`}
           />
         </div>
       </div>
 
-      <div className="flex gap-4 pt-2">
+      <div className="flex flex-col sm:flex-row gap-4 pt-2">
         <button
           onClick={handleUpdate}
           disabled={loading}
           className={`flex-1 py-4 rounded-2xl bg-[#e0e5ec] text-gray-700 font-bold transition-all ${neuButton} disabled:opacity-50`}
         >
-          {loading ? "..." : "Guardar Datos"}
+          {loading ? "Guardando..." : "Guardar Datos"}
         </button>
 
         <button
-          onClick={handleSendInvoice}
+          onClick={handleSendPreInvoice}
           disabled={sendingEmail}
           className={`flex-1 py-4 rounded-2xl bg-[#e0e5ec] text-blue-600 font-bold transition-all ${neuButton} disabled:opacity-50`}
-          title="Enviar borrador de factura al contacto financiero"
         >
           {sendingEmail ? "Enviando..." : "📧 Enviar Pre-Factura"}
         </button>
