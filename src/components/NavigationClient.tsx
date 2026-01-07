@@ -2,8 +2,8 @@
 
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, ChevronLeft, ChevronRight, UserCircle, LogOut } from 'lucide-react'
-import { createClient } from '@/lib/supabaseClient' // Importamos el cliente de navegador
+import { LayoutDashboard, ChevronLeft, ChevronRight, UserCircle, LogOut, ShieldCheck, School } from 'lucide-react'
+import { createClient } from '@/lib/supabaseClient'
 
 type NavigationClientProps = {
   userRole?: string;
@@ -18,12 +18,32 @@ export default function NavigationClient({ userRole, userEmail }: NavigationClie
   const handleBack = () => router.back()
   const handleForward = () => router.forward()
 
-  // Función para cerrar sesión
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/login')
-    router.refresh() // Refresca los componentes de servidor para limpiar estados
+    router.refresh()
   }
+
+  // Lógica para definir el destino y texto del botón de administración
+  const getAdminButtonConfig = () => {
+    if (userRole === 'superadmin') {
+      return {
+        href: '/admin',
+        label: 'Super Admin',
+        icon: <ShieldCheck className="w-4 h-4" />
+      }
+    }
+    if (userRole === 'admin') {
+      return {
+        href: '/dashboard/admin',
+        label: 'Panel Escuela',
+        icon: <School className="w-4 h-4" />
+      }
+    }
+    return null
+  }
+
+  const adminConfig = getAdminButtonConfig()
 
   const getBreadcrumb = () => {
     const segments = pathname.split('/').filter(Boolean);
@@ -37,10 +57,10 @@ export default function NavigationClient({ userRole, userEmail }: NavigationClie
             return 'Admin > Organizaciones';
         }
         if (segments[1] === 'users') return 'Admin > Usuarios';
-        return 'Administración';
+        return 'Administración Global';
       case 'dashboard':
         if (segments.length === 1) return 'Dashboard';
-        if (segments[1] === 'admin') return 'Administración';
+        if (segments[1] === 'admin') return 'Gestión Escuela';
         if (segments[1] === 'class' && segments[2]) {
           if (segments.length === 3) return `Clase`;
           if (segments[3] === 'exam' && segments[4]) {
@@ -85,12 +105,13 @@ export default function NavigationClient({ userRole, userEmail }: NavigationClie
               </div>
             )}
 
-            {/* Botón Panel Admin (Solo para admin o superadmin) */}
-            {(userRole === 'admin' || userRole === 'superadmin') && (
-              <Link href="/admin/organizations">
-                <button className="neu-button px-4 py-2 flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors">
-                  <LayoutDashboard className="w-4 h-4" />
-                  <span className="hidden sm:inline uppercase tracking-tight">Admin</span>
+            {/* BOTÓN DE ADMINISTRACIÓN INTELIGENTE */}
+            {adminConfig && (
+              <Link href={adminConfig.href}>
+                <button className="neu-button px-4 py-2 flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors shadow-[4px_4px_10px_#b8c1ce,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#b8c1ce,inset_-2px_-2px_5px_#ffffff]">
+                  {adminConfig.icon}
+                  <span className="hidden sm:inline uppercase tracking-tight">{adminConfig.label}</span>
+                  <span className="sm:hidden">Admin</span>
                 </button>
               </Link>
             )}
@@ -98,7 +119,7 @@ export default function NavigationClient({ userRole, userEmail }: NavigationClie
             {/* Botón Salir */}
             <button 
               onClick={handleLogout}
-              className="neu-button p-2.5 text-red-500 hover:text-red-600 active:scale-95 transition-all"
+              className="neu-button p-2.5 text-red-500 hover:text-red-600 active:scale-95 transition-all shadow-[4px_4px_10px_#b8c1ce,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#b8c1ce,inset_-2px_-2px_5px_#ffffff]"
               title="Cerrar Sesión"
             >
               <LogOut className="w-4 h-4" strokeWidth={2.5} />
