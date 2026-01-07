@@ -2,7 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { createOrganization, getOrganizations, updateOrganization, deleteOrganization } from '@/actions/organization-actions'
+// CORRECCIÓN: Importamos updateOrganizationDetails en lugar de updateOrganization
+import { 
+  createOrganization, 
+  getOrganizations, 
+  updateOrganizationDetails, 
+  deleteOrganization 
+} from '@/actions/organization-actions'
 
 // --- Tipos ---
 interface Organization {
@@ -43,7 +49,7 @@ export default function OrganizationsManagementPage() {
   const [deletingOrg, setDeletingOrg] = useState<Organization | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  // --- 1. Cargar Datos (USANDO SERVER ACTION) ---
+  // --- 1. Cargar Datos ---
   const fetchOrganizations = async () => {
     try {
       setLoading(true)
@@ -119,7 +125,8 @@ export default function OrganizationsManagementPage() {
     setUpdating(true)
 
     try {
-      const result = await updateOrganization(editingOrg.id, {
+      // CORRECCIÓN: Llamamos a la nueva función updateOrganizationDetails
+      const result = await updateOrganizationDetails(editingOrg.id, {
         name: editFormData.name,
         subscription_plan: editFormData.subscription_plan,
         credits_per_period: editFormData.credits_per_period,
@@ -253,7 +260,7 @@ export default function OrganizationsManagementPage() {
                 <div className={`${neuInset} p-3 rounded-lg space-y-2 mb-3`}>
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-gray-500 font-semibold">Plan:</span>
-                    <span className={`px-2 py-1 rounded-full font-bold ${
+                    <span className={`px-2 py-1 rounded-full font-bold uppercase ${
                       org.subscription_plan === 'enterprise' ? 'bg-purple-100 text-purple-600' :
                       org.subscription_plan === 'pro' ? 'bg-blue-100 text-blue-600' :
                       org.subscription_plan === 'basic' ? 'bg-green-100 text-green-600' :
@@ -308,9 +315,12 @@ export default function OrganizationsManagementPage() {
                     </button>
                   </div>
 
-                  <button className={`${neuButton} !py-2 !px-4 text-xs !text-gray-600`}>
-                      Ver Detalles
-                  </button>
+                  {/* CORRECCIÓN: Botón "Ver Detalles" ahora es un Link */}
+                  <Link href={`/admin/organizations/${org.id}`}>
+                    <button className={`${neuButton} !py-2 !px-4 text-xs !text-gray-600`}>
+                        Ver Detalles
+                    </button>
+                  </Link>
               </div>
             </div>
           ))}
@@ -477,7 +487,7 @@ export default function OrganizationsManagementPage() {
 
       {/* --- Modal Eliminar Organización --- */}
       {isDeleteModalOpen && deletingOrg && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4 text-center">
           <div className={`${neuCard} bg-[#e0e5ec] w-full max-w-md p-8 relative animate-in fade-in zoom-in duration-200`}>
 
             <div className="text-center mb-6">

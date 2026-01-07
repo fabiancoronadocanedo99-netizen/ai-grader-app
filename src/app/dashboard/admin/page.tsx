@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-// CORRECCIÓN AQUÍ: Ruta ajustada
-import { createClient } from '@/lib/supabaseClient'; 
 import Link from 'next/link';
+// IMPORTAMOS LA SERVER ACTION
+import { updateUserCreditLimit } from '@/actions/user-actions'; 
 import { 
   Users, 
   GraduationCap, 
@@ -55,8 +55,6 @@ type DashboardData = {
 };
 
 export default function AdminDashboardPage() {
-  const supabase = createClient();
-
   // --- ESTADOS ---
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,13 +105,13 @@ export default function AdminDashboardPage() {
     setUpdatingUser(true);
 
     try {
-      // Actualizar en Supabase
-      const { error } = await supabase
-        .from('profiles')
-        .update({ monthly_credit_limit: newCreditLimit })
-        .eq('id', selectedUser.id);
+      // CAMBIO CLAVE: Usamos la Server Action en lugar de supabase.update directo
+      // Esto es más seguro y centraliza la lógica de validación
+      const result = await updateUserCreditLimit(selectedUser.id, newCreditLimit);
 
-      if (error) throw error;
+      if (!result.success) {
+        throw new Error(result.error);
+      }
 
       // Actualizar estado local para reflejar cambios sin recargar
       if (data) {
@@ -131,7 +129,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // --- RENDERIZADO DE CARGA/ERROR ---
+  // --- RENDERIZADO DE CARGA/ERROR (se mantiene igual) ---
   if (loading) {
     return (
       <div className="min-h-screen bg-[#e0e5ec] flex items-center justify-center">
@@ -162,16 +160,15 @@ export default function AdminDashboardPage() {
 
   if (!data) return null;
 
-  // --- UI PRINCIPAL ---
   return (
     <div className="min-h-screen bg-[#e0e5ec] p-6 md:p-12 font-sans text-slate-700">
 
       {/* ENCABEZADO */}
       <div className="max-w-7xl mx-auto mb-10">
         <h1 className="text-2xl md:text-3xl font-bold text-slate-700">
-          Panel de Administración
+          Gestión de la Institución
         </h1>
-        <p className="text-slate-500 mt-1 text-lg">
+        <p className="text-slate-500 mt-1 text-lg uppercase tracking-wider font-bold">
           {data.organization.name}
         </p>
       </div>
@@ -181,27 +178,27 @@ export default function AdminDashboardPage() {
         <button
           onClick={() => setActiveTab('gestion')}
           className={cn(
-            "flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all duration-300",
+            "flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all duration-300",
             activeTab === 'gestion'
-              ? "text-blue-600 shadow-[inset_4px_4px_8px_#b8b9be,inset_-4px_-4px_8px_#ffffff]" // Hundido (Activo)
-              : "text-slate-500 shadow-[6px_6px_12px_#b8b9be,-6px_-6px_12px_#ffffff] hover:text-blue-500" // Saliente (Inactivo)
+              ? "text-blue-600 shadow-[inset_4px_4px_8px_#b8b9be,inset_-4px_-4px_8px_#ffffff]"
+              : "text-slate-500 shadow-[6px_6px_12px_#b8b9be,-6px_-6px_12px_#ffffff] hover:text-blue-500"
           )}
         >
           <Settings2 className="w-5 h-5" />
-          Gestión
+          Gestión de Maestros
         </button>
 
         <button
           onClick={() => setActiveTab('analiticas')}
           className={cn(
-            "flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all duration-300",
+            "flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all duration-300",
             activeTab === 'analiticas'
               ? "text-blue-600 shadow-[inset_4px_4px_8px_#b8b9be,inset_-4px_-4px_8px_#ffffff]"
               : "text-slate-500 shadow-[6px_6px_12px_#b8b9be,-6px_-6px_12px_#ffffff] hover:text-blue-500"
           )}
         >
           <BarChart3 className="w-5 h-5" />
-          Analíticas
+          Métricas de Clase
         </button>
       </div>
 
@@ -211,71 +208,68 @@ export default function AdminDashboardPage() {
 
           {/* Tarjetas KPI */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* KPI: Créditos Restantes */}
             <div className="rounded-3xl bg-[#e0e5ec] p-6 shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 rounded-full bg-[#e0e5ec] shadow-[inset_3px_3px_6px_#b8b9be,inset_-3px_-3px_6px_#ffffff]">
                   <Coins className="w-6 h-6 text-yellow-600" />
                 </div>
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Organización</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Saldo Institucional</span>
               </div>
-              <h3 className="text-3xl font-bold text-slate-700">{data.organization.credits_remaining}</h3>
-              <p className="text-sm text-slate-500 mt-1">Créditos Disponibles</p>
+              <h3 className="text-3xl font-bold text-slate-700">{data.organization.credits_remaining.toLocaleString()}</h3>
+              <p className="text-xs text-slate-500 mt-1">Créditos disponibles para la escuela</p>
             </div>
 
-             {/* KPI: Total Usuarios */}
              <div className="rounded-3xl bg-[#e0e5ec] p-6 shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 rounded-full bg-[#e0e5ec] shadow-[inset_3px_3px_6px_#b8b9be,inset_-3px_-3px_6px_#ffffff]">
                   <Users className="w-6 h-6 text-blue-600" />
                 </div>
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Personal</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Plantilla</span>
               </div>
               <h3 className="text-3xl font-bold text-slate-700">{data.users.length}</h3>
-              <p className="text-sm text-slate-500 mt-1">Usuarios Registrados</p>
+              <p className="text-xs text-slate-500 mt-1">Colaboradores activos</p>
             </div>
 
-            {/* KPI: Plan */}
             <div className="rounded-3xl bg-[#e0e5ec] p-6 shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 rounded-full bg-[#e0e5ec] shadow-[inset_3px_3px_6px_#b8b9be,inset_-3px_-3px_6px_#ffffff]">
                   <GraduationCap className="w-6 h-6 text-green-600" />
                 </div>
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Suscripción</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nivel de Servicio</span>
               </div>
-              <h3 className="text-xl font-bold text-slate-700 capitalize">{data.organization.subscription_plan || 'Gratuito'}</h3>
-              <p className="text-sm text-slate-500 mt-1">Plan Actual</p>
+              <h3 className="text-xl font-bold text-slate-700 capitalize">{data.organization.subscription_plan || 'Estándar'}</h3>
+              <p className="text-xs text-slate-500 mt-1">Plan de suscripción activo</p>
             </div>
           </div>
 
           {/* Tabla de Usuarios */}
           <div className="rounded-3xl bg-[#e0e5ec] p-8 shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
             <h2 className="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              Gestión de Usuarios
+              <Users className="w-5 h-5 text-blue-500" />
+              Gestión de Límites por Maestro
             </h2>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="text-slate-500 border-b border-slate-300/50">
-                    <th className="p-4 font-semibold">Nombre</th>
-                    <th className="p-4 font-semibold">Rol</th>
-                    <th className="p-4 font-semibold text-center">Límite Mensual</th>
-                    <th className="p-4 font-semibold text-center">Usados este mes</th>
+                  <tr className="text-slate-400 border-b border-slate-300/30">
+                    <th className="p-4 text-[10px] font-black uppercase tracking-widest">Maestro</th>
+                    <th className="p-4 text-[10px] font-black uppercase tracking-widest">Rol</th>
+                    <th className="p-4 text-[10px] font-black uppercase tracking-widest text-center">Límite (IA)</th>
+                    <th className="p-4 text-[10px] font-black uppercase tracking-widest text-center">Uso Actual</th>
                   </tr>
                 </thead>
                 <tbody className="text-slate-700">
                   {data.users.map((user) => (
-                    <tr key={user.id} className="group border-b border-slate-200/50 hover:bg-slate-200/30 transition-colors">
+                    <tr key={user.id} className="group border-b border-slate-200/50 hover:bg-slate-300/10 transition-colors">
                       <td className="p-4">
-                        <div className="font-medium">{user.full_name}</div>
-                        {/* <div className="text-xs text-slate-400">{user.email}</div> Si tuvieras email */}
+                        <div className="font-bold text-slate-700">{user.full_name}</div>
+                        <div className="text-[10px] text-slate-400 font-mono uppercase tracking-tighter">ID: {user.id.slice(0,8)}</div>
                       </td>
                       <td className="p-4">
                         <span className={cn(
-                          "px-3 py-1 rounded-full text-xs font-bold shadow-[inset_2px_2px_4px_#b8b9be,inset_-2px_-2px_4px_#ffffff]",
-                          user.role === 'admin' ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
+                          "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-[inset_2px_2px_4px_#b8b9be,inset_-2px_-2px_4px_#ffffff]",
+                          user.role === 'admin' ? "text-purple-600" : "text-blue-600"
                         )}>
                           {user.role}
                         </span>
@@ -283,15 +277,15 @@ export default function AdminDashboardPage() {
                       <td className="p-4 text-center">
                         <button
                           onClick={() => handleOpenEditModal(user)}
-                          className="group/btn relative inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-slate-600 transition-all 
-                          shadow-[4px_4px_8px_#b8b9be,-4px_-4px_8px_#ffffff] 
-                          hover:text-blue-600 active:shadow-[inset_2px_2px_4px_#b8b9be,inset_-2px_-2px_4px_#ffffff]"
+                          className="group/btn relative inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black text-slate-600 transition-all 
+                          shadow-[5px_5px_10px_#b8b9be,-5px_-5px_10px_#ffffff] 
+                          hover:text-blue-600 active:shadow-[inset_3px_3px_6px_#b8b9be,inset_-3px_-3px_6px_#ffffff]"
                         >
                           {user.monthly_credit_limit}
-                          <Edit2 className="w-3 h-3 opacity-0 group-hover/btn:opacity-100 transition-opacity" />
+                          <Edit2 className="w-3 h-3 opacity-30 group-hover/btn:opacity-100 transition-opacity" />
                         </button>
                       </td>
-                      <td className="p-4 text-center text-slate-500">
+                      <td className="p-4 text-center font-bold text-slate-500">
                         {user.monthly_credits_used}
                       </td>
                     </tr>
@@ -304,37 +298,35 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* CONTENIDO PESTAÑA: ANALÍTICAS */}
+      {/* SECCIÓN ANALÍTICAS (Se mantiene igual pero con mejores fuentes) */}
       {activeTab === 'analiticas' && (
         <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-           <h2 className="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5" />
-              Selecciona una Clase para ver Analíticas
+           <h2 className="text-xl font-bold text-slate-700 mb-8 flex items-center gap-2">
+              <BarChart3 className="w-6 h-6 text-indigo-500" />
+              Rendimiento por Grupo
             </h2>
 
             {data.classes.length === 0 ? (
-              <div className="text-center p-10 text-slate-500">
-                No hay clases registradas en esta organización.
+              <div className="rounded-3xl p-12 text-center text-slate-400 shadow-[inset_6px_6px_12px_#b8b9be,inset_-6px_-6px_12px_#ffffff]">
+                No hay clases registradas en esta organización todavía.
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                 {data.classes.map((group) => (
                   <Link href={`/dashboard/class/${group.id}/analytics`} key={group.id} className="block group">
-                    <div className="h-full rounded-3xl bg-[#e0e5ec] p-6 transition-all duration-300
-                      shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]
-                      group-hover:translate-y-[-4px] group-hover:shadow-[12px_12px_20px_#b8b9be,-12px_-12px_20px_#ffffff]
+                    <div className="h-full rounded-[30px] bg-[#e0e5ec] p-8 transition-all duration-300
+                      shadow-[10px_10px_20px_#b8b9be,-10px_-10px_20px_#ffffff]
+                      group-hover:translate-y-[-6px] group-hover:shadow-[15px_15px_25px_#b8b9be,-15px_-15px_25px_#ffffff]
                       active:shadow-[inset_4px_4px_8px_#b8b9be,inset_-4px_-4px_8px_#ffffff] active:translate-y-[0px]"
                     >
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="p-3 rounded-2xl bg-[#e0e5ec] shadow-[inset_3px_3px_6px_#b8b9be,inset_-3px_-3px_6px_#ffffff]">
-                          <BarChart3 className="w-6 h-6 text-indigo-500" />
-                        </div>
+                      <div className="p-4 w-14 h-14 mb-6 rounded-2xl bg-[#e0e5ec] shadow-[inset_3px_3px_6px_#b8b9be,inset_-3px_-3px_6px_#ffffff] flex items-center justify-center">
+                        <BarChart3 className="w-8 h-8 text-indigo-500" />
                       </div>
-                      <h3 className="text-xl font-bold text-slate-700 mb-1">{group.name}</h3>
-                      <p className="text-sm text-slate-500">{group.subject || 'Sin materia'}</p>
+                      <h3 className="text-xl font-black text-slate-700 mb-1">{group.name}</h3>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{group.subject || 'Materia General'}</p>
 
-                      <div className="mt-6 flex items-center gap-2 text-sm font-semibold text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                        Ver Reporte <span className="text-lg">→</span>
+                      <div className="mt-8 flex items-center gap-2 text-xs font-black text-blue-500 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                        Ver Analíticas de Alumnos <span className="text-lg">→</span>
                       </div>
                     </div>
                   </Link>
@@ -344,59 +336,53 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* MODAL DE EDICIÓN (NEUMÓRFICO) */}
+      {/* MODAL DE EDICIÓN */}
       {isModalOpen && selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-[#e0e5ec] rounded-3xl p-8 shadow-[10px_10px_20px_rgba(0,0,0,0.2),-10px_-10px_20px_rgba(255,255,255,0.8)] animate-in zoom-in-95 duration-200">
-
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-slate-700">Editar Límite de Crédito</h3>
-              <button onClick={handleCloseModal} className="text-slate-400 hover:text-red-500 transition-colors">
-                <X className="w-6 h-6" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-[#e0e5ec] rounded-[40px] p-10 shadow-[20px_20px_60px_rgba(0,0,0,0.1),-20px_-20px_60px_rgba(255,255,255,0.8)] animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-xl font-black text-slate-700 uppercase tracking-tight">Ajustar Límite</h3>
+              <button onClick={handleCloseModal} className="w-10 h-10 rounded-full flex items-center justify-center bg-[#e0e5ec] shadow-[4px_4px_8px_#b8b9be,-4px_-4px_8px_#ffffff] text-slate-400 hover:text-red-500 active:shadow-inset transition-all">
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="mb-6">
-              <p className="text-sm text-slate-500 mb-1">Maestro</p>
-              <p className="text-lg font-semibold text-slate-700">{selectedUser.full_name}</p>
+            <div className="mb-8 p-4 rounded-2xl shadow-[inset_4px_4px_8px_#b8b9be,inset_-4px_-4px_8px_#ffffff]">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Colaborador</p>
+              <p className="text-lg font-bold text-slate-700">{selectedUser.full_name}</p>
             </div>
 
-            <div className="mb-8">
-              <label className="block text-sm font-bold text-slate-500 mb-3 ml-1">Nuevo Límite Mensual</label>
+            <div className="mb-10">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2">Créditos IA Mensuales</label>
               <div className="relative">
                  <input
                   type="number"
                   min="0"
                   value={newCreditLimit}
                   onChange={(e) => setNewCreditLimit(parseInt(e.target.value) || 0)}
-                  className="w-full bg-[#e0e5ec] rounded-xl p-4 text-slate-700 font-bold text-lg outline-none transition-all
-                  shadow-[inset_4px_4px_8px_#b8b9be,inset_-4px_-4px_8px_#ffffff]
-                  focus:shadow-[inset_6px_6px_12px_#b8b9be,inset_-6px_-6px_12px_#ffffff] focus:text-blue-600"
+                  className="w-full bg-[#e0e5ec] rounded-2xl p-5 text-slate-700 font-black text-2xl outline-none transition-all
+                  shadow-[inset_6px_6px_12px_#b8b9be,inset_-6px_-6px_12px_#ffffff]
+                  focus:text-blue-600"
                 />
-                <Coins className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 pointer-events-none" />
               </div>
-              <p className="text-xs text-slate-400 mt-2 ml-1">
-                Créditos actuales usados: {selectedUser.monthly_credits_used}
-              </p>
             </div>
 
-            <div className="flex gap-4">
+            <div className="flex gap-6">
               <button
                 onClick={handleCloseModal}
-                className="flex-1 py-3 rounded-xl font-bold text-slate-500 bg-[#e0e5ec] shadow-[6px_6px_10px_#b8b9be,-6px_-6px_10px_#ffffff] hover:text-slate-700 active:shadow-[inset_3px_3px_6px_#b8b9be,inset_-3px_-3px_6px_#ffffff] transition-all"
+                className="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-slate-500 bg-[#e0e5ec] shadow-[6px_6px_12px_#b8b9be,-6px_-6px_12px_#ffffff] active:shadow-inset transition-all"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSaveLimit}
                 disabled={updatingUser}
-                className="flex-1 py-3 rounded-xl font-bold text-blue-600 bg-[#e0e5ec] shadow-[6px_6px_10px_#b8b9be,-6px_-6px_10px_#ffffff] hover:text-blue-700 active:shadow-[inset_3px_3px_6px_#b8b9be,inset_-3px_-3px_6px_#ffffff] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex justify-center items-center gap-2"
+                className="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-blue-600 bg-[#e0e5ec] shadow-[6px_6px_12px_#b8b9be,-6px_-6px_12px_#ffffff] active:shadow-inset disabled:opacity-50 transition-all flex justify-center items-center gap-2"
               >
-                {updatingUser ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                Guardar
+                {updatingUser ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Actualizar
               </button>
             </div>
-
           </div>
         </div>
       )}

@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google"; // O tus fuentes 'Geist'
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
-
 export const metadata: Metadata = {
-  title: "AI Grader",
-  description: "App para calificar exámenes con IA",
+  title: "AI Grader - Plataforma de Evaluación",
+  description: "Automatiza tu calificación con IA",
 };
 
 export default function RootLayout({
@@ -16,7 +13,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className={inter.className}>
+      <body className="neu-container min-h-screen">
+        {/* Aquí NO hay NavigationBar. Así el Login queda limpio. */}
         {children}
       </body>
     </html>
