@@ -1,16 +1,54 @@
 'use server'
 
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
-import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+/**
+ * Obtiene la lista de todas las organizaciones
+ */
+export async function getOrganizations() {
+  const supabase = createAdminClient()
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('*')
+    .order('name')
 
-// --- 1. Obtener detalles de una organización y sus usuarios ---
+  if (error) {
+    console.error('Error obteniendo organizaciones:', error)
+    return []
+  }
+  return data
+}
+
+/**
+ * Crea una nueva organización
+ */
+export async function createOrganization(name: string) {
+  const supabase = createAdminClient()
+  try {
+    const { data, error } = await supabase
+      .from('organizations')
+      .insert([{ name }])
+      .select()
+      .single()
+
+    if (error) throw error
+    revalidatePath('/admin/organizations')
+    return { success: true, data }
+  } catch (error) {
+    console.error('Error:', error)
+    return { success: false, error: (error as Error).message }
+  }
+}
+
+/**
+ * Obtiene los detalles de una organización y sus usuarios (Saltando RLS)
+ */
 export async function getOrganizationDetails(id: string) {
   const supabase = createAdminClient()
 
   try {
+    // 1. Datos de la organización
     const { data: organization, error: orgError } = await supabase
       .from('organizations')
       .select('*')
@@ -19,24 +57,27 @@ export async function getOrganizationDetails(id: string) {
 
     if (orgError) throw orgError
 
+    // 2. Lista de usuarios de esa organización
     const { data: users, error: usersError } = await supabase
       .from('profiles')
       .select('*')
       .eq('organization_id', id)
+      .order('full_name', { ascending: true })
 
     if (usersError) throw usersError
 
-    return { organization, users }
+    return { organization, users, error: null }
   } catch (error) {
-    console.error('Error en getOrganizationDetails:', error)
+    console.error('Error:', error)
     return { organization: null, users: [], error: (error as Error).message }
   }
 }
 
-// --- 2. Actualizar detalles genéricos de la organización ---
+/**
+ * Actualiza campos genéricos de la organización (CRM, Facturación, etc.)
+ */
 export async function updateOrganizationDetails(id: string, updates: any) {
   const supabase = createAdminClient()
-
   try {
     const { error } = await supabase
       .from('organizations')
@@ -44,47 +85,77 @@ export async function updateOrganizationDetails(id: string, updates: any) {
       .eq('id', id)
 
     if (error) throw error
-
     revalidatePath(`/admin/organizations/${id}`)
     revalidatePath('/admin/organizations')
     return { success: true }
   } catch (error) {
-    console.error('Error en updateOrganizationDetails:', error)
+    console.error('Error:', error)
     return { success: false, error: (error as Error).message }
   }
 }
 
-// --- 3. NUEVA ACCIÓN: Subir Logo de Organización ---
-export async function uploadOrganizationLogo(organizationId: string, formData: FormData) {
+/**
+ * Asigna un plan y sus créditos correspondientes
+ */
+export async function assignPlanToOrganization(organizationId: string, plan: 'Basic' | 'Pro' | 'Enterprise') {
   const supabase = createAdminClient()
-  const file = formData.get('logo') as File
 
-  if (!file) {
-    return { success: false, error: 'No se ha seleccionado ningún archivo.' }
+  let credits = 0
+  switch (plan) {
+    case 'Basic': credits = 15000; break
+    case 'Pro': credits = 30000; break
+    case 'Enterprise': credits = 99999; break
   }
 
-  try {
-    // 1. Definir nombre único para el archivo
-    const fileExtension = file.name.split('.').pop()
-    const fileName = `logo_${organizationId}_${Date.now()}.${fileExtension}`
-    const filePath = `${organizationId}/${fileName}`
+  // Próxima renovación en 1 mes
+  const nextRenewal = new Date()
+  nextRenewal.setMonth(nextRenewal.getMonth() + 1)
 
-    // 2. Subir el archivo al bucket 'organization_logos'
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('organization_logos')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: true
+  try {
+    const { error } = await supabase
+      .from('organizations')
+      .update({
+        subscription_plan: plan,
+        credits_total_period: credits,
+        credits_remaining: credits,
+        next_renewal_date: nextRenewal.toISOString()
       })
+      .eq('id', organizationId)
+
+    if (error) throw error
+    revalidatePath(`/admin/organizations/${organizationId}`)
+    return { success: true }
+  } catch (error) {
+    console.error('Error:', error)
+    return { success: false, error: (error as Error).message }
+  }
+}
+
+/**
+ * Sube el logo de la organización al bucket de Storage
+ */
+export async function uploadOrganizationLogo(organizationId: string, formData: FormData) {
+  const supabase = createAdminClient()
+  const file = formData.get('logoFile') as File
+  if (!file) return { success: false, error: 'No se recibió ningún archivo' }
+
+  const fileExt = file.name.split('.').pop()
+  const fileName = `logo_${organizationId}_${Date.now()}.${fileExt}`
+
+  try {
+    // 1. Subir al Storage
+    const { error: uploadError } = await supabase.storage
+      .from('organization_logos')
+      .upload(fileName, file)
 
     if (uploadError) throw uploadError
 
-    // 3. Obtener la URL pública del logo
+    // 2. Obtener URL pública
     const { data: { publicUrl } } = supabase.storage
       .from('organization_logos')
-      .getPublicUrl(filePath)
+      .getPublicUrl(fileName)
 
-    // 4. Actualizar la URL en la tabla de organizaciones
+    // 3. Actualizar en la tabla de organizaciones
     const { error: updateError } = await supabase
       .from('organizations')
       .update({ logo_url: publicUrl })
@@ -93,128 +164,29 @@ export async function uploadOrganizationLogo(organizationId: string, formData: F
     if (updateError) throw updateError
 
     revalidatePath(`/admin/organizations/${organizationId}`)
-    revalidatePath('/admin/organizations')
-
-    return { success: true, publicUrl }
+    return { success: true, url: publicUrl }
   } catch (error) {
-    console.error('Error en uploadOrganizationLogo:', error)
+    console.error('Error:', error)
     return { success: false, error: (error as Error).message }
   }
 }
 
-// --- 4. Asignar Plan a la Organización ---
-export async function assignPlanToOrganization(
-  organizationId: string, 
-  plan: 'Basic' | 'Pro' | 'Enterprise'
-) {
-  const supabase = createAdminClient()
-
-  const planConfig = {
-    Basic: 15000,
-    Pro: 30000,
-    Enterprise: 99999
-  }
-
-  const credits = planConfig[plan]
-  const nextRenewalDate = new Date()
-  nextRenewalDate.setMonth(nextRenewalDate.getMonth() + 1)
-
-  try {
-    const { error } = await supabase
-      .from('organizations')
-      .update({
-        subscription_plan: plan,
-        credits_per_period: credits,
-        credits_remaining: credits,
-        next_renewal_date: nextRenewalDate.toISOString(),
-      })
-      .eq('id', organizationId)
-
-    if (error) throw error
-
-    revalidatePath(`/admin/organizations/${organizationId}`)
-    return { success: true }
-  } catch (error) {
-    console.error('Error en assignPlanToOrganization:', error)
-    return { success: false, error: (error as Error).message }
-  }
-}
-
-// --- 5. Generar y enviar pre-factura por email ---
-export async function generatePreInvoice(organizationId: string) {
-  const supabase = createAdminClient()
-
-  try {
-    const { data: org, error: fetchError } = await supabase
-      .from('organizations')
-      .select('name, subscription_plan, finance_contact_email, billing_address, tax_id, credits_per_period')
-      .eq('id', organizationId)
-      .single()
-
-    if (fetchError || !org) throw new Error('No se encontró la organización o sus datos de facturación')
-    if (!org.finance_contact_email) throw new Error('La organización no tiene un email de contacto financiero configurado.')
-
-    const emailHtml = `
-      <div style="font-family: sans-serif; padding: 20px; color: #333;">
-        <h2>Pre-Factura de Servicio</h2>
-        <p>Hola <strong>${org.name}</strong>,</p>
-        <p>Este es un borrador de los detalles de cobro para el próximo periodo:</p>
-        <hr />
-        <p><strong>Plan:</strong> ${org.subscription_plan}</p>
-        <p><strong>Créditos incluidos:</strong> ${org.credits_per_period}</p>
-        <p><strong>ID Fiscal:</strong> ${org.tax_id || 'No especificado'}</p>
-        <p><strong>Dirección:</strong> ${org.billing_address || 'No especificada'}</p>
-        <hr />
-        <p>Este documento no es una factura legal, es solo una notificación previa al cargo automático.</p>
-        <p>Saludos,<br/>El equipo administrativo</p>
-      </div>
-    `
-
-    const { data, error: sendError } = await resend.emails.send({
-      from: 'Admin <noreply@tudominio.com>', 
-      to: [org.finance_contact_email],
-      subject: `Pre-Factura: ${org.name} - Plan ${org.subscription_plan}`,
-      html: emailHtml,
-    })
-
-    if (sendError) throw sendError
-
-    return { success: true, messageId: data?.id }
-  } catch (error) {
-    console.error('Error en generatePreInvoice:', error)
-    return { success: false, error: (error as Error).message }
-  }
-}
-
-// --- Acciones de legado ---
-
-export async function createOrganization(name: string) {
-  const supabase = createAdminClient()
-  try {
-    const { error } = await supabase.from('organizations').insert([{ name }])
-    if (error) throw error
-    revalidatePath('/admin/organizations')
-    return { success: true }
-  } catch (error) {
-    return { success: false, error: (error as Error).message }
-  }
-}
-
-export async function getOrganizations() {
-  const supabase = createAdminClient()
-  const { data, error } = await supabase.from('organizations').select('*').order('name')
-  if (error) return []
-  return data
-}
-
+/**
+ * Elimina una organización
+ */
 export async function deleteOrganization(id: string) {
   const supabase = createAdminClient()
   try {
-    const { error } = await supabase.from('organizations').delete().eq('id', id)
+    const { error } = await supabase
+      .from('organizations')
+      .delete()
+      .eq('id', id)
+
     if (error) throw error
     revalidatePath('/admin/organizations')
     return { success: true }
   } catch (error) {
+    console.error('Error:', error)
     return { success: false, error: (error as Error).message }
   }
 }

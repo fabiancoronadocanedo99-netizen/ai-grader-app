@@ -1,8 +1,9 @@
 'use server'
-import { createAdminClient } from '@/lib/supabase/server'
+// --- CORRECCIÓN: Importamos del archivo que creamos nosotros ---
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function getAdminStats() {
-  const supabase = createAdminClient() // Cambiado a Admin
+  const supabase = createAdminClient() 
 
   try {
     const [orgs, users, evals] = await Promise.all([
