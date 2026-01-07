@@ -2,8 +2,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 
 export async function getAdminStats() {
-  // Usamos Service Role para ignorar RLS y contar TODO en la DB
-  const supabase = createAdminClient()
+  const supabase = createAdminClient() // Cambiado a Admin
 
   try {
     const [orgs, users, evals] = await Promise.all([
@@ -18,7 +17,7 @@ export async function getAdminStats() {
       evaluations: evals.count || 0
     }
   } catch (error) {
-    console.error('Error obteniendo stats globales:', error)
+    console.error('Error stats:', error)
     return { organizations: 0, users: 0, evaluations: 0 }
   }
 }
