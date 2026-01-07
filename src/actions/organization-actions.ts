@@ -189,4 +189,11 @@ export async function deleteOrganization(id: string) {
     console.error('Error:', error)
     return { success: false, error: (error as Error).message }
   }
+}/**
+ * Genera una pre-factura y la envía por correo
+ */
+export async function generatePreInvoice(organizationId: string) {
+  // Por ahora es un placeholder para que la app compile
+  console.log("Generando pre-factura para:", organizationId)
+  return { success: true, message: "Funcionalidad en desarrollo" }
 }
