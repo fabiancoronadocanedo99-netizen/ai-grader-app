@@ -35,20 +35,18 @@ export async function POST(request: NextRequest) {
       .eq('id', studentId)
       .single()
 
-    if (studentError || !studentData) return NextResponse.json({ error: 'Estudiante no encontrado' }, { status: 404 })
-
-    // Verificación de seguridad
+    if (studentError || !studentData) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
     if (studentData.classes.user_id !== user.id) return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
 
-    // Lógica de caché para FODA (15 días)
-    const lastUpdated = studentData.swot_last_updated ? new Date(studentData.swot_last_updated) : null
-    const daysSince = lastUpdated ? (Date.now() - lastUpdated.getTime()) / (1000 * 60 * 60 * 24) : 999
-
+    // Lógica FODA (Caché 15 días)
     let finalSwot = studentData.ai_swot
+    const lastUpdate = studentData.swot_last_updated ? new Date(studentData.swot_last_updated) : null
+    const daysSince = lastUpdate ? (Date.now() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24) : 999
+
     if (!finalSwot || daysSince > 15) {
-      const feedbacks = studentData.grades.filter((g:any) => g.ai_feedback).slice(0,5).map((g:any) => g.ai_feedback)
-      if (feedbacks.length > 0) {
-        finalSwot = await generateSWOT(feedbacks)
+      const fbs = studentData.grades.filter((g:any) => g.ai_feedback).slice(0,5).map((g:any) => g.ai_feedback)
+      if (fbs.length > 0) {
+        finalSwot = await generateSWOT(fbs)
         await supabaseAdmin.from('students').update({ ai_swot: finalSwot, swot_last_updated: new Date().toISOString() }).eq('id', studentId)
       }
     }
@@ -60,7 +58,6 @@ export async function POST(request: NextRequest) {
         fullName: studentData.full_name,
         studentEmail: studentData.student_email,
         tutorEmail: studentData.tutor_email,
-        classId: studentData.class_id,
       },
       class: { name: studentData.classes.name },
       grades: studentData.grades.map((g: any) => ({
@@ -81,7 +78,7 @@ export async function POST(request: NextRequest) {
       ai_swot: finalSwot
     })
   } catch (error) {
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 })
+    return NextResponse.json({ error: 'Error' }, { status: 500 })
   }
 }
 
@@ -97,9 +94,8 @@ async function generateSWOT(feedbacks: string[]) {
 }
 
 function calculateAverage(grades: any[]) {
-  const valid = grades.filter(g => g.score_obtained !== null && g.score_possible);
-  if (valid.length === 0) return 0;
-  return Math.round(valid.reduce((s, g) => s + ((g.score_obtained / g.score_possible) * 100), 0) / valid.length);
+  const v = grades.filter(g => g.score_obtained !== null && g.score_possible);
+  return v.length ? Math.round(v.reduce((s, g) => s + ((g.score_obtained / g.score_possible) * 100), 0) / v.length) : 0;
 }
 
 function calculatePoints(grades: any[]) {
