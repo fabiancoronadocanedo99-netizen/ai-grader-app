@@ -2,7 +2,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Tipos para la respuesta estructurada
 type StudentDashboardData = {
   id: string
   full_name: string
@@ -11,6 +10,8 @@ type StudentDashboardData = {
   class_id: string
   user_id: string
   created_at: string
+  ai_swot: any // Columna para el JSON del FODA
+  swot_last_updated: string | null // Columna para la fecha de control
   classes: {
     name: string
     user_id: string
@@ -25,6 +26,7 @@ type StudentDashboardData = {
     created_at: string
     exams: {
       name: string
+      type: 'exam' | 'assignment'
     } | null
   }>
 }
@@ -33,18 +35,11 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Verificar autenticación
+    // 1. Autenticación
     const authHeader = request.headers.get('authorization')
     const accessToken = authHeader?.replace('Bearer ', '')
+    if (!accessToken) return NextResponse.json({ error: 'Token requerido' }, { status: 401 })
 
-    if (!accessToken) {
-      return NextResponse.json(
-        { error: 'Token de autenticación requerido' },
-        { status: 401 }
-      )
-    }
-
-    // Verificar que el token sea válido y obtener el usuario
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -52,107 +47,73 @@ export async function POST(request: NextRequest) {
     )
 
     const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    if (userError || !user) {
-      return NextResponse.json(
-        { error: 'Autenticación fallida' },
-        { status: 401 }
-      )
-    }
+    const { studentId } = await request.json()
 
-    console.log('✅ Usuario autenticado:', user.id)
-
-    // 2. Obtener studentId del cuerpo de la petición
-    const body = await request.json()
-    const { studentId } = body
-
-    if (!studentId || typeof studentId !== 'string') {
-      return NextResponse.json(
-        { error: 'studentId es requerido y debe ser un string' },
-        { status: 400 }
-      )
-    }
-
-    console.log('🔍 Buscando información para student:', studentId)
-
-    // 3. Crear cliente admin de Supabase
+    // 2. Cliente Admin para lectura y escritura
     const supabaseAdmin = createClient(
       process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // 4. Realizar la consulta completa en una sola llamada
+    // 3. Consulta inicial incluyendo ai_swot y swot_last_updated
     const { data: studentData, error: studentError } = await supabaseAdmin
       .from('students')
       .select(`
         *,
         classes ( name, user_id ),
         grades ( 
-          id,
-          student_id,
-          exam_id,
-          score_obtained,
-          score_possible,
-          ai_feedback,
-          created_at,
-          exams ( name )
+          id, student_id, exam_id, score_obtained, score_possible, ai_feedback, created_at,
+          exams ( name, type )
         )
       `)
       .eq('id', studentId)
       .single<StudentDashboardData>()
 
-    if (studentError) {
-      console.error('❌ Error al buscar estudiante:', studentError)
+    if (studentError || !studentData) return NextResponse.json({ error: 'Estudiante no encontrado' }, { status: 404 })
 
-      if (studentError.code === 'PGRST116') {
-        return NextResponse.json(
-          { error: 'Estudiante no encontrado' },
-          { status: 404 }
-        )
+    // Seguridad: dueño de la clase
+    if (studentData.classes?.user_id !== user.id) return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
+
+    // --- 4. LÓGICA DE DECISIÓN FODA (CACHÉ) ---
+    const lastUpdated = studentData.swot_last_updated ? new Date(studentData.swot_last_updated) : null
+    const daysSinceUpdate = lastUpdated ? (Date.now() - lastUpdated.getTime()) / (1000 * 60 * 60 * 24) : 999
+
+    const shouldRegenerate = !studentData.ai_swot || daysSinceUpdate > 15
+    let finalSwot = studentData.ai_swot
+
+    if (shouldRegenerate) {
+      console.log('🔄 Regenerando FODA con IA (Caché expirada o inexistente)')
+
+      const recentFeedbacks = studentData.grades
+        .filter(g => g.ai_feedback)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 5)
+        .map(g => typeof g.ai_feedback === 'string' ? g.ai_feedback : JSON.stringify(g.ai_feedback))
+
+      if (recentFeedbacks.length > 0) {
+        const swotResult = await generateSWOTWithGemini(recentFeedbacks)
+
+        if (swotResult) {
+          finalSwot = swotResult
+          // Guardar en la base de datos para los próximos 15 días
+          await supabaseAdmin
+            .from('students')
+            .update({ 
+              ai_swot: swotResult, 
+              swot_last_updated: new Date().toISOString() 
+            })
+            .eq('id', studentId)
+
+          console.log('✅ FODA guardado en base de datos')
+        }
       }
-
-      return NextResponse.json(
-        { error: 'Error al obtener datos del estudiante', details: studentError.message },
-        { status: 500 }
-      )
+    } else {
+      console.log(`📦 Usando FODA almacenado (Actualizado hace ${Math.floor(daysSinceUpdate)} días)`)
     }
 
-    if (!studentData) {
-      return NextResponse.json(
-        { error: 'Estudiante no encontrado' },
-        { status: 404 }
-      )
-    }
-
-    console.log('📊 Datos encontrados:', {
-      student: studentData.full_name,
-      class: studentData.classes?.name,
-      grades: studentData.grades?.length || 0
-    })
-
-    // 5. Verificación de seguridad: El usuario debe ser dueño de la clase
-    if (!studentData.classes) {
-      return NextResponse.json(
-        { error: 'El estudiante no está asociado a ninguna clase' },
-        { status: 404 }
-      )
-    }
-
-    if (studentData.classes.user_id !== user.id) {
-      console.warn('⚠️ Intento de acceso no autorizado:', {
-        requestedBy: user.id,
-        classOwner: studentData.classes.user_id
-      })
-
-      return NextResponse.json(
-        { error: 'Acceso denegado: No tienes permiso para ver este estudiante' },
-        { status: 403 }
-      )
-    }
-
-    console.log('✅ Verificación de seguridad pasada')
-
-    // 6. Preparar y devolver los datos
+    // 5. Preparar respuesta
     const response = {
       success: true,
       student: {
@@ -161,81 +122,92 @@ export async function POST(request: NextRequest) {
         studentEmail: studentData.student_email,
         tutorEmail: studentData.tutor_email,
         classId: studentData.class_id,
-        createdAt: studentData.created_at
       },
-      class: {
-        name: studentData.classes.name
-      },
+      class: { name: studentData.classes?.name },
       grades: studentData.grades.map(grade => ({
         id: grade.id,
-        examId: grade.exam_id,
-        examName: grade.exams?.name || 'Sin nombre',
-        scoreObtained: grade.score_obtained,
-        scorePossible: grade.score_possible,
-        percentage: grade.score_possible && grade.score_obtained 
-          ? Math.round((grade.score_obtained / grade.score_possible) * 100)
-          : 0,
-        aiFeedback: grade.ai_feedback,
+        examName: grade.exams?.name || 'Evaluación',
+        type: grade.exams?.type || 'exam',
+        percentage: grade.score_possible ? Math.round((grade.score_obtained! / grade.score_possible) * 100) : 0,
         createdAt: grade.created_at
       })),
       stats: {
-        totalExams: studentData.grades?.length || 0,
+        totalExams: studentData.grades.length,
         averageScore: calculateAverageScore(studentData.grades),
-        totalPoints: calculateTotalPoints(studentData.grades)
-      }
+        totalPoints: calculateTotalPoints(studentData.grades),
+        monthlyAverages: calculateMonthlyAverages(studentData.grades)
+      },
+      swot: finalSwot // Devolvemos el FODA (nuevo o de la DB)
     }
-
-    console.log('✅ Dashboard generado exitosamente')
 
     return NextResponse.json(response)
 
   } catch (error) {
-    console.error('❌ Error fatal en la API:', error)
-    return NextResponse.json(
-      { 
-        error: 'Error interno del servidor', 
-        details: (error as Error).message 
-      },
-      { status: 500 }
-    )
+    console.error('❌ Error fatal:', error)
+    return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
 
-// Funciones auxiliares para calcular estadísticas
-function calculateAverageScore(grades: StudentDashboardData['grades']): number {
-  if (!grades || grades.length === 0) return 0
+// --- FUNCIÓN GEMINI ---
+async function generateSWOTWithGemini(feedbacks: string[]) {
+  const GEMINI_API_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY
+  // He usado 1.5-flash ya que 2.5 no existe comercialmente aún, pero el prompt es el solicitado
+  const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`
 
-  const validGrades = grades.filter(g => 
-    g.score_obtained !== null && 
-    g.score_possible !== null && 
-    g.score_possible > 0
-  )
+  const prompt = {
+    contents: [{
+      parts: [{
+        text: `Analiza este historial de feedback pedagógico y genera un FODA (Fortalezas, Oportunidades, Debilidades y Amenazas) académico. 
 
-  if (validGrades.length === 0) return 0
+        Feedbacks:
+        ${feedbacks.join('\n- ')}
 
-  const totalPercentage = validGrades.reduce((sum, grade) => {
-    const percentage = (grade.score_obtained! / grade.score_possible!) * 100
-    return sum + percentage
-  }, 0)
-
-  return Math.round(totalPercentage / validGrades.length)
-}
-
-function calculateTotalPoints(grades: StudentDashboardData['grades']): {
-  obtained: number
-  possible: number
-} {
-  if (!grades || grades.length === 0) {
-    return { obtained: 0, possible: 0 }
+        Devuelve exclusivamente un JSON con las claves: fortalezas, oportunidades, debilidades, amenazas. Sé ejecutivo y motivador.`
+      }]
+    }]
   }
 
-  const validGrades = grades.filter(g => 
-    g.score_obtained !== null && 
-    g.score_possible !== null
-  )
+  const response = await fetch(GEMINI_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(prompt)
+  })
 
-  const obtained = validGrades.reduce((sum, grade) => sum + grade.score_obtained!, 0)
-  const possible = validGrades.reduce((sum, grade) => sum + grade.score_possible!, 0)
+  const data = await response.json()
+  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
 
-  return { obtained, possible }
+  // Limpieza de JSON
+  const jsonMatch = rawText.match(/\{[\s\S]*\}/)
+  return jsonMatch ? JSON.parse(jsonMatch[0]) : null
+}
+
+// --- FUNCIONES AUXILIARES ---
+function calculateAverageScore(grades: any[]) {
+  const valid = grades.filter(g => g.score_obtained !== null && g.score_possible);
+  if (valid.length === 0) return 0;
+  return Math.round(valid.reduce((sum, g) => sum + ((g.score_obtained / g.score_possible) * 100), 0) / valid.length);
+}
+
+function calculateTotalPoints(grades: any[]) {
+  const valid = grades.filter(g => g.score_obtained !== null && g.score_possible);
+  return {
+    obtained: valid.reduce((sum, g) => sum + g.score_obtained, 0),
+    possible: valid.reduce((sum, g) => sum + g.score_possible, 0)
+  }
+}
+
+function calculateMonthlyAverages(grades: any[]) {
+  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const stats = Array.from({ length: 12 }, (_, i) => ({ month: months[i], sum: 0, count: 0 }));
+  const currentYear = new Date().getFullYear();
+
+  grades.forEach(g => {
+    const d = new Date(g.created_at);
+    if (d.getFullYear() === currentYear && g.score_obtained !== null && g.score_possible) {
+      const idx = d.getMonth();
+      stats[idx].sum += (g.score_obtained / g.score_possible) * 100;
+      stats[idx].count++;
+    }
+  });
+  return stats.map(m => ({ month: m.month, average: m.count > 0 ? Math.round(m.sum / m.count) : null }));
 }

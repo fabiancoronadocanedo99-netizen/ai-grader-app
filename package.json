@@ -24,7 +24,7 @@
     "react": "^18",
     "react-dom": "^18",
     "react-dropzone": "^14.2.3",
-    "recharts": "^2.12.7",
+    "recharts": "^2.15.4",
     "resend": "^6.6.0",
     "tailwind-merge": "^3.4.0"
   },
