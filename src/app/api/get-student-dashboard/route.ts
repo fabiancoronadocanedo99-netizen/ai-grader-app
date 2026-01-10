@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
     const { studentId } = await request.json()
     const supabaseAdmin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
+    // Consulta completa
     const { data: studentData, error: studentError } = await supabaseAdmin
       .from('students')
       .select(`
@@ -35,19 +36,38 @@ export async function POST(request: NextRequest) {
       .eq('id', studentId)
       .single()
 
-    if (studentError || !studentData) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
+    if (studentError || !studentData) return NextResponse.json({ error: 'Estudiante no encontrado' }, { status: 404 })
     if (studentData.classes.user_id !== user.id) return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
 
-    // Lógica FODA (Caché 15 días)
+    // --- LÓGICA DE CACHÉ Y GENERACIÓN FODA IA ---
     let finalSwot = studentData.ai_swot
     const lastUpdate = studentData.swot_last_updated ? new Date(studentData.swot_last_updated) : null
     const daysSince = lastUpdate ? (Date.now() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24) : 999
 
     if (!finalSwot || daysSince > 15) {
-      const fbs = studentData.grades.filter((g:any) => g.ai_feedback).slice(0,5).map((g:any) => g.ai_feedback)
-      if (fbs.length > 0) {
-        finalSwot = await generateSWOT(fbs)
-        await supabaseAdmin.from('students').update({ ai_swot: finalSwot, swot_last_updated: new Date().toISOString() }).eq('id', studentId)
+      // Extraemos los feedbacks del JSONB que mostraste en la captura
+      const feedbacks = studentData.grades
+        .filter((g: any) => g.ai_feedback)
+        .slice(0, 5)
+        .map((g: any) => JSON.stringify(g.ai_feedback))
+
+      if (feedbacks.length > 0) {
+        finalSwot = await generateSWOT(feedbacks)
+        if (finalSwot) {
+          await supabaseAdmin.from('students')
+            .update({ ai_swot: finalSwot, swot_last_updated: new Date().toISOString() })
+            .eq('id', studentId)
+        }
+      }
+    }
+
+    // Fallback por si la IA falla o no hay datos
+    if (!finalSwot) {
+      finalSwot = {
+        fortalezas: "Iniciando análisis de desempeño.",
+        oportunidades: "Se requiere completar más evaluaciones para un diagnóstico detallado.",
+        debilidades: "Historial de retroalimentación en proceso de recopilación.",
+        amenazas: "Mantener la constancia en las entregas para evitar riesgos académicos."
       }
     }
 
@@ -78,19 +98,34 @@ export async function POST(request: NextRequest) {
       ai_swot: finalSwot
     })
   } catch (error) {
-    return NextResponse.json({ error: 'Error' }, { status: 500 })
+    console.error("Error API:", error)
+    return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
 
 async function generateSWOT(feedbacks: string[]) {
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GOOGLE_GENERATIVE_AI_API_KEY}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts: [{ text: `Analiza este feedback y genera un JSON con claves: fortalezas, oportunidades, debilidades, amenazas: ${feedbacks.join('|')}` }] }] })
-  })
-  const data = await res.json()
-  const match = data.candidates?.[0]?.content?.parts?.[0]?.text.match(/\{[\s\S]*\}/)
-  return match ? JSON.parse(match[0]) : null
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GOOGLE_GENERATIVE_AI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: `Analiza estos informes de evaluación pedagógica en formato JSON: ${feedbacks.join(' | ')}. 
+            Genera un análisis FODA ejecutivo y motivador. 
+            Responde ÚNICAMENTE un objeto JSON con las claves: fortalezas, oportunidades, debilidades y amenazas. 
+            No incluyas markdown ni texto adicional.`
+          }]
+        }]
+      })
+    })
+    const data = await res.json()
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const match = rawText.match(/\{[\s\S]*\}/)
+    return match ? JSON.parse(match[0]) : null
+  } catch (e) {
+    return null
+  }
 }
 
 function calculateAverage(grades: any[]) {
