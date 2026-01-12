@@ -35,85 +35,101 @@ export default function StudentDashboardPage() {
   }, [studentId])
 
   const processed = useMemo(() => {
-    if (!dashboardData || !dashboardData.grades) return null
+    if (!dashboardData?.grades || dashboardData.grades.length === 0) return null
+
+    // Filtramos usando el campo 'type' que acabamos de ver en tu tabla
     const exams = dashboardData.grades.filter((g: any) => g.type === 'exam')
     const homeworks = dashboardData.grades.filter((g: any) => g.type === 'assignment')
 
     const avgExams = exams.length ? exams.reduce((s:any, g:any) => s + g.percentage, 0) / exams.length : 0
     const avgHomeworks = homeworks.length ? homeworks.reduce((s:any, g:any) => s + g.percentage, 0) / homeworks.length : 0
 
+    // Cálculo de calificación final proyectada
+    let final;
+    if (homeworks.length === 0) {
+        final = avgExams
+    } else if (exams.length === 0) {
+        final = avgHomeworks
+    } else {
+        final = (avgExams * (examWeight / 100)) + (avgHomeworks * (homeworkWeight / 100))
+    }
+
+    const sorted = [...dashboardData.grades].sort((a, b) => b.percentage - a.percentage)
+
     return {
       exams, homeworks,
       avgExams: Math.round(avgExams),
       avgHomeworks: Math.round(avgHomeworks),
-      finalGrade: Math.round((avgExams * (examWeight / 100)) + (avgHomeworks * (homeworkWeight / 100))),
-      best: [...dashboardData.grades].sort((a, b) => b.percentage - a.percentage)[0]
+      finalGrade: Math.round(final),
+      best: sorted[0]
     }
   }, [dashboardData, examWeight, homeworkWeight])
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-[#d1d9e6] font-bold">Cargando Súper Dashboard...</div>
-  if (!dashboardData) return <div className="p-8">Error al conectar con la base de datos.</div>
+  if (loading) return <div className="h-screen flex items-center justify-center bg-[#d1d9e6] font-bold">Cargando Dashboard...</div>
+  if (!dashboardData) return <div className="p-8 text-center text-red-500 font-bold">Error de conexión.</div>
 
   return (
     <div className="min-h-screen bg-[#d1d9e6] p-4 md:p-8 text-gray-700">
       <div className="max-w-7xl mx-auto">
 
-        {/* HEADER Y ACCIONES */}
+        {/* ACCIONES */}
         <div className="flex justify-between items-center mb-6">
-          <button onClick={() => router.back()} className="neu-button px-6 py-2 font-bold">← Volver</button>
+          <button onClick={() => router.back()} className="neu-button px-6 py-2 font-bold tracking-tighter">← Volver</button>
           <button 
             onClick={async () => {
               setSending(true);
-              const result = await sendStudentReportToParent({
+              await sendStudentReportToParent({
                 studentId, studentName: dashboardData.student.fullName,
                 className: dashboardData.class.name, finalGrade: processed?.finalGrade || 0,
                 swot: dashboardData.ai_swot
               });
               setSending(false);
-              alert(result.success ? "Reporte enviado" : "Error al enviar");
+              alert("✅ Reporte enviado a padres");
             }}
-            className="neu-button px-6 py-2 text-blue-700 font-black"
+            className="neu-button px-6 py-2 text-blue-700 font-black tracking-tighter"
           >
-            {sending ? "⏳ ENVIANDO..." : "📧 ENVIAR REPORTE A PADRES"}
+            {sending ? "Enviando..." : "📧 Enviar Reporte"}
           </button>
         </div>
 
-        {/* DATOS PERSONALES */}
+        {/* CABECERA ALUMNO */}
         <div className="neu-card p-8 mb-8 flex justify-between items-center relative overflow-hidden">
           <div className="z-10">
-            <h1 className="text-4xl font-black text-gray-800 mb-2">{dashboardData.student?.fullName}</h1>
-            <p className="text-lg font-bold">📚 Clase: <span className="opacity-70">{dashboardData.class?.name}</span></p>
-            <p className="text-sm mt-4 opacity-50 font-bold">📧 {dashboardData.student?.studentEmail}</p>
-            <p className="text-sm opacity-50 font-bold">👨‍👩‍👧 Tutor: {dashboardData.student?.tutorEmail}</p>
+            <h1 className="text-4xl font-black text-gray-800 mb-2">{dashboardData.student.fullName}</h1>
+            <p className="text-lg font-bold">📚 Clase: <span className="opacity-70">{dashboardData.class.name}</span></p>
+            <div className="mt-4 space-y-1">
+                <p className="text-xs opacity-50 font-bold uppercase tracking-widest">📧 {dashboardData.student.studentEmail}</p>
+                <p className="text-xs opacity-50 font-bold uppercase tracking-widest">👨‍👩‍👧 {dashboardData.student.tutorEmail}</p>
+            </div>
           </div>
           <div className="text-[120px] opacity-10 absolute right-10 bottom-[-20px] select-none">👤</div>
         </div>
 
-        {/* RESUMEN SUPERIOR */}
+        {/* CONTENEDORES PRINCIPALES */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8 text-center">
-          <StatCard title="Promedio General" value={`${processed?.finalGrade || 0}%`} sub="Calificación Ponderada" icon="📊" />
-          <StatCard title="Evaluaciones" value={dashboardData.stats?.totalEvaluations || 0} sub="Pruebas realizadas" icon="📝" />
-          <StatCard title="Puntos Totales" value={`${dashboardData.stats?.totalPoints?.obtained || 0}/${dashboardData.stats?.totalPoints?.possible || 0}`} sub="Puntos acumulados" icon="🎯" />
+          <StatCard title="Promedio Final" value={`${processed?.finalGrade || 0}%`} sub="Cálculo Ponderado" icon="📊" />
+          <StatCard title="Evaluaciones" value={dashboardData.stats.totalEvaluations} sub="Total realizadas" icon="📝" />
+          <StatCard title="Puntos Totales" value={`${dashboardData.stats.totalPoints.obtained}/${dashboardData.stats.totalPoints.possible}`} sub="Puntos acumulados" icon="🎯" />
         </div>
 
-        {/* PESOS Y EVOLUCIÓN */}
+        {/* CONFIG Y GRÁFICA */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
           <div className="neu-card p-6">
-            <h3 className="text-lg font-black mb-6 flex items-center gap-2">⚙️ Configuración de Pesos</h3>
+            <h3 className="text-lg font-black mb-6 uppercase opacity-40">⚙️ Pesos</h3>
             <div className="space-y-8">
-              <WeightSlider label="Exámenes" value={examWeight} onChange={(v:any) => {setExamWeight(v); setHomeworkWeight(100-v)}} />
-              <WeightSlider label="Tareas y Trabajos" value={homeworkWeight} onChange={(v:any) => {setHomeworkWeight(v); setExamWeight(100-v)}} />
+              <WeightSlider label="Exámenes" value={examWeight} onChange={setExamWeight} />
+              <WeightSlider label="Tareas" value={homeworkWeight} onChange={setHomeworkWeight} />
             </div>
           </div>
           <div className="neu-card p-6 lg:col-span-2">
-            <h3 className="text-lg font-black mb-4">📈 Evolución Mensual del Rendimiento</h3>
+            <h3 className="text-lg font-black mb-4 uppercase opacity-40">📈 Evolución</h3>
             <div className="h-[250px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={dashboardData.stats?.monthlyAverages || []}>
+                <AreaChart data={dashboardData.stats.monthlyAverages}>
+                  <Area type="monotone" dataKey="average" stroke="#2563eb" strokeWidth={4} fill="#2563eb20" />
                   <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 'bold'}} />
-                  <YAxis domain={[0, 100]} axisLine={false} tickLine={false} />
+                  <YAxis hide domain={[0,100]} />
                   <Tooltip contentStyle={{ borderRadius: '15px', border: 'none', backgroundColor: '#d1d9e6' }} />
-                  <Area type="monotone" dataKey="average" stroke="#2563eb" strokeWidth={4} fill="#2563eb30" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -131,23 +147,23 @@ export default function StudentDashboardPage() {
           </div>
         </div>
 
-        {/* ANÁLISIS DE RENDIMIENTO */}
+        {/* ANÁLISIS RENDIMIENTO */}
         <div className="mb-12">
-          <h2 className="text-2xl font-black mb-6 flex items-center gap-2">📈 Análisis de Rendimiento</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <h2 className="text-2xl font-black mb-6">📈 Análisis de Rendimiento</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8 text-center">
             <StatCardSmall title="Promedio" value={`${processed?.avgExams || 0}%`} icon="📝" color="text-blue-600" />
             <StatCardSmall title="Tareas" value={`${processed?.avgHomeworks || 0}%`} icon="📚" color="text-purple-600" />
             <StatCardSmall title="Mejor Nota" value={`${processed?.best?.percentage || 0}%`} sub={processed?.best?.examName} icon="🏆" color="text-green-600" />
-            <StatCardSmall title="Puntos" value={dashboardData.stats?.totalPoints?.obtained || 0} sub={`de ${dashboardData.stats?.totalPoints?.possible || 0}`} icon="🎯" color="text-red-500" />
+            <StatCardSmall title="Puntos" value={dashboardData.stats.totalPoints.obtained} sub={`de ${dashboardData.stats.totalPoints.possible}`} icon="🎯" color="text-red-500" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="neu-card p-6">
                 <h3 className="text-xl font-black mb-6 text-blue-700">📝 Exámenes</h3>
                 <div className="space-y-4">
-                    {(processed?.exams || []).map((g:any) => (
+                    {processed?.exams.map((g:any) => (
                         <div key={g.id} className="p-4 rounded-3xl bg-[#d1d9e6] shadow-[inset_4px_4px_8px_#b1b9c5,inset_-4px_-4px_8px_#f1f9ff] flex justify-between items-center">
-                            <div><p className="font-black text-gray-800 uppercase text-sm tracking-tighter">{g.examName}</p><p className="text-[10px] font-bold opacity-40">{new Date(g.createdAt).toLocaleDateString()}</p></div>
+                            <div><p className="font-black text-gray-800 uppercase text-xs">{g.examName}</p><p className="text-[9px] opacity-40 font-bold">{new Date(g.createdAt).toLocaleDateString()}</p></div>
                             <div className="text-right"><p className="text-lg font-black text-blue-600">{g.percentage}%</p></div>
                         </div>
                     ))}
@@ -156,9 +172,9 @@ export default function StudentDashboardPage() {
             <div className="neu-card p-6">
                 <h3 className="text-xl font-black mb-6 text-purple-700">📚 Tareas</h3>
                 <div className="space-y-4">
-                    {(processed?.homeworks || []).map((g:any) => (
+                    {processed?.homeworks.map((g:any) => (
                         <div key={g.id} className="p-4 rounded-3xl bg-[#d1d9e6] shadow-[inset_4px_4px_8px_#b1b9c5,inset_-4px_-4px_8px_#f1f9ff] flex justify-between items-center">
-                            <div><p className="font-black text-gray-800 uppercase text-sm tracking-tighter">{g.examName}</p><p className="text-[10px] font-bold opacity-40">{new Date(g.createdAt).toLocaleDateString()}</p></div>
+                            <div><p className="font-black text-gray-800 uppercase text-xs">{g.examName}</p><p className="text-[9px] opacity-40 font-bold">{new Date(g.createdAt).toLocaleDateString()}</p></div>
                             <div className="text-right"><p className="text-lg font-black text-purple-600">{g.percentage}%</p></div>
                         </div>
                     ))}
@@ -172,24 +188,24 @@ export default function StudentDashboardPage() {
   )
 }
 
-// --- SUB-COMPONENTES ---
+// --- SUBCOMPONENTES ---
 function StatCard({ title, value, sub, icon }: any) {
   return (
-    <div className="neu-card p-8"><div className="text-2xl mb-2 opacity-50">{icon}</div><h4 className="text-xs font-black uppercase opacity-40 tracking-widest">{title}</h4><div className="text-5xl font-black text-blue-700 my-1">{value}</div><p className="text-[10px] font-bold opacity-40">{sub}</p></div>
+    <div className="neu-card p-8"><div className="text-2xl mb-2 opacity-30">{icon}</div><h4 className="text-xs font-black uppercase opacity-40 tracking-widest">{title}</h4><div className="text-5xl font-black text-blue-700 my-1">{value}</div><p className="text-[10px] font-bold opacity-40">{sub}</p></div>
   )
 }
 function StatCardSmall({ title, value, sub, icon, color }: any) {
   return (
-    <div className="neu-card p-6 text-center"><div className="text-2xl mb-1">{icon}</div><p className="text-[10px] font-black uppercase opacity-40 mb-1">{title}</p><div className={`text-2xl font-black ${color}`}>{value}</div>{sub && <p className="text-[9px] font-bold opacity-50 truncate mt-1">{sub}</p>}</div>
+    <div className="neu-card p-6"><div className="text-2xl mb-1">{icon}</div><p className="text-[10px] font-black uppercase opacity-40 mb-1">{title}</p><div className={`text-2xl font-black ${color}`}>{value}</div>{sub && <p className="text-[8px] font-bold opacity-50 truncate mt-1">{sub}</p>}</div>
   )
 }
 function WeightSlider({ label, value, onChange }: any) {
   return (
-    <div><div className="flex justify-between mb-2 text-xs font-black uppercase opacity-50"><span>{label}</span><span>{value}%</span></div><input type="range" min="0" max="100" value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer" /></div>
+    <div><div className="flex justify-between mb-2 text-xs font-black uppercase opacity-40"><span>{label}</span><span>{value}%</span></div><input type="range" min="0" max="100" value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer" /></div>
   )
 }
 function SWOTCard({ title, text, icon, color }: any) {
   return (
-    <div className={`neu-card p-6 border-l-8 ${color}`}><div className="flex items-center gap-3 mb-2 font-black"><span>{icon}</span> {title.toUpperCase()}</div><p className="text-sm font-medium italic text-gray-600 leading-relaxed">{text || "Analizando..."}</p></div>
+    <div className={`neu-card p-6 border-l-8 ${color}`}><div className="flex items-center gap-3 mb-2 font-black uppercase tracking-tighter"><span>{icon}</span> {title}</div><p className="text-sm font-medium italic text-gray-600 leading-relaxed">{text || "Generando..."}</p></div>
   )
 }

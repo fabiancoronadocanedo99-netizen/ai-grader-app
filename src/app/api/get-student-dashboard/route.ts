@@ -19,7 +19,14 @@ export async function POST(request: NextRequest) {
 
     const { data: studentData, error: studentError } = await supabaseAdmin
       .from('students')
-      .select(`*, classes ( name, user_id ), grades ( id, score_obtained, score_possible, ai_feedback, created_at, exams ( name, type ) )`)
+      .select(`
+        *,
+        classes ( name, user_id ),
+        grades ( 
+          id, score_obtained, score_possible, ai_feedback, created_at, 
+          exams ( name, type ) 
+        )
+      `)
       .eq('id', studentId)
       .single()
 
@@ -29,31 +36,40 @@ export async function POST(request: NextRequest) {
     let finalSwot = studentData.ai_swot
     if (!finalSwot) {
       const lastGrade = (studentData.grades || []).filter((g: any) => g.ai_feedback).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
-      const smallCtx = lastGrade?.ai_feedback?.informe_evaluacion?.evaluacion_detallada?.[0]?.feedback || "Buen desempeño."
+      const smallCtx = typeof lastGrade?.ai_feedback === 'string' ? lastGrade.ai_feedback : JSON.stringify(lastGrade?.ai_feedback || "Buen progreso.")
       finalSwot = await generateSWOT(smallCtx.substring(0, 250))
-
-      if (finalSwot) {
-        await supabaseAdmin.from('students').update({ ai_swot: finalSwot, swot_last_updated: new Date().toISOString() }).eq('id', studentId)
-      }
+      if (finalSwot) await supabaseAdmin.from('students').update({ ai_swot: finalSwot, swot_last_updated: new Date().toISOString() }).eq('id', studentId)
     }
+
+    // MAPEO DE GRADES SEGURO
+    const formattedGrades = (studentData.grades || []).map((g: any) => {
+      const examInfo = g.exams;
+      return {
+        id: g.id,
+        examName: examInfo?.name || 'Evaluación',
+        type: examInfo?.type || 'exam',
+        scoreObtained: g.score_obtained || 0,
+        scorePossible: g.score_possible || 0,
+        percentage: g.score_possible ? Math.round((g.score_obtained / g.score_possible) * 100) : 0,
+        createdAt: g.created_at
+      }
+    });
 
     return NextResponse.json({
       success: true,
       student: { id: studentData.id, fullName: studentData.full_name, studentEmail: studentData.student_email, tutorEmail: studentData.tutor_email },
       class: { name: studentData.classes?.name || 'Sin clase' },
-      grades: (studentData.grades || []).map((g: any) => ({
-        id: g.id, examName: g.exams?.name || 'Evaluación', type: g.exams?.type || 'exam',
-        scoreObtained: g.score_obtained, scorePossible: g.score_possible,
-        percentage: g.score_possible ? Math.round((g.score_obtained / g.score_possible) * 100) : 0,
-        createdAt: g.created_at
-      })),
+      grades: formattedGrades,
       stats: {
-        totalEvaluations: studentData.grades?.length || 0,
-        averageScore: calculateAverage(studentData.grades || []),
-        totalPoints: calculatePoints(studentData.grades || []),
+        totalEvaluations: formattedGrades.length,
+        totalPoints: {
+            // CORRECCIÓN DE ERRORES TYPESCRIPT (Líneas 68-69)
+            obtained: formattedGrades.reduce((acc: number, curr: any) => acc + curr.scoreObtained, 0),
+            possible: formattedGrades.reduce((acc: number, curr: any) => acc + curr.scorePossible, 0)
+        },
         monthlyAverages: calculateMonthly(studentData.grades || [])
       },
-      ai_swot: finalSwot || { fortalezas: "En análisis", oportunidades: "En análisis", debilidades: "En análisis", amenazas: "En análisis" }
+      ai_swot: finalSwot || { fortalezas: "En proceso", oportunidades: "En proceso", debilidades: "En proceso", amenazas: "En proceso" }
     })
   } catch (e) { return NextResponse.json({ error: 'Server Error' }, { status: 500 }) }
 }
@@ -77,23 +93,17 @@ async function generateSWOT(ctx: string) {
   } catch { return null }
 }
 
-function calculateAverage(gs: any[]) {
-  const v = gs.filter(g => g.score_obtained !== null && g.score_possible)
-  return v.length ? Math.round(v.reduce((s, g) => s + ((g.score_obtained / g.score_possible) * 100), 0) / v.length) : 0
-}
-
-function calculatePoints(gs: any[]) {
-  return { obtained: gs.reduce((s, g) => s + (g.score_obtained || 0), 0), possible: gs.reduce((s, g) => s + (g.score_possible || 0), 0) }
-}
-
 function calculateMonthly(gs: any[]) {
   const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
   const stats = Array.from({ length: 12 }, (_, i) => ({ month: months[i], sum: 0, count: 0 }))
-  gs.forEach(g => {
+  const currentYear = new Date().getFullYear();
+  gs.forEach((g: any) => {
     const d = new Date(g.created_at)
-    if (d.getFullYear() === new Date().getFullYear() && g.score_possible) {
-      const idx = d.getMonth(); stats[idx].sum += (g.score_obtained / g.score_possible) * 100; stats[idx].count++
+    if (d.getFullYear() === currentYear && g.score_possible) {
+      const idx = d.getMonth(); 
+      stats[idx].sum += (g.score_obtained / g.score_possible) * 100; 
+      stats[idx].count++
     }
   })
-  return stats.map(m => ({ month: m.month, average: m.count > 0 ? Math.round(m.sum / m.count) : null }))
+  return stats.map((m: any) => ({ month: m.month, average: m.count > 0 ? Math.round(m.sum / m.count) : null }))
 }
