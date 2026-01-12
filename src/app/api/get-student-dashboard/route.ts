@@ -29,42 +29,39 @@ export async function POST(request: NextRequest) {
     const lastUpdate = studentData.swot_last_updated ? new Date(studentData.swot_last_updated) : null
     const daysSince = lastUpdate ? (Date.now() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24) : 999
 
+    // SI NO HAY SWOT, GENERAMOS UNO MINI
     if (!finalSwot || daysSince > 15) {
-      console.log("🚩 [LOG] Generando diagnóstico para:", studentData.full_name);
+      console.log("🚀 [PASO 1] Iniciando IA para:", studentData.full_name);
 
-      // EXTRACCIÓN SÚPER RESUMIDA (Para no disparar filtros de seguridad de Google)
-      const feedbackTexts = studentData.grades
+      // EXTRAEMOS SOLO EL FEEDBACK DE LA PRIMERA PREGUNTA DEL ÚLTIMO EXAMEN (MÁXIMA VELOCIDAD)
+      const lastGrade = studentData.grades
         .filter((g: any) => g.ai_feedback)
-        .slice(0, 3) 
-        .map((g: any) => {
-          const f = g.ai_feedback;
-          // Sacamos solo una frase clave para que Google no se asuste
-          if (f.informe_evaluacion?.resumen_general?.comentarios_globales) {
-              return f.informe_evaluacion.resumen_general.comentarios_globales.substring(0, 200);
-          }
-          return "Buen desempeño en las evaluaciones realizadas.";
-        });
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
 
-      if (feedbackTexts.length > 0) {
-        const swotResult = await generateSWOT(feedbackTexts);
-        if (swotResult) {
-          finalSwot = swotResult;
-          await supabaseAdmin.from('students').update({ 
-            ai_swot: finalSwot, 
-            swot_last_updated: new Date().toISOString() 
-          }).eq('id', studentId);
-          console.log("✅ [ÉXITO] FODA guardado.");
-        }
+      let smallContext = "Buen progreso general.";
+      if (lastGrade?.ai_feedback?.informe_evaluacion?.evaluacion_detallada?.[0]?.feedback) {
+          smallContext = lastGrade.ai_feedback.informe_evaluacion.evaluacion_detallada[0].feedback;
+      }
+
+      const swotResult = await generateSWOT(smallContext.substring(0, 300));
+
+      if (swotResult) {
+        finalSwot = swotResult;
+        console.log("🚀 [PASO 2] IA respondió. Guardando...");
+        await supabaseAdmin.from('students').update({ 
+          ai_swot: finalSwot, 
+          swot_last_updated: new Date().toISOString() 
+        }).eq('id', studentId);
       }
     }
 
-    // Fallback amigable
+    // Fallback si la IA falló
     if (!finalSwot) {
       finalSwot = {
-        fortalezas: "Análisis pedagógico en proceso.",
-        oportunidades: "Se requiere más historial para diagnóstico detallado.",
-        debilidades: "Información insuficiente actualmente.",
-        amenazas: "Mantener regularidad en las entregas."
+        fortalezas: "Análisis en proceso.",
+        oportunidades: "Completar más tareas.",
+        debilidades: "Datos insuficientes.",
+        amenazas: "Mantener constancia."
       };
     }
 
@@ -88,64 +85,37 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error("❌ [CRITICAL]:", error)
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 })
+    console.error("❌ Error:", error)
+    return NextResponse.json({ error: 'Error' }, { status: 500 })
   }
 }
 
-async function generateSWOT(feedbacks: string[]) {
+async function generateSWOT(context: string) {
   try {
     const GEMINI_KEY = process.env.GOOGLE_AI_API_KEY;
     if (!GEMINI_KEY) return null;
-
-    // Prompt minimalista para evitar bloqueos
-    const prompt = `Basado en: "${feedbacks.join('. ')}". 
-    Genera un JSON con fortalezas, oportunidades, debilidades y amenazas. 
-    Máximo 10 palabras por punto. SOLO JSON PURO.`;
 
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        // DESACTIVAMOS TODOS LOS FILTROS PARA QUE NO DEVUELVA VACÍO
-        safetySettings: [
-          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-        ],
-        generationConfig: {
-            temperature: 0.1, // Baja temperatura para que sea más preciso y rápido
-            topP: 0.1
-        }
+        contents: [{ parts: [{ text: `Alumno: "${context}". Genera JSON con claves: fortalezas, oportunidades, debilidades, amenazas. Sé breve (5 palabras c/u). SOLO JSON.` }] }],
+        safetySettings: [{ category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" }]
       })
     });
 
     const data = await res.json();
-
-    // Si Google nos da error de seguridad, lo veremos aquí
-    if (data.promptFeedback?.blockReason) {
-        console.error("❌ [GOOGLE BLOCKED]:", data.promptFeedback.blockReason);
-        return null;
-    }
-
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     if (!rawText) return null;
 
     const start = rawText.indexOf('{');
     const end = rawText.lastIndexOf('}');
-    const jsonString = rawText.substring(start, end + 1);
+    const parsed = JSON.parse(rawText.substring(start, end + 1));
 
-    const parsed = JSON.parse(jsonString);
     const normalized: any = {};
-    Object.keys(parsed).forEach(key => {
-      normalized[key.toLowerCase()] = parsed[key];
-    });
-
+    Object.keys(parsed).forEach(k => normalized[k.toLowerCase()] = parsed[k]);
     return normalized;
   } catch (e) {
-    console.error("❌ [GENERATE SWOT ERROR]:", e);
     return null;
   }
 }
