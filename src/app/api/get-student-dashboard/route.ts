@@ -6,7 +6,6 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Verificar autenticación
     const authHeader = request.headers.get('authorization')
     const accessToken = authHeader?.replace('Bearer ', '')
     if (!accessToken) return NextResponse.json({ error: 'Token requerido' }, { status: 401 })
@@ -20,7 +19,6 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     if (userError || !user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    // 2. Obtener datos del estudiante
     const { studentId } = await request.json()
     const supabaseAdmin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -39,57 +37,57 @@ export async function POST(request: NextRequest) {
 
     if (studentError || !studentData) return NextResponse.json({ error: 'Estudiante no encontrado' }, { status: 404 })
 
-    // Verificación de seguridad
-    if (studentData.classes.user_id !== user.id) {
-      return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
-    }
-
-    // --- 3. LÓGICA DE GENERACIÓN FODA IA (OPTIMIZADA PARA VERCEL) ---
     let finalSwot = studentData.ai_swot
     const lastUpdate = studentData.swot_last_updated ? new Date(studentData.swot_last_updated) : null
     const daysSince = lastUpdate ? (Date.now() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24) : 999
 
+    // SI NO HAY SWOT, INTENTAMOS GENERARLO
     if (!finalSwot || daysSince > 15) {
-      console.log("🚩 [INICIO] Generando FODA para:", studentData.full_name);
+      console.log("🚩 [INICIO] Intentando generar FODA real para:", studentData.full_name);
 
-      // Extraemos feedbacks (Máximo 3 para velocidad)
+      // Usamos solo las últimas 2 para que sea ultra rápido y no exceda el tiempo de Vercel
       const feedbackTexts = studentData.grades
         .filter((g: any) => g.ai_feedback)
         .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 3) 
+        .slice(0, 2) 
         .map((g: any) => {
           const f = g.ai_feedback;
-          let text = "";
-          if (f.informe_evaluacion?.evaluacion_detallada) {
-            text = f.informe_evaluacion.evaluacion_detallada.map((ed: any) => ed.feedback).join(". ");
-          } else {
-            text = JSON.stringify(f);
-          }
-          return text.substring(0, 500); 
+          let text = f.informe_evaluacion?.evaluacion_detallada 
+            ? f.informe_evaluacion.evaluacion_detallada.map((ed: any) => ed.feedback).join(". ")
+            : JSON.stringify(f);
+          return text.substring(0, 400); 
         });
 
       if (feedbackTexts.length > 0) {
         const swotResult = await generateSWOT(feedbackTexts);
+
         if (swotResult) {
           finalSwot = swotResult;
-          await supabaseAdmin.from('students')
-            .update({ ai_swot: finalSwot, swot_last_updated: new Date().toISOString() })
+          console.log("🚩 [DB] Intentando guardar en Supabase...");
+          const { error: updateError } = await supabaseAdmin
+            .from('students')
+            .update({ 
+              ai_swot: finalSwot, 
+              swot_last_updated: new Date().toISOString() 
+            })
             .eq('id', studentId);
+
+          if (updateError) console.error("❌ [DB ERROR]:", updateError);
+          else console.log("✅ [DB ÉXITO] Guardado correctamente");
         }
       }
     }
 
-    // Fallback por si no hay datos o la IA falla
+    // Fallback si todo lo anterior falló (para que el dashboard no se vea vacío)
     if (!finalSwot) {
       finalSwot = {
-        fortalezas: "Análisis en proceso. Se requiere más historial.",
-        oportunidades: "Completar evaluaciones pendientes.",
-        debilidades: "Datos insuficientes para diagnóstico.",
-        amenazas: "Mantener regularidad en las entregas."
+        fortalezas: "Análisis pedagógico en curso.",
+        oportunidades: "Se requiere más historial para un diagnóstico preciso.",
+        debilidades: "Datos en proceso de recopilación.",
+        amenazas: "Mantener regularidad en las evaluaciones."
       };
     }
 
-    // 4. Devolver respuesta
     return NextResponse.json({
       success: true,
       student: {
@@ -118,46 +116,52 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error("❌ Error API Dashboard:", error)
+    console.error("❌ [CRITICAL ERROR]:", error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
 
-// --- FUNCIÓN GEMINI CON SAFETY SETTINGS ---
 async function generateSWOT(feedbacks: string[]) {
   try {
     const GEMINI_KEY = process.env.GOOGLE_AI_API_KEY;
-    if (!GEMINI_KEY) return null;
+    if (!GEMINI_KEY) {
+      console.error("❌ [ERROR] No existe GOOGLE_AI_API_KEY");
+      return null;
+    }
+
+    const prompt = `Analiza estos feedbacks de un alumno y genera un JSON con fortalezas, oportunidades, debilidades y amenazas (máximo 15 palabras por cada una): ${feedbacks.join(' | ')}. Responde SOLO el JSON.`;
 
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `Eres un experto pedagogo. Analiza estos informes: ${feedbacks.join('\n')}. 
-            Genera un JSON con: fortalezas, oportunidades, debilidades, amenazas. 
-            Responde SOLO el JSON puro, sin markdown ni explicaciones.`
-          }]
-        }],
+        contents: [{ parts: [{ text: prompt }] }],
         safetySettings: [
             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" }
         ]
       })
     });
 
     const data = await res.json();
+
+    // LOG DE SEGURIDAD: Esto nos dirá qué está enviando Google exactamente
+    console.log("🚩 [GOOGLE RESPONSE]:", JSON.stringify(data));
+
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    if (!rawText) return null;
+    if (!rawText) {
+        console.error("❌ [IA ERROR] Google devolvió una respuesta vacía o bloqueada.");
+        return null;
+    }
 
     const start = rawText.indexOf('{');
     const end = rawText.lastIndexOf('}');
-    const jsonString = rawText.substring(start, end + 1);
+    if (start === -1) return null;
 
+    const jsonString = rawText.substring(start, end + 1);
     const parsed = JSON.parse(jsonString);
+
+    // Normalizar llaves
     const normalized: any = {};
     Object.keys(parsed).forEach(key => {
       normalized[key.toLowerCase()] = parsed[key];
@@ -165,11 +169,10 @@ async function generateSWOT(feedbacks: string[]) {
 
     return normalized;
   } catch (e) {
+    console.error("❌ [FETCH ERROR]:", e);
     return null;
   }
 }
-
-// --- FUNCIONES AUXILIARES CON TIPADO CORRECTO ---
 
 function calculateAverage(grades: any[]) {
   const v = grades.filter((g: any) => g.score_obtained !== null && g.score_possible);
