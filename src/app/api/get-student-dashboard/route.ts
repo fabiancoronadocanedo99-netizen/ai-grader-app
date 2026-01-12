@@ -25,17 +25,17 @@ export async function POST(request: NextRequest) {
 
     if (studentError || !studentData) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    // Lógica FODA
+    // --- LÓGICA FODA ---
     let finalSwot = studentData.ai_swot
     if (!finalSwot) {
-      const lastGrade = studentData.grades?.filter((g: any) => g.ai_feedback).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
-      const smallCtx = lastGrade?.ai_feedback?.informe_evaluacion?.evaluacion_detallada?.[0]?.feedback || "Buen progreso."
-      finalSwot = await generateSWOT(smallCtx.substring(0, 200))
-      if (finalSwot) await supabaseAdmin.from('students').update({ ai_swot: finalSwot, swot_last_updated: new Date().toISOString() }).eq('id', studentId)
-    }
+      const lastGrade = (studentData.grades || []).filter((g: any) => g.ai_feedback).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+      const smallCtx = lastGrade?.ai_feedback?.informe_evaluacion?.evaluacion_detallada?.[0]?.feedback || "Buen desempeño."
+      finalSwot = await generateSWOT(smallCtx.substring(0, 250))
 
-    // Asegurar objeto FODA para que el front no explote
-    const safeSwot = finalSwot || { fortalezas: "En proceso", oportunidades: "En proceso", debilidades: "En proceso", amenazas: "En proceso" }
+      if (finalSwot) {
+        await supabaseAdmin.from('students').update({ ai_swot: finalSwot, swot_last_updated: new Date().toISOString() }).eq('id', studentId)
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
         totalPoints: calculatePoints(studentData.grades || []),
         monthlyAverages: calculateMonthly(studentData.grades || [])
       },
-      ai_swot: safeSwot
+      ai_swot: finalSwot || { fortalezas: "En análisis", oportunidades: "En análisis", debilidades: "En análisis", amenazas: "En análisis" }
     })
   } catch (e) { return NextResponse.json({ error: 'Server Error' }, { status: 500 }) }
 }
@@ -64,7 +64,7 @@ async function generateSWOT(ctx: string) {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: `Alumno feedback: "${ctx}". Genera JSON con: fortalezas, oportunidades, debilidades, amenazas. Sé muy breve. SOLO JSON.` }] }] })
+      body: JSON.stringify({ contents: [{ parts: [{ text: `Alumno: "${ctx}". Genera JSON con: fortalezas, oportunidades, debilidades, amenazas. Muy breve. SOLO JSON.` }] }] })
     })
     const data = await res.json()
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
