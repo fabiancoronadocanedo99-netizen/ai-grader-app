@@ -39,36 +39,52 @@ export async function POST(request: NextRequest) {
     if (studentError || !studentData) return NextResponse.json({ error: 'Estudiante no encontrado' }, { status: 404 })
     if (studentData.classes.user_id !== user.id) return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
 
-    // --- LÓGICA DE CACHÉ Y GENERACIÓN FODA IA ---
+    // --- LÓGICA DE GENERACIÓN FODA IA MEJORADA ---
     let finalSwot = studentData.ai_swot
     const lastUpdate = studentData.swot_last_updated ? new Date(studentData.swot_last_updated) : null
     const daysSince = lastUpdate ? (Date.now() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24) : 999
 
+    // Forzamos regeneración si es nulo o pasaron los 15 días
     if (!finalSwot || daysSince > 15) {
-      // Extraemos los feedbacks del JSONB que mostraste en la captura
-      const feedbacks = studentData.grades
-        .filter((g: any) => g.ai_feedback)
-        .slice(0, 5)
-        .map((g: any) => JSON.stringify(g.ai_feedback))
 
-      if (feedbacks.length > 0) {
-        finalSwot = await generateSWOT(feedbacks)
-        if (finalSwot) {
+      // EXTRACCIÓN MEJORADA: Sacamos el texto del JSONB complejo
+      const feedbackTexts = studentData.grades
+        .filter((g: any) => g.ai_feedback)
+        .slice(0, 8) // Tomamos hasta 8 para más contexto
+        .map((g: any) => {
+          const f = g.ai_feedback;
+          const examName = g.exams?.name || 'Evaluación';
+
+          // Si es tu estructura informe_evaluacion, intentamos extraer los comentarios
+          if (f.informe_evaluacion) {
+            const cuerpo = f.informe_evaluacion;
+            return `Examen: ${examName}. Comentarios: ${JSON.stringify(cuerpo.analisis || cuerpo.retroalimentacion || cuerpo.conclusiones || cuerpo)}`;
+          }
+          return `Examen: ${examName}. ${JSON.stringify(f)}`;
+        });
+
+      if (feedbackTexts.length > 0) {
+        console.log("🤖 Llamando a Gemini con contexto real...");
+        const swotResult = await generateSWOT(feedbackTexts);
+
+        if (swotResult && swotResult.fortalezas) {
+          finalSwot = swotResult;
+          // Guardamos en la DB
           await supabaseAdmin.from('students')
             .update({ ai_swot: finalSwot, swot_last_updated: new Date().toISOString() })
-            .eq('id', studentId)
+            .eq('id', studentId);
         }
       }
     }
 
-    // Fallback por si la IA falla o no hay datos
+    // Solo si después de todo sigue siendo nulo, usamos el fallback
     if (!finalSwot) {
       finalSwot = {
-        fortalezas: "Iniciando análisis de desempeño.",
-        oportunidades: "Se requiere completar más evaluaciones para un diagnóstico detallado.",
-        debilidades: "Historial de retroalimentación en proceso de recopilación.",
-        amenazas: "Mantener la constancia en las entregas para evitar riesgos académicos."
-      }
+        fortalezas: "Análisis en proceso. Se requiere más historial.",
+        oportunidades: "Completar evaluaciones pendientes.",
+        debilidades: "Datos insuficientes para diagnóstico.",
+        amenazas: "Mantener regularidad en las entregas."
+      };
     }
 
     return NextResponse.json({
@@ -103,28 +119,34 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// --- FUNCIÓN GEMINI REFORZADA ---
 async function generateSWOT(feedbacks: string[]) {
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GOOGLE_GENERATIVE_AI_API_KEY}`, {
+    const GEMINI_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{
           parts: [{
-            text: `Analiza estos informes de evaluación pedagógica en formato JSON: ${feedbacks.join(' | ')}. 
-            Genera un análisis FODA ejecutivo y motivador. 
-            Responde ÚNICAMENTE un objeto JSON con las claves: fortalezas, oportunidades, debilidades y amenazas. 
-            No incluyas markdown ni texto adicional.`
+            text: `Eres un experto pedagogo. Analiza estos informes de un alumno: 
+            ${feedbacks.join('\n')}
+            Genera un análisis FODA real, ejecutivo y motivador.
+            Responde ESTRICTAMENTE un objeto JSON con estas claves: fortalezas, oportunidades, debilidades, amenazas.
+            No uses markdown, no uses bloques de código, solo el JSON puro.`
           }]
         }]
       })
-    })
-    const data = await res.json()
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-    const match = rawText.match(/\{[\s\S]*\}/)
-    return match ? JSON.parse(match[0]) : null
+    });
+    const data = await res.json();
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    // Limpieza extrema del JSON
+    const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanJson);
   } catch (e) {
-    return null
+    console.error("❌ Error en generateSWOT:", e);
+    return null;
   }
 }
 
