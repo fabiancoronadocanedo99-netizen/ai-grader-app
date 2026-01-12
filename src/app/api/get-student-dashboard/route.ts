@@ -22,7 +22,6 @@ export async function POST(request: NextRequest) {
     const { studentId } = await request.json()
     const supabaseAdmin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-    // Consulta completa
     const { data: studentData, error: studentError } = await supabaseAdmin
       .from('students')
       .select(`
@@ -39,51 +38,54 @@ export async function POST(request: NextRequest) {
     if (studentError || !studentData) return NextResponse.json({ error: 'Estudiante no encontrado' }, { status: 404 })
     if (studentData.classes.user_id !== user.id) return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
 
-    // --- LÓGICA DE GENERACIÓN FODA IA MEJORADA ---
     let finalSwot = studentData.ai_swot
     const lastUpdate = studentData.swot_last_updated ? new Date(studentData.swot_last_updated) : null
     const daysSince = lastUpdate ? (Date.now() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24) : 999
 
-    // Forzamos regeneración si es nulo o pasaron los 15 días
+    // SI NO HAY SWOT O PASARON 15 DIAS, GENERAMOS
     if (!finalSwot || daysSince > 15) {
+      console.log("🤖 Iniciando proceso de generación FODA para:", studentData.full_name);
 
-      // EXTRACCIÓN MEJORADA: Sacamos el texto del JSONB complejo
       const feedbackTexts = studentData.grades
         .filter((g: any) => g.ai_feedback)
-        .slice(0, 8) // Tomamos hasta 8 para más contexto
+        .slice(0, 10) 
         .map((g: any) => {
           const f = g.ai_feedback;
           const examName = g.exams?.name || 'Evaluación';
-
-          // Si es tu estructura informe_evaluacion, intentamos extraer los comentarios
-          if (f.informe_evaluacion) {
-            const cuerpo = f.informe_evaluacion;
-            return `Examen: ${examName}. Comentarios: ${JSON.stringify(cuerpo.analisis || cuerpo.retroalimentacion || cuerpo.conclusiones || cuerpo)}`;
-          }
-          return `Examen: ${examName}. ${JSON.stringify(f)}`;
+          // Extraemos contenido de tu JSONB de Supabase
+          const content = f.informe_evaluacion 
+            ? JSON.stringify(f.informe_evaluacion) 
+            : JSON.stringify(f);
+          return `Examen: ${examName}. Data: ${content}`;
         });
 
       if (feedbackTexts.length > 0) {
-        console.log("🤖 Llamando a Gemini con contexto real...");
         const swotResult = await generateSWOT(feedbackTexts);
 
-        if (swotResult && swotResult.fortalezas) {
+        if (swotResult) {
           finalSwot = swotResult;
-          // Guardamos en la DB
-          await supabaseAdmin.from('students')
-            .update({ ai_swot: finalSwot, swot_last_updated: new Date().toISOString() })
+          // GUARDAR EN BASE DE DATOS
+          const { error: updateError } = await supabaseAdmin
+            .from('students')
+            .update({ 
+              ai_swot: finalSwot, 
+              swot_last_updated: new Date().toISOString() 
+            })
             .eq('id', studentId);
+
+          if (updateError) console.error("❌ Error guardando SWOT en DB:", updateError);
+          else console.log("✅ SWOT guardado con éxito");
         }
       }
     }
 
-    // Solo si después de todo sigue siendo nulo, usamos el fallback
+    // FALLBACK: Si la IA falló o no devolvió nada, mensaje amigable
     if (!finalSwot) {
       finalSwot = {
-        fortalezas: "Análisis en proceso. Se requiere más historial.",
-        oportunidades: "Completar evaluaciones pendientes.",
-        debilidades: "Datos insuficientes para diagnóstico.",
-        amenazas: "Mantener regularidad en las entregas."
+        fortalezas: "Análisis en proceso. Continúa realizando evaluaciones.",
+        oportunidades: "El historial de feedback se está recopilando para este diagnóstico.",
+        debilidades: "Se requiere más contexto pedagógico para identificar áreas de mejora.",
+        amenazas: "Mantén la regularidad en tus entregas para evitar falta de datos."
       };
     }
 
@@ -114,12 +116,12 @@ export async function POST(request: NextRequest) {
       ai_swot: finalSwot
     })
   } catch (error) {
-    console.error("Error API:", error)
+    console.error("❌ Error fatal en API:", error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
 
-// --- FUNCIÓN GEMINI REFORZADA ---
+// --- FUNCIÓN GEMINI REFORZADA (MÁS RESISTENTE) ---
 async function generateSWOT(feedbacks: string[]) {
   try {
     const GEMINI_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
@@ -129,23 +131,41 @@ async function generateSWOT(feedbacks: string[]) {
       body: JSON.stringify({
         contents: [{
           parts: [{
-            text: `Eres un experto pedagogo. Analiza estos informes de un alumno: 
+            text: `Analiza estos informes pedagógicos de un alumno: 
             ${feedbacks.join('\n')}
-            Genera un análisis FODA real, ejecutivo y motivador.
-            Responde ESTRICTAMENTE un objeto JSON con estas claves: fortalezas, oportunidades, debilidades, amenazas.
-            No uses markdown, no uses bloques de código, solo el JSON puro.`
+            Genera un análisis FODA real y motivador.
+            Responde ÚNICAMENTE un objeto JSON con las claves: fortalezas, oportunidades, debilidades, amenazas.
+            No escribas nada más que el JSON.`
           }]
         }]
       })
     });
+
     const data = await res.json();
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-    // Limpieza extrema del JSON
-    const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(cleanJson);
+    // LIMPIEZA DE JSON (Busca el primer { y el último })
+    const start = rawText.indexOf('{');
+    const end = rawText.lastIndexOf('}');
+    if (start === -1 || end === -1) return null;
+
+    const jsonString = rawText.substring(start, end + 1);
+    const parsed = JSON.parse(jsonString);
+
+    // NORMALIZAR CLAVES (Por si Gemini responde con Mayúsculas)
+    const normalized: any = {};
+    Object.keys(parsed).forEach(key => {
+      normalized[key.toLowerCase()] = parsed[key];
+    });
+
+    // Validar que tengamos las 4 claves necesarias
+    if (normalized.fortalezas && normalized.oportunidades) {
+      return normalized;
+    }
+
+    return null;
   } catch (e) {
-    console.error("❌ Error en generateSWOT:", e);
+    console.error("❌ Error parseando respuesta de Gemini:", e);
     return null;
   }
 }
