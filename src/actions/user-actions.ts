@@ -4,6 +4,10 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
 import Papa from 'papaparse'
+import { Resend } from 'resend'
+
+// Inicializar Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // --- Tipos para el CSV ---
 type CSVUser = {
@@ -45,7 +49,7 @@ export async function getCurrentUserProfile() {
   return profile
 }
 
-// --- FUNCIONES EXISTENTES ---
+// --- FUNCIONES GESTIÓN DE USUARIOS ---
 
 export async function createUser(data: {
   email: string
@@ -270,5 +274,109 @@ export async function updateUserCreditLimit(targetUserId: string, newLimit: numb
 
   } catch (error) {
     return { success: false, error: (error as Error).message }
+  }
+}
+
+// --- ENVIAR REPORTE A PADRES (DOMINIO PIXELGO VERIFICADO) ---
+export async function sendStudentReportToParent(data: {
+  studentId: string
+  studentName: string
+  className: string
+  finalGrade: number
+  swot: any
+}) {
+  const supabase = createAdminClient();
+
+  try {
+    // 1. Obtener correos del estudiante y tutor
+    const { data: student, error: studentError } = await supabase
+      .from('students')
+      .select('student_email, tutor_email')
+      .eq('id', data.studentId)
+      .single();
+
+    if (studentError || !student) {
+      throw new Error('Información del alumno no encontrada en la base de datos.');
+    }
+
+    const recipients = [student.tutor_email, student.student_email].filter(Boolean) as string[];
+
+    if (recipients.length === 0) {
+      throw new Error('El alumno no tiene correos electrónicos registrados para recibir el reporte.');
+    }
+
+    // 2. Construir diseño de correo profesional
+    const emailHtml = `
+      <div style="background-color: #d1d9e6; padding: 40px; font-family: sans-serif; color: #444;">
+        <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 40px; padding: 40px; box-shadow: 0 15px 35px rgba(0,0,0,0.1);">
+
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #2563eb; margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 1px;">Reporte Académico Pixelgo</h1>
+            <p style="color: #666; font-size: 14px;">Diagnóstico de desempeño mediante Inteligencia Artificial</p>
+          </div>
+
+          <div style="background: #f8fafc; border-radius: 25px; padding: 30px; text-align: center; margin-bottom: 30px; border: 1px solid #e2e8f0;">
+            <p style="text-transform: uppercase; font-size: 11px; font-weight: 900; color: #94a3b8; margin-bottom: 5px;">Estudiante</p>
+            <h2 style="margin: 0; color: #1e293b; font-size: 26px;">${data.studentName}</h2>
+            <p style="margin: 5px 0 0 0; color: #64748b; font-weight: bold;">Clase: ${data.className}</p>
+
+            <div style="margin-top: 25px;">
+              <span style="font-size: 12px; font-weight: 800; color: #3b82f6; text-transform: uppercase;">Promedio General Proyectado</span>
+              <div style="font-size: 56px; font-weight: 900; color: #2563eb;">${data.finalGrade}%</div>
+            </div>
+          </div>
+
+          <h3 style="color: #1e293b; font-size: 18px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 20px;">🚀 Análisis FODA Académico</h3>
+
+          <div style="margin-bottom: 15px;">
+            <div style="background: #ecfdf5; padding: 15px; border-radius: 15px; border-left: 6px solid #10b981; margin-bottom: 10px;">
+              <strong style="color: #059669; font-size: 13px; text-transform: uppercase;">💪 Fortalezas</strong>
+              <p style="margin: 5px 0 0 0; font-size: 14px; line-height: 1.5; color: #064e3b;">${data.swot?.fortalezas || 'Pendiente de análisis'}</p>
+            </div>
+
+            <div style="background: #eff6ff; padding: 15px; border-radius: 15px; border-left: 6px solid #3b82f6; margin-bottom: 10px;">
+              <strong style="color: #2563eb; font-size: 13px; text-transform: uppercase;">🚀 Oportunidades</strong>
+              <p style="margin: 5px 0 0 0; font-size: 14px; line-height: 1.5; color: #1e3a8a;">${data.swot?.oportunidades || 'Pendiente de análisis'}</p>
+            </div>
+
+            <div style="background: #fffbeb; padding: 15px; border-radius: 15px; border-left: 6px solid #f59e0b; margin-bottom: 10px;">
+              <strong style="color: #d97706; font-size: 13px; text-transform: uppercase;">⚠️ Debilidades</strong>
+              <p style="margin: 5px 0 0 0; font-size: 14px; line-height: 1.5; color: #78350f;">${data.swot?.debilidades || 'Pendiente de análisis'}</p>
+            </div>
+
+            <div style="background: #fef2f2; padding: 15px; border-radius: 15px; border-left: 6px solid #ef4444;">
+              <strong style="color: #dc2626; font-size: 13px; text-transform: uppercase;">🚩 Amenazas</strong>
+              <p style="margin: 5px 0 0 0; font-size: 14px; line-height: 1.5; color: #7f1d1d;">${data.swot?.amenazas || 'Pendiente de análisis'}</p>
+            </div>
+          </div>
+
+          <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
+            <p style="font-size: 11px; color: #94a3b8; line-height: 1.6;">
+              Este reporte ha sido generado automáticamente por la plataforma Pixelgo AI.<br>
+              Para más información, consulte con el asesor académico.
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // 3. Enviar correo usando el dominio verificado
+    const { data: resData, error: resError } = await resend.emails.send({
+      from: 'Reportes Académicos <reportes@pixelgo.com.mx>', 
+      to: recipients,
+      subject: `📈 Reporte de Desempeño: ${data.studentName}`,
+      html: emailHtml,
+    });
+
+    if (resError) {
+      console.error('Resend Error:', resError);
+      throw new Error(resError.message);
+    }
+
+    return { success: true, message: 'Reporte enviado con éxito.' };
+
+  } catch (error) {
+    console.error('Error en sendStudentReportToParent:', error);
+    return { success: false, error: (error as Error).message };
   }
 }

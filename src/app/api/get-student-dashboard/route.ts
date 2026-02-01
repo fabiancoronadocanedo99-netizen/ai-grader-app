@@ -2,240 +2,109 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Tipos para la respuesta estructurada
-type StudentDashboardData = {
-  id: string
-  full_name: string
-  student_email: string | null
-  tutor_email: string | null
-  class_id: string
-  user_id: string
-  created_at: string
-  classes: {
-    name: string
-    user_id: string
-  } | null
-  grades: Array<{
-    id: string
-    student_id: string
-    exam_id: string
-    score_obtained: number | null
-    score_possible: number | null
-    ai_feedback: any
-    created_at: string
-    exams: {
-      name: string
-    } | null
-  }>
-}
-
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Verificar autenticación
     const authHeader = request.headers.get('authorization')
     const accessToken = authHeader?.replace('Bearer ', '')
+    if (!accessToken) return NextResponse.json({ error: 'No token' }, { status: 401 })
 
-    if (!accessToken) {
-      return NextResponse.json(
-        { error: 'Token de autenticación requerido' },
-        { status: 401 }
-      )
-    }
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { global: { headers: { Authorization: `Bearer ${accessToken}` } } })
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // Verificar que el token sea válido y obtener el usuario
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { global: { headers: { Authorization: `Bearer ${accessToken}` } } }
-    )
+    const { studentId } = await request.json()
+    const supabaseAdmin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json(
-        { error: 'Autenticación fallida' },
-        { status: 401 }
-      )
-    }
-
-    console.log('✅ Usuario autenticado:', user.id)
-
-    // 2. Obtener studentId del cuerpo de la petición
-    const body = await request.json()
-    const { studentId } = body
-
-    if (!studentId || typeof studentId !== 'string') {
-      return NextResponse.json(
-        { error: 'studentId es requerido y debe ser un string' },
-        { status: 400 }
-      )
-    }
-
-    console.log('🔍 Buscando información para student:', studentId)
-
-    // 3. Crear cliente admin de Supabase
-    const supabaseAdmin = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-
-    // 4. Realizar la consulta completa en una sola llamada
     const { data: studentData, error: studentError } = await supabaseAdmin
       .from('students')
-      .select(`
-        *,
-        classes ( name, user_id ),
-        grades ( 
-          id,
-          student_id,
-          exam_id,
-          score_obtained,
-          score_possible,
-          ai_feedback,
-          created_at,
-          exams ( name )
-        )
-      `)
+      .select(`*, classes ( name ), grades ( score_obtained, score_possible, ai_feedback, created_at, exams ( name, type ) )`)
       .eq('id', studentId)
-      .single<StudentDashboardData>()
+      .single()
 
-    if (studentError) {
-      console.error('❌ Error al buscar estudiante:', studentError)
+    if (studentError || !studentData) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-      if (studentError.code === 'PGRST116') {
-        return NextResponse.json(
-          { error: 'Estudiante no encontrado' },
-          { status: 404 }
-        )
-      }
+    // --- LÓGICA DE INSIGHTS PEDAGÓGICOS ---
+    const allEvaluations = studentData.grades || []
+    const masteredTopics = new Set<string>()
+    const reviewTopics = new Set<string>()
+    let lastRecommendation = "Continúa con el plan de estudios estándar."
 
-      return NextResponse.json(
-        { error: 'Error al obtener datos del estudiante', details: studentError.message },
-        { status: 500 }
-      )
-    }
-
-    if (!studentData) {
-      return NextResponse.json(
-        { error: 'Estudiante no encontrado' },
-        { status: 404 }
-      )
-    }
-
-    console.log('📊 Datos encontrados:', {
-      student: studentData.full_name,
-      class: studentData.classes?.name,
-      grades: studentData.grades?.length || 0
+    allEvaluations.forEach((g: any) => {
+      const detail = g.ai_feedback?.informe_evaluacion?.evaluacion_detallada || []
+      detail.forEach((item: any) => {
+        if (item.evaluacion === 'CORRECTO') masteredTopics.add(item.tema)
+        if (item.evaluacion === 'INCORRECTO' || item.evaluacion === 'PARCIAL') reviewTopics.add(item.tema)
+      })
     })
 
-    // 5. Verificación de seguridad: El usuario debe ser dueño de la clase
-    if (!studentData.classes) {
-      return NextResponse.json(
-        { error: 'El estudiante no está asociado a ninguna clase' },
-        { status: 404 }
-      )
+    const latestGrade = [...allEvaluations].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+    if (latestGrade?.ai_feedback?.informe_evaluacion?.evaluacion_detallada) {
+        const primaryIssue = latestGrade.ai_feedback.informe_evaluacion.evaluacion_detallada.find((i:any) => i.area_de_mejora)
+        if (primaryIssue) lastRecommendation = primaryIssue.area_de_mejora
     }
 
-    if (studentData.classes.user_id !== user.id) {
-      console.warn('⚠️ Intento de acceso no autorizado:', {
-        requestedBy: user.id,
-        classOwner: studentData.classes.user_id
-      })
-
-      return NextResponse.json(
-        { error: 'Acceso denegado: No tienes permiso para ver este estudiante' },
-        { status: 403 }
-      )
-    }
-
-    console.log('✅ Verificación de seguridad pasada')
-
-    // 6. Preparar y devolver los datos
-    const response = {
+    return NextResponse.json({
       success: true,
-      student: {
-        id: studentData.id,
-        fullName: studentData.full_name,
-        studentEmail: studentData.student_email,
-        tutorEmail: studentData.tutor_email,
-        classId: studentData.class_id,
-        createdAt: studentData.created_at
-      },
-      class: {
-        name: studentData.classes.name
-      },
-      grades: studentData.grades.map(grade => ({
-        id: grade.id,
-        examId: grade.exam_id,
-        examName: grade.exams?.name || 'Sin nombre',
-        scoreObtained: grade.score_obtained,
-        scorePossible: grade.score_possible,
-        percentage: grade.score_possible && grade.score_obtained 
-          ? Math.round((grade.score_obtained / grade.score_possible) * 100)
-          : 0,
-        aiFeedback: grade.ai_feedback,
-        createdAt: grade.created_at
+      student: { id: studentData.id, fullName: studentData.full_name, studentEmail: studentData.student_email, tutorEmail: studentData.tutor_email },
+      class: { name: studentData.classes?.name || 'Sin Clase' },
+      grades: allEvaluations.map((g: any) => ({
+        examName: g.exams?.name || 'Evaluación',
+        type: g.exams?.type || 'exam',
+        percentage: g.score_possible ? Math.round((g.score_obtained / g.score_possible) * 100) : 0,
+        createdAt: g.created_at
       })),
       stats: {
-        totalExams: studentData.grades?.length || 0,
-        averageScore: calculateAverageScore(studentData.grades),
-        totalPoints: calculateTotalPoints(studentData.grades)
-      }
-    }
-
-    console.log('✅ Dashboard generado exitosamente')
-
-    return NextResponse.json(response)
-
-  } catch (error) {
-    console.error('❌ Error fatal en la API:', error)
-    return NextResponse.json(
-      { 
-        error: 'Error interno del servidor', 
-        details: (error as Error).message 
+        totalEvaluations: allEvaluations.length,
+        totalPoints: {
+          obtained: allEvaluations.reduce((acc: number, curr: any) => acc + (curr.score_obtained || 0), 0),
+          possible: allEvaluations.reduce((acc: number, curr: any) => acc + (curr.score_possible || 0), 0)
+        },
+        monthlyAverages: calculateMonthly(allEvaluations) // <-- AQUÍ SE APLICA LA MEJORA
       },
-      { status: 500 }
-    )
-  }
+      pedagogicalInsights: {
+        mastered: Array.from(masteredTopics).slice(0, 4),
+        toReview: Array.from(reviewTopics).slice(0, 4),
+        recommendation: lastRecommendation
+      },
+      ai_swot: {
+        fortalezas: Array.from(masteredTopics).slice(0, 2).join(", ") || "En análisis",
+        oportunidades: lastRecommendation.substring(0, 100),
+        debilidades: Array.from(reviewTopics).slice(0, 2).join(", ") || "Ninguna detectada",
+        amenazas: "Mantener el ritmo de entrega"
+      }
+    })
+  } catch (e) { return NextResponse.json({ error: 'Error' }, { status: 500 }) }
 }
 
-// Funciones auxiliares para calcular estadísticas
-function calculateAverageScore(grades: StudentDashboardData['grades']): number {
-  if (!grades || grades.length === 0) return 0
+// --- FUNCIÓN CORREGIDA: FALLBACK DE AÑO PARA 2026/2025 ---
+function calculateMonthly(gs: any[]) {
+  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const stats = Array.from({ length: 12 }, (_, i) => ({ month: months[i], sum: 0, count: 0 }));
 
-  const validGrades = grades.filter(g => 
-    g.score_obtained !== null && 
-    g.score_possible !== null && 
-    g.score_possible > 0
-  )
+  let targetYear = new Date().getFullYear();
 
-  if (validGrades.length === 0) return 0
+  // Verificamos si el alumno tiene algún dato en el año actual (ej. 2026)
+  const hasDataThisYear = gs.some(g => new Date(g.created_at).getFullYear() === targetYear);
 
-  const totalPercentage = validGrades.reduce((sum, grade) => {
-    const percentage = (grade.score_obtained! / grade.score_possible!) * 100
-    return sum + percentage
-  }, 0)
-
-  return Math.round(totalPercentage / validGrades.length)
-}
-
-function calculateTotalPoints(grades: StudentDashboardData['grades']): {
-  obtained: number
-  possible: number
-} {
-  if (!grades || grades.length === 0) {
-    return { obtained: 0, possible: 0 }
+  // Si no hay datos en 2026, bajamos a 2025 automáticamente
+  if (!hasDataThisYear) {
+      targetYear = targetYear - 1;
   }
 
-  const validGrades = grades.filter(g => 
-    g.score_obtained !== null && 
-    g.score_possible !== null
-  )
+  gs.forEach(g => {
+    const d = new Date(g.created_at);
+    // Filtramos solo por el año objetivo (2026 o 2025)
+    if (d.getFullYear() === targetYear && g.score_possible) {
+      const idx = d.getMonth();
+      stats[idx].sum += (g.score_obtained / g.score_possible) * 100;
+      stats[idx].count++;
+    }
+  });
 
-  const obtained = validGrades.reduce((sum, grade) => sum + grade.score_obtained!, 0)
-  const possible = validGrades.reduce((sum, grade) => sum + grade.score_possible!, 0)
-
-  return { obtained, possible }
+  return stats.map(m => ({ 
+    month: m.month, 
+    average: m.count > 0 ? Math.round(m.sum / m.count) : null 
+  }));
 }
