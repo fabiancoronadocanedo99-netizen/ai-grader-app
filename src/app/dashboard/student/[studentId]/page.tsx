@@ -32,58 +32,45 @@ export default function StudentDashboardPage() {
       } catch (err) { console.error(err) } finally { setLoading(false) }
     }
     fetchData()
-  }, [studentId])
+  }, [studentId, supabase])
 
   const processed = useMemo(() => {
     if (!dashboardData?.grades || dashboardData.grades.length === 0) return null
-
     const exams = dashboardData.grades.filter((g: any) => g.type === 'exam')
     const homeworks = dashboardData.grades.filter((g: any) => g.type === 'assignment')
-
     const avgExams = exams.length ? exams.reduce((s:any, g:any) => s + g.percentage, 0) / exams.length : 0
     const avgHomeworks = homeworks.length ? homeworks.reduce((s:any, g:any) => s + g.percentage, 0) / homeworks.length : 0
-
-    let final = homeworks.length === 0 ? avgExams : (avgExams * (examWeight / 100)) + (avgHomeworks * (homeworkWeight / 100))
-
+    const final = homeworks.length === 0 ? avgExams : (avgExams * (examWeight / 100)) + (avgHomeworks * (homeworkWeight / 100))
     const sorted = [...dashboardData.grades].sort((a, b) => b.percentage - a.percentage)
     const worst = [...dashboardData.grades].sort((a, b) => a.percentage - b.percentage)[0]
-
-    return {
-      exams, homeworks,
-      avgExams: Math.round(avgExams),
-      avgHomeworks: Math.round(avgHomeworks),
-      finalGrade: Math.round(final),
-      best: sorted[0],
-      worst: worst
-    }
+    return { exams, homeworks, avgExams: Math.round(avgExams), avgHomeworks: Math.round(avgHomeworks), finalGrade: Math.round(final), best: sorted[0], worst: worst }
   }, [dashboardData, examWeight, homeworkWeight])
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-[#d1d9e6] font-bold">Cargando Inteligencia...</div>
+  if (loading) return <div className="h-screen flex items-center justify-center bg-[#d1d9e6] font-black italic text-gray-400 animate-pulse uppercase tracking-[0.3em]">Cargando Ficha Académica...</div>
 
   return (
     <div className="min-h-screen bg-[#d1d9e6] p-4 md:p-8 text-gray-700 font-sans">
       <div className="max-w-7xl mx-auto">
 
-        {/* NAVEGACIÓN */}
         <div className="flex justify-between items-center mb-8">
           <button onClick={() => router.back()} className="neu-button px-6 py-2 font-bold tracking-tighter">← VOLVER</button>
           <button 
             onClick={async () => {
-              setSending(true)
-              await sendStudentReportToParent({
+              setSending(true);
+              const result = await sendStudentReportToParent({
                 studentId, studentName: dashboardData.student.fullName,
                 className: dashboardData.class.name, finalGrade: processed?.finalGrade || 0,
                 swot: dashboardData.ai_swot
-              })
-              setSending(false); alert("✅ Reporte enviado")
+              });
+              setSending(false);
+              alert(result.success ? "✅ Reporte enviado" : "Error al enviar");
             }}
             className="neu-button px-6 py-2 text-blue-700 font-black tracking-tighter"
           >
-            {sending ? "ENVIANDO..." : "📧 ENVIAR REPORTE"}
+            {sending ? "ENVIANDO..." : "📧 ENVIAR REPORTE A PADRES"}
           </button>
         </div>
 
-        {/* CABECERA */}
         <div className="neu-card p-10 mb-10 flex justify-between items-center relative overflow-hidden">
           <div className="z-10">
             <h1 className="text-5xl font-black text-gray-800 mb-2 tracking-tighter italic uppercase">{dashboardData.student.fullName}</h1>
@@ -93,17 +80,15 @@ export default function StudentDashboardPage() {
               <span>👨‍👩‍👧 Tutor: {dashboardData.student.tutorEmail}</span>
             </div>
           </div>
-          <div className="text-[150px] opacity-5 absolute right-10 select-none font-black italic">USER</div>
+          <div className="text-[150px] opacity-5 absolute right-10 bottom-[-40px] select-none font-black italic tracking-tighter">STUDENT</div>
         </div>
 
-        {/* CONTENEDORES SUPERIORES */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10 text-center">
           <StatCard title="Promedio Final" value={`${processed?.finalGrade || 0}%`} sub="Calificación Ponderada" icon="📊" color="text-blue-700" />
           <StatCard title="Evaluaciones" value={dashboardData.stats.totalEvaluations} sub="Pruebas Realizadas" icon="📝" color="text-purple-700" />
           <StatCard title="Puntos Totales" value={`${dashboardData.stats.totalPoints.obtained}/${dashboardData.stats.totalPoints.possible}`} sub="Puntos Acumulados" icon="🎯" color="text-orange-600" />
         </div>
 
-        {/* CONFIG Y GRÁFICA */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 mb-12">
           <div className="neu-card p-8 flex flex-col justify-center">
             <h3 className="text-xs font-black uppercase opacity-40 mb-8 tracking-[0.2em] italic">⚙️ Ajuste de Ponderación</h3>
@@ -112,28 +97,23 @@ export default function StudentDashboardPage() {
               <WeightSlider label="Tareas" value={homeworkWeight} onChange={setHomeworkWeight} />
             </div>
           </div>
-          <div className="neu-card p-8 lg:col-span-2">
+          <div className="neu-card p-8 lg:col-span-2 min-h-[300px]">
             <h3 className="text-xs font-black uppercase opacity-40 mb-6 tracking-[0.2em] italic">📈 Evolución Mensual del Rendimiento</h3>
             <div className="h-[250px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={dashboardData.stats.monthlyAverages}>
-                  <defs>
-                    <linearGradient id="colorGrade" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.4}/><stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
+                <AreaChart data={dashboardData.stats.monthlyAverages} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs><linearGradient id="colorG" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#2563eb" stopOpacity={0.4}/><stop offset="95%" stopColor="#2563eb" stopOpacity={0}/></linearGradient></defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#bec8d9" opacity={0.5} />
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 'bold'}} />
-                  <YAxis hide domain={[0, 100]} />
-                  <Tooltip contentStyle={{ borderRadius: '15px', border: 'none', backgroundColor: '#d1d9e6' }} />
-                  <Area type="monotone" dataKey="average" stroke="#2563eb" strokeWidth={5} fill="url(#colorGrade)" />
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} interval={0} tick={{fontSize: 10, fontWeight: 'bold', fill: '#888'}} />
+                  <YAxis domain={[0, 100]} hide />
+                  <Tooltip contentStyle={{ borderRadius: '20px', border: 'none', backgroundColor: '#d1d9e6', boxShadow: '10px 10px 20px #b1b9c5' }} />
+                  <Area type="monotone" dataKey="average" stroke="#2563eb" strokeWidth={5} fill="url(#colorG)" connectNulls={true} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
         </div>
 
-        {/* FOCO PEDAGÓGICO */}
         <div className="mb-12">
             <h2 className="text-2xl font-black mb-6 uppercase italic tracking-tighter opacity-80">🚀 Foco Pedagógico</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -146,16 +126,12 @@ export default function StudentDashboardPage() {
             </div>
         </div>
 
-        {/* ANÁLISIS DE RENDIMIENTO (IMAGEN 2 CORREGIDA) */}
         <div className="mb-12">
           <h2 className="text-2xl font-black mb-6 uppercase italic tracking-tighter opacity-80">📈 Análisis de Rendimiento</h2>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-            {/* CORRECCIÓN: Promedio Exámenes en lugar de Promedio Ponderado */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-10 text-center">
             <StatCardSmall title="Promedio Exámenes" value={`${processed?.avgExams || 0}%`} icon="📝" color="text-blue-600" />
             <StatCardSmall title="Promedio Tareas" value={`${processed?.avgHomeworks || 0}%`} icon="📚" color="text-purple-600" />
             <StatCardSmall title="Mejor Nota" value={`${processed?.best?.percentage || 0}%`} sub={processed?.best?.examName} icon="🏆" color="text-green-600" />
-            {/* CORRECCIÓN: Nota más baja en lugar de Puntos */}
             <StatCardSmall title="Nota más Baja" value={`${processed?.worst?.percentage || 0}%`} sub={processed?.worst?.examName} icon="🚩" color="text-red-500" />
           </div>
 
@@ -164,7 +140,6 @@ export default function StudentDashboardPage() {
             <ListContainer title="Trabajo y Tareas" items={processed?.homeworks || []} color="text-purple-700" />
           </div>
         </div>
-
       </div>
 
       <style jsx global>{`
@@ -179,8 +154,6 @@ export default function StudentDashboardPage() {
   )
 }
 
-// --- SUB-COMPONENTES ---
-
 function StatCard({ title, value, sub, icon, color }: any) {
   return (
     <div className="neu-card p-8 text-center relative group overflow-hidden">
@@ -191,7 +164,6 @@ function StatCard({ title, value, sub, icon, color }: any) {
     </div>
   )
 }
-
 function StatCardSmall({ title, value, sub, icon, color }: any) {
   return (
     <div className="neu-card p-6 text-center group">
@@ -202,7 +174,6 @@ function StatCardSmall({ title, value, sub, icon, color }: any) {
     </div>
   )
 }
-
 function InsightCard({ title, items, color, badge }: any) {
     return (
         <div className={`neu-card p-8 border-t-8 ${color}`}>
@@ -210,12 +181,11 @@ function InsightCard({ title, items, color, badge }: any) {
             <div className="flex flex-wrap gap-2">
                 {items.length > 0 ? items.map((t:any) => (
                     <span key={t} className={`${badge} px-3 py-1 rounded-full text-[10px] font-black uppercase shadow-sm tracking-tighter`}>{t}</span>
-                )) : <p className="text-xs opacity-30 italic">Sin datos registrados</p>}
+                )) : <p className="text-xs opacity-30 italic">Sin datos</p>}
             </div>
         </div>
     )
 }
-
 function WeightSlider({ label, value, onChange }: any) {
   return (
     <div>
@@ -224,7 +194,6 @@ function WeightSlider({ label, value, onChange }: any) {
     </div>
   )
 }
-
 function ListContainer({ title, items, color }: any) {
     return (
         <div className="neu-card p-8">
