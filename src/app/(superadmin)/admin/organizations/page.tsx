@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-// CORRECCIÓN: Importamos updateOrganizationDetails en lugar de updateOrganization
 import { 
   createOrganization, 
   getOrganizations, 
@@ -125,7 +124,6 @@ export default function OrganizationsManagementPage() {
     setUpdating(true)
 
     try {
-      // CORRECCIÓN: Llamamos a la nueva función updateOrganizationDetails
       const result = await updateOrganizationDetails(editingOrg.id, {
         name: editFormData.name,
         subscription_plan: editFormData.subscription_plan,
@@ -210,6 +208,11 @@ export default function OrganizationsManagementPage() {
             <Link href="/dashboard" className={`${neuButton} !text-gray-600`}>
                 ← Volver
             </Link>
+
+            <Link href="/admin/organizations/bulk" className={neuButton}>
+                📤 Carga Masiva
+            </Link>
+
             <button 
             onClick={() => setIsModalOpen(true)}
             className={neuButton}
@@ -315,7 +318,6 @@ export default function OrganizationsManagementPage() {
                     </button>
                   </div>
 
-                  {/* CORRECCIÓN: Botón "Ver Detalles" ahora es un Link */}
                   <Link href={`/admin/organizations/${org.id}`}>
                     <button className={`${neuButton} !py-2 !px-4 text-xs !text-gray-600`}>
                         Ver Detalles
