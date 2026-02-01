@@ -189,11 +189,81 @@ export async function deleteOrganization(id: string) {
     console.error('Error:', error)
     return { success: false, error: (error as Error).message }
   }
-}/**
+}
+
+/**
  * Genera una pre-factura y la envía por correo
  */
 export async function generatePreInvoice(organizationId: string) {
   // Por ahora es un placeholder para que la app compile
   console.log("Generando pre-factura para:", organizationId)
   return { success: true, message: "Funcionalidad en desarrollo" }
+}
+
+/**
+ * Importa organizaciones masivamente desde un CSV (Texto plano)
+ * Formato esperado: name, subdomain, director_name, director_email
+ */
+export async function createOrganizationsFromCSV(csvContent: string) {
+  const supabase = createAdminClient()
+
+  // Dividir por líneas (soporta saltos de línea windows/unix)
+  const rows = csvContent.split(/\r?\n/)
+
+  let created = 0
+  let errors = 0
+
+  // Fecha de renovación + 1 mes
+  const nextRenewal = new Date()
+  nextRenewal.setMonth(nextRenewal.getMonth() + 1)
+
+  // Empezamos en i=1 asumiendo que la primera fila es el encabezado
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i].trim()
+    if (!row) continue // Saltar líneas vacías
+
+    // Separar por comas
+    const columns = row.split(',')
+
+    // Mapear columnas según orden esperado
+    const name = columns[0]?.trim()
+    const subdomain = columns[1]?.trim()
+    const director_name = columns[2]?.trim()
+    const director_email = columns[3]?.trim()
+
+    // Validación mínima: Debe tener nombre
+    if (!name) {
+      errors++
+      continue
+    }
+
+    try {
+      const { error } = await supabase
+        .from('organizations')
+        .insert({
+          name,
+          subdomain,
+          director_name,
+          director_email,
+          // Valores por defecto
+          subscription_plan: 'Basic',
+          credits_total_period: 15000,
+          credits_remaining: 15000,
+          next_renewal_date: nextRenewal.toISOString()
+        })
+
+      if (error) throw error
+      created++
+
+    } catch (error) {
+      console.error(`Error en fila ${i} (${name}):`, error)
+      errors++
+    }
+  }
+
+  if (created > 0) {
+    revalidatePath('/admin/organizations')
+  }
+
+  return { success: true, created, errors }
 }
