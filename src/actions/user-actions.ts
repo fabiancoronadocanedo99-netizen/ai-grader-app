@@ -10,10 +10,11 @@ import { Resend } from 'resend'
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 // --- Tipos para el CSV ---
+// NOTA: password ya no es obligatorio en el CSV de entrada
 type CSVUser = {
   full_name: string
   email: string
-  password: string
+  password?: string 
   role: string
   organization_name: string
 }
@@ -47,6 +48,47 @@ export async function getCurrentUserProfile() {
   }
 
   return profile
+}
+
+// --- NUEVA FUNCIÓN: Enviar correo de bienvenida ---
+export async function sendWelcomeEmail(email: string, fullName: string, password: string) {
+  try {
+    const { data, error } = await resend.emails.send({
+      from: 'Onboarding Pixelgo <onboarding@pixelgo.com.mx>',
+      to: [email],
+      subject: '¡Bienvenido a AI Grader de Pixelgo!',
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+          <h1 style="color: #2563eb;">Bienvenido a Pixelgo AI</h1>
+          <p>Hola <strong>${fullName}</strong>,</p>
+          <p>Tu cuenta ha sido creada exitosamente. A continuación encontrarás tus credenciales de acceso:</p>
+
+          <div style="background-color: #f3f4f6; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <p style="margin: 5px 0;"><strong>Usuario:</strong> ${email}</p>
+            <p style="margin: 5px 0;"><strong>Contraseña Temporal:</strong> ${password}</p>
+          </div>
+
+          <p>Puedes iniciar sesión ahora en nuestra plataforma:</p>
+          <a href="https://aigrader.pixelgo.com.mx" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+            Ir a la Plataforma
+          </a>
+
+          <p style="margin-top: 30px; font-size: 12px; color: #666;">
+            Por seguridad, te recomendamos cambiar tu contraseña al ingresar por primera vez.
+          </p>
+        </div>
+      `
+    });
+
+    if (error) {
+      console.error('Error enviando email de bienvenida:', error);
+      return { success: false, error };
+    }
+    return { success: true, data };
+  } catch (e) {
+    console.error('Excepción enviando email:', e);
+    return { success: false, error: e };
+  }
 }
 
 // --- FUNCIONES GESTIÓN DE USUARIOS ---
@@ -188,9 +230,13 @@ export async function createUsersFromCSV(csvContent: string): Promise<BulkImport
           throw new Error(`Organización '${user.organization_name}' no encontrada.`)
         }
 
+        // 1. Generar contraseña aleatoria de 10 caracteres
+        const generatedPassword = Math.random().toString(36).slice(-10);
+
+        // 2. Crear usuario
         const result = await createUser({
           email: user.email,
-          password: user.password,
+          password: generatedPassword, // Usamos la generada
           fullName: user.full_name,
           role: user.role,
           organizationId: org.id,
@@ -198,6 +244,12 @@ export async function createUsersFromCSV(csvContent: string): Promise<BulkImport
 
         if (result.success) {
           createdCount++
+
+          // 3. Enviar correo de bienvenida con credenciales
+          // No esperamos (await) obligatoriamente para no bloquear el loop masivo,
+          // pero logueamos si falla.
+          sendWelcomeEmail(user.email, user.full_name, generatedPassword);
+
         } else {
           throw new Error(result.error)
         }

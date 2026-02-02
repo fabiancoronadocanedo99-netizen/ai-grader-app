@@ -17,8 +17,9 @@ export default function BulkUploadPage() {
 
   // Función para descargar la plantilla
   const handleDownloadTemplate = () => {
-    const headers = 'name,subdomain,director_name,director_email'
-    const example = 'Colegio San Mateo,sanmateo,Juan Pérez,juan@sanmateo.edu'
+    // ACTUALIZADO: Se agrega la columna education_level
+    const headers = 'name,subdomain,director_name,director_email,education_level'
+    const example = 'Colegio San Mateo,sanmateo,Juan Pérez,juan@sanmateo.edu,Primaria'
     const csvContent = `data:text/csv;charset=utf-8,${headers}\n${example}`
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement('a')
@@ -136,6 +137,10 @@ export default function BulkUploadPage() {
               <li className="flex items-center gap-2">
                 <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
                 Columna 4: <strong>director_email</strong>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
+                Columna 5: <strong>education_level</strong>
               </li>
             </ul>
           </div>
