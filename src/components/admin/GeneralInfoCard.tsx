@@ -9,6 +9,8 @@ interface GeneralInfoCardProps {
 
 export default function GeneralInfoCard({ initialData }: GeneralInfoCardProps) {
   const [name, setName] = useState(initialData.name || '')
+  // Nuevo estado para Nivel Educativo
+  const [educationLevel, setEducationLevel] = useState(initialData.education_level || '')
   const [subdomain, setSubdomain] = useState(initialData.subdomain || '')
   const [logoFile, setLogoFile] = useState<File | null>(null)
 
@@ -21,7 +23,7 @@ export default function GeneralInfoCard({ initialData }: GeneralInfoCardProps) {
 
     setIsUploadingLogo(true)
     const formData = new FormData()
-    formData.append('logo', logoFile)
+    formData.append('logoFile', logoFile) // Corrección: el nombre debe coincidir con el server action (logoFile)
 
     const res = await uploadOrganizationLogo(initialData.id, formData)
     setIsUploadingLogo(false)
@@ -34,10 +36,17 @@ export default function GeneralInfoCard({ initialData }: GeneralInfoCardProps) {
     }
   }
 
-  // Función para guardar nombre y subdominio
+  // Función para guardar nombre, nivel educativo y subdominio
   const handleUpdateDetails = async () => {
     setIsUpdatingDetails(true)
-    const res = await updateOrganizationDetails(initialData.id, { name, subdomain })
+
+    // Incluimos education_level en la actualización
+    const res = await updateOrganizationDetails(initialData.id, { 
+      name, 
+      subdomain,
+      education_level: educationLevel 
+    })
+
     setIsUpdatingDetails(false)
 
     if (res.success) {
@@ -86,6 +95,8 @@ export default function GeneralInfoCard({ initialData }: GeneralInfoCardProps) {
 
       {/* INPUTS DE TEXTO */}
       <div className="space-y-4">
+
+        {/* Nombre Institución */}
         <div>
           <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-2 block mb-2">Nombre de la Institución</label>
           <input
@@ -96,6 +107,30 @@ export default function GeneralInfoCard({ initialData }: GeneralInfoCardProps) {
           />
         </div>
 
+        {/* Nivel Educativo (Nuevo) */}
+        <div>
+          <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-2 block mb-2">Nivel Educativo</label>
+          <div className="relative">
+            <select
+              value={educationLevel}
+              onChange={(e) => setEducationLevel(e.target.value)}
+              className={`w-full p-4 rounded-xl bg-[#e0e5ec] outline-none text-gray-700 appearance-none cursor-pointer ${neuInset}`}
+            >
+              <option value="">Seleccionar nivel...</option>
+              <option value="Primaria">Primaria</option>
+              <option value="Secundaria">Secundaria</option>
+              <option value="Preparatoria">Preparatoria</option>
+            </select>
+            {/* Icono de flecha para el select */}
+            <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Subdominio */}
         <div>
           <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-2 block mb-2">Subdominio</label>
           <div className="relative flex items-center">
