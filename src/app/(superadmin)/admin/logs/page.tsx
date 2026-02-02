@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { getAuditLogs } from '@/actions/audit-actions'
-import { FileText, Clock, User, Activity, Database, Search } from 'lucide-react'
+import { FileText, Clock, User, Activity, Database, Search, ArrowLeft } from 'lucide-react'
 
 // Tipos
 interface AuditLog {
@@ -54,6 +55,16 @@ export default function AuditLogsPage() {
 
   return (
     <div className={`min-h-screen ${neuBase} p-8 font-sans`}>
+
+      {/* Botón Volver */}
+      <div className="mb-6">
+        <Link 
+          href="/admin"
+          className="neu-button inline-flex items-center gap-2 text-gray-600 font-bold py-2 px-4 text-xs uppercase tracking-wider"
+        >
+          <ArrowLeft size={16} /> Volver al Panel
+        </Link>
+      </div>
 
       {/* Header */}
       <div className="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
