@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, ChevronLeft, ChevronRight, UserCircle, LogOut, ShieldCheck, School } from 'lucide-react'
+import { LayoutDashboard, ChevronLeft, ChevronRight, UserCircle, LogOut, ShieldCheck, School, Landmark } from 'lucide-react'
 import { createClient } from '@/lib/supabaseClient'
 
 type NavigationClientProps = {
@@ -40,6 +40,14 @@ export default function NavigationClient({ userRole, userEmail }: NavigationClie
         icon: <School className="w-4 h-4" />
       }
     }
+    // NUEVO: Configuración para el Gerente Institucional
+    if (userRole === 'institutional_manager') {
+      return {
+        href: '/dashboard/institutional',
+        label: 'Centro de Mando',
+        icon: <Landmark className="w-4 h-4" />
+      }
+    }
     return null
   }
 
@@ -61,6 +69,8 @@ export default function NavigationClient({ userRole, userEmail }: NavigationClie
       case 'dashboard':
         if (segments.length === 1) return 'Dashboard';
         if (segments[1] === 'admin') return 'Gestión Escuela';
+        // NUEVO: Breadcrumb para institucional
+        if (segments[1] === 'institutional') return 'Centro de Mando';
         if (segments[1] === 'class' && segments[2]) {
           if (segments.length === 3) return `Clase`;
           if (segments[3] === 'exam' && segments[4]) {
