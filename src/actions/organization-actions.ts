@@ -202,7 +202,7 @@ export async function generatePreInvoice(organizationId: string) {
 
 /**
  * Importa organizaciones masivamente desde un CSV (Texto plano)
- * Formato esperado: name, subdomain, director_name, director_email
+ * Formato esperado: name, subdomain, director_name, director_email, education_level
  */
 export async function createOrganizationsFromCSV(csvContent: string) {
   const supabase = createAdminClient()
@@ -230,6 +230,8 @@ export async function createOrganizationsFromCSV(csvContent: string) {
     const subdomain = columns[1]?.trim()
     const director_name = columns[2]?.trim()
     const director_email = columns[3]?.trim()
+    // NUEVO: Capturar nivel educativo (columna 5)
+    const education_level = columns[4]?.trim()
 
     // Validación mínima: Debe tener nombre
     if (!name) {
@@ -245,6 +247,7 @@ export async function createOrganizationsFromCSV(csvContent: string) {
           subdomain,
           director_name,
           director_email,
+          education_level, // Guardar en BD
           // Valores por defecto
           subscription_plan: 'Basic',
           credits_total_period: 15000,

@@ -1,19 +1,43 @@
 'use client'
 
-import { useState } from 'react'
-import { updateOrganizationDetails, uploadOrganizationLogo } from '@/actions/organization-actions'
+import { useState, useEffect } from 'react'
+import { 
+  updateOrganizationDetails, 
+  uploadOrganizationLogo, 
+  getOrganizations // Nueva importación
+} from '@/actions/organization-actions'
 
 interface GeneralInfoCardProps {
   initialData: any
 }
 
 export default function GeneralInfoCard({ initialData }: GeneralInfoCardProps) {
+  // Estados del formulario
   const [name, setName] = useState(initialData.name || '')
+  const [educationLevel, setEducationLevel] = useState(initialData.education_level || '')
   const [subdomain, setSubdomain] = useState(initialData.subdomain || '')
+
+  // Nuevo estado para la jerarquía
+  const [parentId, setParentId] = useState(initialData.parent_id || '')
+  const [availableOrgs, setAvailableOrgs] = useState<any[]>([])
+
   const [logoFile, setLogoFile] = useState<File | null>(null)
 
+  // Estados de carga
   const [isUpdatingDetails, setIsUpdatingDetails] = useState(false)
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
+
+  // Cargar lista de organizaciones al montar el componente
+  useEffect(() => {
+    const fetchOrgs = async () => {
+      const orgs = await getOrganizations()
+      if (orgs) {
+        // Filtramos para que una organización no pueda ser su propio padre
+        setAvailableOrgs(orgs.filter((o: any) => o.id !== initialData.id))
+      }
+    }
+    fetchOrgs()
+  }, [initialData.id])
 
   // Función para subir el logo
   const handleUploadLogo = async () => {
@@ -21,7 +45,7 @@ export default function GeneralInfoCard({ initialData }: GeneralInfoCardProps) {
 
     setIsUploadingLogo(true)
     const formData = new FormData()
-    formData.append('logo', logoFile)
+    formData.append('logoFile', logoFile)
 
     const res = await uploadOrganizationLogo(initialData.id, formData)
     setIsUploadingLogo(false)
@@ -34,10 +58,17 @@ export default function GeneralInfoCard({ initialData }: GeneralInfoCardProps) {
     }
   }
 
-  // Función para guardar nombre y subdominio
+  // Función para guardar nombre, nivel, subdominio y padre
   const handleUpdateDetails = async () => {
     setIsUpdatingDetails(true)
-    const res = await updateOrganizationDetails(initialData.id, { name, subdomain })
+
+    const res = await updateOrganizationDetails(initialData.id, { 
+      name, 
+      subdomain,
+      education_level: educationLevel,
+      parent_id: parentId === '' ? null : parentId // Convertir string vacío a null para la BD
+    })
+
     setIsUpdatingDetails(false)
 
     if (res.success) {
@@ -86,6 +117,8 @@ export default function GeneralInfoCard({ initialData }: GeneralInfoCardProps) {
 
       {/* INPUTS DE TEXTO */}
       <div className="space-y-4">
+
+        {/* Nombre Institución */}
         <div>
           <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-2 block mb-2">Nombre de la Institución</label>
           <input
@@ -96,6 +129,56 @@ export default function GeneralInfoCard({ initialData }: GeneralInfoCardProps) {
           />
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Nivel Educativo */}
+            <div>
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-2 block mb-2">Nivel Educativo</label>
+              <div className="relative">
+                <select
+                  value={educationLevel}
+                  onChange={(e) => setEducationLevel(e.target.value)}
+                  className={`w-full p-4 rounded-xl bg-[#e0e5ec] outline-none text-gray-700 appearance-none cursor-pointer ${neuInset}`}
+                >
+                  <option value="">Seleccionar nivel...</option>
+                  <option value="Primaria">Primaria</option>
+                  <option value="Secundaria">Secundaria</option>
+                  <option value="Preparatoria">Preparatoria</option>
+                  <option value="Universidad">Universidad</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Entidad Superior (Parent ID) - NUEVO */}
+            <div>
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-2 block mb-2">Entidad Superior</label>
+              <div className="relative">
+                <select
+                  value={parentId}
+                  onChange={(e) => setParentId(e.target.value)}
+                  className={`w-full p-4 rounded-xl bg-[#e0e5ec] outline-none text-gray-700 appearance-none cursor-pointer ${neuInset}`}
+                >
+                  <option value="">Ninguna (Nivel Principal)</option>
+                  {availableOrgs.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+        </div>
+
+        {/* Subdominio */}
         <div>
           <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-2 block mb-2">Subdominio</label>
           <div className="relative flex items-center">
