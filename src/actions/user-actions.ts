@@ -398,34 +398,36 @@ export async function sendStudentReportToParent(data: {
 
 /**
  * ACTUALIZAR MATERIAS DEL MAESTRO
- * Limpia el texto y lo guarda como un string (o array según configuración de DB)
  */
 export async function updateUserSubjects(subjectsString: string) {
   const supabase = createAdminClient(); 
 
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("No autenticado");
+    if (!user) throw new Error("Sesión no válida");
 
-    // --- LA CLAVE: Convertir el texto en una lista limpia ---
+    // Convertimos el texto "mate, español" en ['mate', 'español']
     const subjectsArray = subjectsString
       .split(',')
       .map(s => s.trim())
-      .filter(s => s !== ""); // Quitamos espacios vacíos
+      .filter(s => s.length > 0);
 
-    // Guardamos las materias. Nota: Si tu columna es de tipo texto, 
-    // puedes usar subjectsArray.join(', ') si prefieres un string plano.
-    const { error } = await supabase
+    // ACTUALIZACIÓN LIMPIA: Usamos los nombres exactos de la DB
+    const { error: dbError } = await supabase
       .from('profiles')
-      .update({ subjects_taught: subjectsArray.join(', ') })
+      .update({ 
+        subjects_taught: subjectsArray,
+        onboarding_completed: true // Marcamos que ya terminó su config
+      })
       .eq('id', user.id);
 
-    if (error) throw error;
+    if (dbError) throw dbError;
 
     revalidatePath('/dashboard');
     return { success: true };
+
   } catch (error) {
-    console.error("Error actualizando materias:", error);
-    return { success: false, error: (error as Error).message };
+    console.error("ERROR REAL EN DB:", error);
+    return { success: false, error: "No se pudo guardar la configuración." };
   }
 }
