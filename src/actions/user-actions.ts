@@ -400,24 +400,26 @@ export async function sendStudentReportToParent(data: {
  * ACTUALIZAR MATERIAS DEL MAESTRO
  */
 export async function updateUserSubjects(subjectsString: string) {
-  const supabase = createAdminClient(); 
+  // --- CAMBIO CLAVE: Usamos createClient (el de la sesión) no el Admin ---
+  const supabase = createClient(); 
 
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Sesión no válida");
 
-    // Convertimos el texto "mate, español" en ['mate', 'español']
+    if (!user) throw new Error("Sesión expirada. Por favor, vuelve a iniciar sesión.");
+
+    // Convertimos el texto en array
     const subjectsArray = subjectsString
       .split(',')
       .map(s => s.trim())
       .filter(s => s.length > 0);
 
-    // ACTUALIZACIÓN LIMPIA: Usamos los nombres exactos de la DB
+    // Actualizamos usando el cliente del usuario
     const { error: dbError } = await supabase
       .from('profiles')
       .update({ 
         subjects_taught: subjectsArray,
-        onboarding_completed: true // Marcamos que ya terminó su config
+        onboarding_completed: true 
       })
       .eq('id', user.id);
 
@@ -427,7 +429,10 @@ export async function updateUserSubjects(subjectsString: string) {
     return { success: true };
 
   } catch (error) {
-    console.error("ERROR REAL EN DB:", error);
-    return { success: false, error: "No se pudo guardar la configuración." };
+    console.error("FALLO EN ACTUALIZACIÓN:", error);
+    return { 
+      success: false, 
+      error: "Error de conexión con la base de datos." 
+    };
   }
 }
