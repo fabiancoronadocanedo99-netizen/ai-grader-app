@@ -16,10 +16,10 @@ export default function ClassDetailPage() {
   const supabase = createClient()
   const params = useParams()
 
-  // Manejar classId de forma segura - puede ser string o string[]
+  // En Next.js 15, params.classId puede ser string | string[] | undefined
   const classId = useMemo(() => {
-    const id = params?.classId
-    return Array.isArray(id) ? id[0] : id
+    if (!params?.classId) return undefined
+    return Array.isArray(params.classId) ? params.classId[0] : params.classId
   }, [params])
 
   const [classDetails, setClassDetails] = useState<ClassDetails | null>(null)
