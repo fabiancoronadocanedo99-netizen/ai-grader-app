@@ -14,9 +14,9 @@ interface Profile { subjects_taught: string | null; }
 
 export default function ClassDetailPage() {
   const supabase = createClient()
-  const params = useParams()
+  const params = useParams() // Asegúrate de que useParams esté importado de 'next/navigation'
 
-  // En Next.js 15, params.classId puede ser string | string[] | undefined
+  // Esta es la forma segura para Next.js 15
   const classId = useMemo(() => {
     if (!params?.classId) return undefined
     return Array.isArray(params.classId) ? params.classId[0] : params.classId

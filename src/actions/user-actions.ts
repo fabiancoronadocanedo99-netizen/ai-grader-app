@@ -397,51 +397,32 @@ export async function sendStudentReportToParent(data: {
 }
 
 /**
- * ACTUALIZAR MATERIAS DEL MAESTRO usando RPC
- * Esta función usa la RPC update_my_subjects que maneja las políticas RLS correctamente
+ * ACTUALIZAR MATERIAS DEL MAESTRO (Versión de diagnóstico)
  */
 export async function updateUserSubjects(subjectsString: string) {
-  const supabase = await createClient(); 
+  const supabase = await createClient();
 
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      throw new Error("Sesión expirada. Por favor, vuelve a iniciar sesión.");
-    }
-
-    // Convertimos el string separado por comas en un array
     const subjectsArray = subjectsString
       .split(',')
       .map(s => s.trim())
       .filter(s => s.length > 0);
 
-    // Verificamos que haya al menos una materia
-    if (subjectsArray.length === 0) {
-      throw new Error("Debes proporcionar al menos una materia.");
-    }
-
-    // Llamamos a la función RPC que creamos en Supabase
-    // Esta función actualiza subjects_taught y marca onboarding_completed = true
-    const { error: rpcError } = await supabase.rpc('update_my_subjects', {
-      new_subjects: subjectsArray
+    // Llamada a la base de datos vía RPC
+    const { error } = await supabase.rpc('update_my_subjects', {
+      input_subjects: subjectsArray
     });
 
-    if (rpcError) {
-      console.error("Error en RPC update_my_subjects:", rpcError);
-      throw new Error(`Error al actualizar materias: ${rpcError.message}`);
+    if (error) {
+      // ESTO ES LO MÁS IMPORTANTE: Ver el error real en la terminal del servidor
+      console.error("DETALLE ERROR RPC:", error);
+      return { success: false, error: `Error DB: ${error.message} (Código: ${error.code})` };
     }
 
-    // Revalidamos la página del dashboard para reflejar los cambios
     revalidatePath('/dashboard');
-
     return { success: true };
-
-  } catch (error) {
-    console.error("FALLO EN ACTUALIZACIÓN DE MATERIAS:", error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : "Error de conexión con la base de datos." 
-    };
+  } catch (error: any) {
+    console.error("EXCEPCIÓN EN ACTION:", error);
+    return { success: false, error: error.message };
   }
 }
