@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
 import Papa from 'papaparse'
 import { Resend } from 'resend'
+import { logEvent } from './audit-actions'
 
 // Inicializar Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -116,20 +117,28 @@ export async function createUser(data: {
     return { success: false, error: 'No se pudo crear el usuario en Auth' }
   }
 
+  // --- CAMBIO DE INSERT A UPSERT ---
   const { error: profileError } = await supabase
     .from('profiles')
-    .insert({
+    .upsert({
       id: authData.user.id,
       full_name: data.fullName,
+      email: data.email,
       role: data.role,
       organization_id: data.organizationId,
-      onboarding_completed: true
+      onboarding_completed: true // Como lo creamos nosotros, ya está listo
     })
 
   if (profileError) {
     await supabase.auth.admin.deleteUser(authData.user.id)
-    return { success: false, error: 'Error de base de datos creando el perfil: ' + profileError.message }
+    return { success: false, error: 'Error de base de datos creando/actualizando el perfil: ' + profileError.message }
   }
+
+  // Registro de auditoría
+  await logEvent('CREATE_USER', 'profile', authData.user.id, { 
+    email: data.email, 
+    role: data.role 
+  })
 
   revalidatePath('/admin/users')
   return { success: true }
@@ -178,6 +187,9 @@ export async function updateUser(
 
     if (error) throw error
 
+    // Registro de auditoría
+    await logEvent('UPDATE_USER', 'profile', userId, updates)
+
     revalidatePath('/admin/users')
     return { success: true }
   } catch (error) {
@@ -189,6 +201,11 @@ export async function deleteUser(userId: string) {
   const supabase = createAdminClient()
 
   try {
+    // Registro de auditoría antes de borrar
+    await logEvent('DELETE_USER', 'profile', userId, { 
+      note: 'Usuario eliminado del sistema' 
+    })
+
     const { error: authError } = await supabase.auth.admin.deleteUser(userId)
     if (authError) throw authError
 
