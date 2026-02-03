@@ -117,23 +117,21 @@ export async function createUser(data: {
     return { success: false, error: 'No se pudo crear el usuario en Auth' }
   }
 
-  // Esperamos un momento para que el trigger de la DB cree el perfil base
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  // Ahora actualizamos ese perfil con los datos correctos (Rol y Organización)
+  // --- CAMBIO DE INSERT A UPSERT ---
   const { error: profileError } = await supabase
     .from('profiles')
-    .update({
+    .upsert({
+      id: authData.user.id,
       full_name: data.fullName,
+      email: data.email,
       role: data.role,
       organization_id: data.organizationId,
-      onboarding_completed: true
+      onboarding_completed: true // Como lo creamos nosotros, ya está listo
     })
-    .eq('id', authData.user.id); // Buscamos al usuario que acabamos de crear
 
   if (profileError) {
     await supabase.auth.admin.deleteUser(authData.user.id)
-    return { success: false, error: 'Error actualizando el perfil: ' + profileError.message }
+    return { success: false, error: 'Error de base de datos creando/actualizando el perfil: ' + profileError.message }
   }
 
   // Registro de auditoría
