@@ -15,7 +15,12 @@ interface Profile { subjects_taught: string | null; }
 export default function ClassDetailPage() {
   const supabase = createClient()
   const params = useParams()
-  const classId = params.classId as string
+
+  // Manejar classId de forma segura - puede ser string o string[]
+  const classId = useMemo(() => {
+    const id = params?.classId
+    return Array.isArray(id) ? id[0] : id
+  }, [params])
 
   const [classDetails, setClassDetails] = useState<ClassDetails | null>(null)
   const [allEvaluations, setAllEvaluations] = useState<Evaluation[]>([])
@@ -52,7 +57,7 @@ export default function ClassDetailPage() {
   const exams = useMemo(() => allEvaluations.filter(e => e.type === 'exam'), [allEvaluations])
   const assignments = useMemo(() => allEvaluations.filter(e => e.type === 'assignment'), [allEvaluations])
 
-  // --- Lógica de materias procesadas (NUEVO) ---
+  // --- Lógica de materias procesadas ---
   const subjectsList = useMemo(() => {
     if (!profile?.subjects_taught) return []
     return profile.subjects_taught.split(',').map(s => s.trim()).filter(Boolean)
@@ -197,7 +202,7 @@ export default function ClassDetailPage() {
         name: newEvaluationName, 
         class_id: classId, 
         type: newEvaluationType,
-        subject: selectedSubject, // Guardamos la materia seleccionada
+        subject: selectedSubject,
         user_id: user.id,
         organization_id: classData.organization_id
       }])
@@ -516,7 +521,7 @@ export default function ClassDetailPage() {
         )}
       </div>
 
-      {/* MODAL CREAR EVALUACIÓN (ACTUALIZADO CON MATERIA) */}
+      {/* MODAL CREAR EVALUACIÓN */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
@@ -558,7 +563,7 @@ export default function ClassDetailPage() {
                 </div>
               </div>
 
-              {/* Selector de Materia (Inteligente - Solo aparece si hay 2 o más) */}
+              {/* Selector de Materia (Solo aparece si hay 2 o más) */}
               {subjectsList.length > 1 && (
                 <div className="mb-6">
                   <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Materia</label>

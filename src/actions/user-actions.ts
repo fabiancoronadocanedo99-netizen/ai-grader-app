@@ -28,8 +28,8 @@ type BulkImportResult = {
 
 // --- OBTENER PERFIL (LIMPIO) ---
 export async function getCurrentUserProfile() {
-  const cookieStore = cookies();
-  const supabase = createClient()
+  const cookieStore = await cookies();
+  const supabase = await createClient()
 
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
@@ -100,7 +100,7 @@ export async function createUser(data: {
   organizationId: string
   fullName: string
 }) {
-  const supabase = createAdminClient()
+  const supabase = await createAdminClient()
 
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email: data.email,
@@ -143,7 +143,7 @@ export async function createUser(data: {
 }
 
 export async function getUsers() {
-  const supabase = createAdminClient()
+  const supabase = await createAdminClient()
 
   const { data, error } = await supabase
     .from('profiles')
@@ -169,7 +169,7 @@ export async function updateUser(
     organizationId?: string
   }
 ) {
-  const supabase = createAdminClient()
+  const supabase = await createAdminClient()
 
   try {
     const profileUpdates: any = {}
@@ -195,7 +195,7 @@ export async function updateUser(
 }
 
 export async function deleteUser(userId: string) {
-  const supabase = createAdminClient()
+  const supabase = await createAdminClient()
 
   try {
     await logEvent('DELETE_USER', 'profile', userId, { 
@@ -227,7 +227,7 @@ export async function createUsersFromCSV(csvContent: string): Promise<BulkImport
   let createdCount = 0
   let failedCount = 0
   const errors: string[] = []
-  const supabase = createAdminClient()
+  const supabase = await createAdminClient()
 
   try {
     const { data: allOrgs } = await supabase.from('organizations').select('id, name')
@@ -281,14 +281,14 @@ export async function createUsersFromCSV(csvContent: string): Promise<BulkImport
 // --- ACTUALIZAR LÍMITE (Seguro) ---
 export async function updateUserCreditLimit(targetUserId: string, newLimit: number) {
   try {
-    const supabaseAuth = createClient();
+    const supabaseAuth = await createClient();
     const { data: { user: currentUser }, error: authError } = await supabaseAuth.auth.getUser()
 
     if (authError || !currentUser) {
       throw new Error('No estás autenticado.')
     }
 
-    const supabaseAdmin = createAdminClient();
+    const supabaseAdmin = await createAdminClient();
 
     const { data: adminProfile, error: adminProfileError } = await supabaseAdmin
       .from('profiles')
@@ -343,7 +343,7 @@ export async function sendStudentReportToParent(data: {
   finalGrade: number
   swot: any
 }) {
-  const supabase = createAdminClient();
+  const supabase = await createAdminClient();
 
   try {
     const { data: student, error: studentError } = await supabase
@@ -397,16 +397,17 @@ export async function sendStudentReportToParent(data: {
 }
 
 /**
- * ACTUALIZAR MATERIAS DEL MAESTRO
+ * ACTUALIZAR MATERIAS DEL MAESTRO usando RPC
  */
 export async function updateUserSubjects(subjectsString: string) {
-  // --- CAMBIO CLAVE: Usamos createClient (el de la sesión) no el Admin ---
-  const supabase = createClient(); 
+  const supabase = await createClient(); 
 
   try {
     const { data: { user } } = await supabase.auth.getUser();
 
-    if (!user) throw new Error("Sesión expirada. Por favor, vuelve a iniciar sesión.");
+    if (!user) {
+      throw new Error("Sesión expirada. Por favor, vuelve a iniciar sesión.");
+    }
 
     // Convertimos el texto en array
     const subjectsArray = subjectsString
@@ -414,16 +415,15 @@ export async function updateUserSubjects(subjectsString: string) {
       .map(s => s.trim())
       .filter(s => s.length > 0);
 
-    // Actualizamos usando el cliente del usuario
-    const { error: dbError } = await supabase
-      .from('profiles')
-      .update({ 
-        subjects_taught: subjectsArray,
-        onboarding_completed: true 
-      })
-      .eq('id', user.id);
+    // Usamos la función RPC para actualizar
+    const { data, error: rpcError } = await supabase.rpc('update_my_subjects', {
+      new_subjects: subjectsArray
+    });
 
-    if (dbError) throw dbError;
+    if (rpcError) {
+      console.error("Error en RPC update_my_subjects:", rpcError);
+      throw rpcError;
+    }
 
     revalidatePath('/dashboard');
     return { success: true };
@@ -432,7 +432,7 @@ export async function updateUserSubjects(subjectsString: string) {
     console.error("FALLO EN ACTUALIZACIÓN:", error);
     return { 
       success: false, 
-      error: "Error de conexión con la base de datos." 
+      error: error instanceof Error ? error.message : "Error de conexión con la base de datos." 
     };
   }
 }
