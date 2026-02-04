@@ -43,7 +43,7 @@ export default function UsersManagementPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null)
   const [editFormData, setEditFormData] = useState({
-    id: '', // <-- Agregamos el ID al estado del formulario
+    id: '', // <-- Agregado para rastrear el UUID del usuario
     fullName: '',
     role: '',
     organizationId: ''
@@ -138,11 +138,11 @@ export default function UsersManagementPage() {
     }
   }
 
-  // --- 3. Abrir Modal de Edición (CORREGIDO: Capturamos el ID) ---
+  // --- 3. Abrir Modal de Edición (ID CAPTURADO AQUÍ) ---
   const openEditModal = (user: UserProfile) => {
     setEditingUser(user)
     setEditFormData({
-      id: user.id, // <-- CRÍTICO: Aseguramos que el ID se guarde aquí
+      id: user.id, // <-- CRÍTICO: Guardamos el ID del usuario seleccionado
       fullName: user.full_name || '',
       role: user.role || '',
       organizationId: user.organization_id || ''
@@ -159,7 +159,6 @@ export default function UsersManagementPage() {
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // CORRECCIÓN: Usamos editFormData.id en lugar de solo editingUser
     if (!editFormData.id || !editFormData.fullName.trim()) {
       alert('Por favor completa todos los campos obligatorios.')
       return
@@ -168,7 +167,7 @@ export default function UsersManagementPage() {
     setIsUpdating(true)
 
     try {
-      // LLAMADA A LA SERVER ACTION CON EL ID DEL FORMULARIO
+      // LLAMADA A LA SERVER ACTION CON EL ID DEL ESTADO
       const result = await updateUser(editFormData.id, {
         fullName: editFormData.fullName,
         role: editFormData.role,
@@ -240,7 +239,7 @@ export default function UsersManagementPage() {
   const neuIconButton = `${neuBase} ${neuShadow} w-8 h-8 rounded-lg flex items-center justify-center hover:translate-y-[1px] active:shadow-[inset_4px_4px_8px_rgb(163,177,198),inset_-4px_-4px_8px_rgba(255,255,255,0.5)] transition-all duration-200`
 
   return (
-    <div className={`min-h-screen ${neuBase} p-8 font-sans`}>
+    <div className={`min-h-screen ${neuBase} p-8 font-sans text-left`}>
       <header className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Usuarios</h1>
@@ -287,35 +286,30 @@ export default function UsersManagementPage() {
                       </div>
                     </td>
                     <td className="p-4 text-gray-600">{user.email}</td>
-                    <td className="p-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold 
+                    <td className="p-4 uppercase text-[10px] font-black tracking-widest">
+                      <span className={`px-2 py-1 rounded-md 
                         ${user.role === 'admin' ? 'bg-purple-100 text-purple-600' : 
                           user.role === 'director' ? 'bg-orange-100 text-orange-600' : 
                           'bg-blue-100 text-blue-600'}`}>
                         {user.role}
                       </span>
                     </td>
-                    <td className="p-4 text-gray-600">
-                      {user.organizations?.name || <span className="text-gray-400 italic">Sin Asignar</span>}
+                    <td className="p-4 text-gray-600 italic text-xs">
+                      {user.organizations?.name || "Sin Asignar"}
                     </td>
                     <td className="p-4">
                       <div className="flex gap-2 justify-end">
-                        {/* Botón Editar */}
                         <button 
                           onClick={() => openEditModal(user)}
                           className={`${neuIconButton} text-blue-600 hover:text-blue-700`}
-                          title="Editar usuario"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                             <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
                           </svg>
                         </button>
-
-                        {/* Botón Eliminar */}
                         <button 
                           onClick={() => openDeleteModal(user)}
                           className={`${neuIconButton} text-red-600 hover:text-red-700`}
-                          title="Eliminar usuario"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                             <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
@@ -331,12 +325,12 @@ export default function UsersManagementPage() {
         </div>
       )}
 
-      {/* --- Modal Crear Usuario --- */}
+      {/* --- Modal Crear --- */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4 text-left">
           <div className={`${neuCard} bg-[#e0e5ec] w-full max-w-lg p-8 relative animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto`}>
             <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">Nuevo Usuario</h2>
-            <form onSubmit={handleCreateUser} className="space-y-4">
+            <form onSubmit={handleCreateUser} className="space-y-4 text-left">
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wide">Nombre Completo</label>
                 <input type="text" name="fullName" value={formData.fullName} onChange={handleInputChange} className={neuInput} required />
@@ -356,7 +350,7 @@ export default function UsersManagementPage() {
                     <option value="teacher">Teacher (Profesor)</option>
                     <option value="admin">Admin (Administrador)</option>
                     <option value="director">Director</option>
-                    <option value="institutional_manager">Gerente Institucional (Secretario/Director Gral)</option>
+                    <option value="institutional_manager">Gerente Institucional</option>
                   </select>
                   <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">▼</div>
                 </div>
@@ -380,14 +374,13 @@ export default function UsersManagementPage() {
         </div>
       )}
 
-      {/* --- Modal Editar Usuario --- */}
+      {/* --- Modal Editar (ID INTEGRADO) --- */}
       {isEditModalOpen && editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4 text-left">
           <div className={`${neuCard} bg-[#e0e5ec] w-full max-w-lg p-8 relative animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto`}>
             <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">Editar Usuario</h2>
-            <form onSubmit={handleUpdateUser} className="space-y-4">
-              {/* Campo oculto opcional para el ID */}
-              <input type="hidden" value={editFormData.id} />
+            <form onSubmit={handleUpdateUser} className="space-y-4 text-left">
+              <input type="hidden" name="id" value={editFormData.id} />
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wide">Nombre Completo</label>
                 <input 
@@ -398,16 +391,6 @@ export default function UsersManagementPage() {
                   className={neuInput} 
                   required 
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wide">Email</label>
-                <input 
-                  type="email" 
-                  value={editingUser.email} 
-                  className={`${neuInput} opacity-50 cursor-not-allowed`} 
-                  disabled 
-                />
-                <p className="text-xs text-gray-500 mt-1 ml-1">El email no puede ser modificado</p>
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wide">Rol</label>
@@ -421,7 +404,7 @@ export default function UsersManagementPage() {
                     <option value="teacher">Teacher (Profesor)</option>
                     <option value="admin">Admin (Administrador)</option>
                     <option value="director">Director</option>
-                    <option value="institutional_manager">Gerente Institucional (Secretario/Director Gral)</option>
+                    <option value="institutional_manager">Gerente Institucional</option>
                   </select>
                   <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">▼</div>
                 </div>
@@ -445,10 +428,7 @@ export default function UsersManagementPage() {
               <div className="flex gap-4 mt-8 pt-4">
                 <button 
                   type="button" 
-                  onClick={() => {
-                    setIsEditModalOpen(false)
-                    setEditingUser(null)
-                  }} 
+                  onClick={() => setIsEditModalOpen(false)} 
                   className={`${neuButton} flex-1 !text-gray-500`} 
                   disabled={isUpdating}
                 >
@@ -467,50 +447,28 @@ export default function UsersManagementPage() {
         </div>
       )}
 
-      {/* --- Modal Eliminar Usuario --- */}
+      {/* --- Modal Eliminar --- */}
       {isDeleteModalOpen && deletingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4">
-          <div className={`${neuCard} bg-[#e0e5ec] w-full max-w-md p-8 relative animate-in fade-in zoom-in duration-200`}>
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className={`${neuCard} bg-[#e0e5ec] w-full max-w-md p-8 relative text-center`}>
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-red-600">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
                 </svg>
-              </div>
-              <h2 className="text-2xl font-bold text-gray-700 mb-2">¿Eliminar Usuario?</h2>
-              <p className="text-gray-600">
-                ¿Estás seguro de que quieres eliminar a <strong className="text-gray-800">{deletingUser.full_name}</strong>?
-              </p>
-              <p className="text-sm text-red-600 mt-2">
-                Esta acción eliminará el usuario del sistema de autenticación y todos sus datos. No se puede deshacer.
-              </p>
             </div>
-
-            <div className="flex gap-4 mt-8">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsDeleteModalOpen(false)
-                  setDeletingUser(null)
-                }}
-                className={`${neuButton} flex-1 !text-gray-500`}
-                disabled={isDeleting}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteUser}
-                className={`${neuButton} flex-1 !text-red-600`}
-                disabled={isDeleting}
-              >
-                {isDeleting ? 'Eliminando...' : 'Eliminar'}
+            <h2 className="text-xl font-bold text-gray-700 mb-2">¿Eliminar Usuario?</h2>
+            <p className="text-gray-600 mb-8">
+                Esta acción es permanente para <strong>{deletingUser.full_name}</strong>.
+            </p>
+            <div className="flex gap-4">
+              <button onClick={() => setIsDeleteModalOpen(false)} className={`${neuButton} flex-1 !text-gray-500`} disabled={isDeleting}>Cancelar</button>
+              <button onClick={handleDeleteUser} className={`${neuButton} flex-1 !text-red-600`} disabled={isDeleting}>
+                {isDeleting ? 'Eliminando...' : 'Sí, Eliminar'}
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   )
 }

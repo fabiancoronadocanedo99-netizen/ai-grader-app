@@ -162,53 +162,41 @@ export async function getUsers() {
 }
 
 /**
- * ACTUALIZAR USUARIO (Versión Blindada)
+ * ACTUALIZAR USUARIO (Versión Estricta con validación de ID)
  */
-export async function updateUser(
-  userId: string,
-  updates: {
-    fullName?: string
-    role?: string
-    organizationId?: string
+export async function updateUser(userId: string, updates: any) {
+  const supabase = await createAdminClient();
+
+  // Validación de seguridad para asegurar que recibimos el ID
+  if (!userId) {
+    return { success: false, error: "Error interno: ID de usuario no recibido." };
   }
-) {
-  // USAMOS EL CLIENTE ADMIN PARA SALTAR RLS
-  const supabase = await createAdminClient()
 
   try {
-    const profileUpdates: any = {}
-
-    // Mapeo exacto de nombres de columnas de tu base de datos
-    if (updates.fullName !== undefined) profileUpdates.full_name = updates.fullName
-    if (updates.role !== undefined) profileUpdates.role = updates.role
-    if (updates.organizationId !== undefined) profileUpdates.organization_id = updates.organizationId
-
-    console.log(`Intentando actualizar usuario ${userId} con:`, profileUpdates);
-
-    // Ejecutamos la actualización
     const { data, error } = await supabase
       .from('profiles')
-      .update(profileUpdates)
+      .update({
+        full_name: updates.fullName,
+        role: updates.role,
+        organization_id: updates.organizationId
+      })
       .eq('id', userId)
-      .select(); // El .select() es vital para confirmar que se hizo
+      .select();
 
-    if (error) {
-      console.error("ERROR REAL EN UPDATE USER:", error);
-      throw new Error(`Error DB: ${error.message}`);
-    }
+    if (error) throw error;
 
     if (!data || data.length === 0) {
-      throw new Error("No se encontró el usuario o no se aplicaron cambios.");
+      throw new Error("La base de datos no encontró al usuario o no se aplicaron cambios.");
     }
 
-    // Registro de auditoría (Solo si la DB confirmó el cambio)
-    await logEvent('UPDATE_USER', 'profile', userId, updates)
+    // Registro de auditoría
+    await logEvent('UPDATE_USER', 'profile', userId, updates);
 
-    revalidatePath('/admin/users')
-    return { success: true }
+    revalidatePath('/admin/users');
+    return { success: true };
   } catch (error: any) {
-    console.error("FALLO CRÍTICO EN updateUser:", error);
-    return { success: false, error: error.message }
+    console.error("FALLO EN UPDATE:", error);
+    return { success: false, error: error.message };
   }
 }
 
