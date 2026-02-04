@@ -43,6 +43,7 @@ export default function UsersManagementPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null)
   const [editFormData, setEditFormData] = useState({
+    id: '', // <-- Agregamos el ID al estado del formulario
     fullName: '',
     role: '',
     organizationId: ''
@@ -137,12 +138,13 @@ export default function UsersManagementPage() {
     }
   }
 
-  // --- 3. Abrir Modal de Edición ---
+  // --- 3. Abrir Modal de Edición (CORREGIDO: Capturamos el ID) ---
   const openEditModal = (user: UserProfile) => {
     setEditingUser(user)
     setEditFormData({
-      fullName: user.full_name,
-      role: user.role,
+      id: user.id, // <-- CRÍTICO: Aseguramos que el ID se guarde aquí
+      fullName: user.full_name || '',
+      role: user.role || '',
       organizationId: user.organization_id || ''
     })
     setIsEditModalOpen(true)
@@ -157,7 +159,8 @@ export default function UsersManagementPage() {
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!editingUser || !editFormData.fullName.trim()) {
+    // CORRECCIÓN: Usamos editFormData.id en lugar de solo editingUser
+    if (!editFormData.id || !editFormData.fullName.trim()) {
       alert('Por favor completa todos los campos obligatorios.')
       return
     }
@@ -165,7 +168,8 @@ export default function UsersManagementPage() {
     setIsUpdating(true)
 
     try {
-      const result = await updateUser(editingUser.id, {
+      // LLAMADA A LA SERVER ACTION CON EL ID DEL FORMULARIO
+      const result = await updateUser(editFormData.id, {
         fullName: editFormData.fullName,
         role: editFormData.role,
         organizationId: editFormData.organizationId
@@ -329,7 +333,7 @@ export default function UsersManagementPage() {
 
       {/* --- Modal Crear Usuario --- */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4 text-left">
           <div className={`${neuCard} bg-[#e0e5ec] w-full max-w-lg p-8 relative animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto`}>
             <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">Nuevo Usuario</h2>
             <form onSubmit={handleCreateUser} className="space-y-4">
@@ -378,10 +382,12 @@ export default function UsersManagementPage() {
 
       {/* --- Modal Editar Usuario --- */}
       {isEditModalOpen && editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4 text-left">
           <div className={`${neuCard} bg-[#e0e5ec] w-full max-w-lg p-8 relative animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto`}>
             <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">Editar Usuario</h2>
             <form onSubmit={handleUpdateUser} className="space-y-4">
+              {/* Campo oculto opcional para el ID */}
+              <input type="hidden" value={editFormData.id} />
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wide">Nombre Completo</label>
                 <input 
