@@ -73,6 +73,19 @@ export default function ClassDetailPage() {
     }
   }, [subjectsList])
 
+  // Efecto para resetear materia cuando se abre el modal
+  useEffect(() => {
+    if (isCreateModalOpen) {
+      // Si solo hay una materia, seleccionarla automáticamente
+      if (subjectsList.length === 1) {
+        setSelectedSubject(subjectsList[0])
+      } else {
+        // Si hay varias, limpiar la selección para forzar al usuario a elegir
+        setSelectedSubject('')
+      }
+    }
+  }, [isCreateModalOpen, subjectsList])
+
   const fetchClassDetails = useCallback(async () => {
     if (!classId) return
     const { data, error } = await supabase.from('classes').select('*').eq('id', classId).single()
@@ -182,11 +195,14 @@ export default function ClassDetailPage() {
     e.preventDefault()
     if (!newEvaluationName.trim() || !classId) return
 
-    // Validar materia si hay varias
+    // 🎯 VALIDACIÓN INTELIGENTE: Solo validar si hay varias materias
     if (subjectsList.length > 1 && !selectedSubject) {
         alert("Por favor selecciona una materia");
         return;
     }
+
+    // 🎯 MATERIA FINAL: Si solo hay una, usar esa; si hay varias, usar la seleccionada
+    const finalSubject = subjectsList.length === 1 ? subjectsList[0] : selectedSubject;
 
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -201,17 +217,23 @@ export default function ClassDetailPage() {
       if (classError || !classData) {
         throw new Error("No se pudo encontrar la clase para obtener la organización.")
       }
+
+      // 🎯 GUARDAR CON LA MATERIA CORRECTA
       const { error } = await supabase.from('exams').insert([{ 
         name: newEvaluationName, 
         class_id: classId, 
         type: newEvaluationType,
-        subject: selectedSubject,
+        subject: finalSubject, // ← Aquí guardamos la materia
         user_id: user.id,
         organization_id: classData.organization_id
       }])
+
       if (error) throw error
+
+      // Limpiar formulario
       setNewEvaluationName('')
       setNewEvaluationType('exam')
+      setSelectedSubject('')
       setIsCreateModalOpen(false)
       await fetchEvaluations()
     } catch (error) {
@@ -595,26 +617,38 @@ export default function ClassDetailPage() {
                 </div>
               </div>
 
-              {/* Selector de Materia (Solo aparece si hay 2 o más) */}
-              {subjectsList.length > 1 && (
+              {/* Selector de Materia (INTELIGENTE) */}
+              {subjectsList.length > 0 && (
                 <div className="mb-6">
-                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Materia</label>
-                  <div className="relative">
-                    <select 
-                      value={selectedSubject} 
-                      onChange={(e) => setSelectedSubject(e.target.value)}
-                      className="w-full p-4 rounded-xl bg-[#e0e5ec] shadow-[inset_6px_6px_10px_#b8c1ce,inset_-6px_-6px_10px_#ffffff] outline-none text-gray-700 appearance-none cursor-pointer"
-                      required
-                    >
-                      <option value="">Seleccionar Materia...</option>
-                      {subjectsList.map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                        ▼
+                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">
+                    Materia {subjectsList.length === 1 && <span className="text-blue-500">(Asignada automáticamente)</span>}
+                  </label>
+
+                  {subjectsList.length === 1 ? (
+                    // Si solo hay una materia, mostrar badge informativo
+                    <div className="w-full p-4 rounded-xl bg-blue-50 border-2 border-blue-200 flex items-center justify-between">
+                      <span className="text-blue-700 font-bold">{subjectsList[0]}</span>
+                      <span className="text-blue-500 text-sm">✓ Auto-asignada</span>
                     </div>
-                  </div>
+                  ) : (
+                    // Si hay varias materias, mostrar el selector
+                    <div className="relative">
+                      <select 
+                        value={selectedSubject} 
+                        onChange={(e) => setSelectedSubject(e.target.value)}
+                        className="w-full p-4 rounded-xl bg-[#e0e5ec] shadow-[inset_6px_6px_10px_#b8c1ce,inset_-6px_-6px_10px_#ffffff] outline-none text-gray-700 appearance-none cursor-pointer"
+                        required
+                      >
+                        <option value="">Seleccionar Materia...</option>
+                        {subjectsList.map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                          ▼
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
