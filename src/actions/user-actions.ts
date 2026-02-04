@@ -37,6 +37,7 @@ export async function getCurrentUserProfile() {
     return null
   }
 
+  // El asterisco trae todas las columnas, incluyendo onboarding_completed
   const { data: profile, error } = await supabase
     .from('profiles')
     .select('*')
@@ -167,6 +168,7 @@ export async function updateUser(
     fullName?: string
     role?: string
     organizationId?: string
+    onboardingCompleted?: boolean
   }
 ) {
   const supabase = await createAdminClient()
@@ -177,6 +179,7 @@ export async function updateUser(
     if (updates.fullName !== undefined) profileUpdates.full_name = updates.fullName
     if (updates.role !== undefined) profileUpdates.role = updates.role
     if (updates.organizationId !== undefined) profileUpdates.organization_id = updates.organizationId
+    if (updates.onboardingCompleted !== undefined) profileUpdates.onboarding_completed = updates.onboardingCompleted
 
     const { error } = await supabase
       .from('profiles')
@@ -397,10 +400,10 @@ export async function sendStudentReportToParent(data: {
 }
 
 /**
- * ACTUALIZAR MATERIAS DEL MAESTRO (Versión de diagnóstico)
+ * ACTUALIZAR MATERIAS DEL MAESTRO
  */
 export async function updateUserSubjects(subjectsString: string) {
-  const supabase = await createClient();
+  const supabase = await createClient(); 
 
   try {
     const subjectsArray = subjectsString
@@ -408,21 +411,19 @@ export async function updateUserSubjects(subjectsString: string) {
       .map(s => s.trim())
       .filter(s => s.length > 0);
 
-    // Llamada a la base de datos vía RPC
-    const { error } = await supabase.rpc('update_my_subjects', {
+    // LLAMAMOS AL NUEVO NOMBRE DE FUNCIÓN RPC
+    const { error } = await supabase.rpc('set_teacher_subjects', {
       input_subjects: subjectsArray
     });
 
     if (error) {
-      // ESTO ES LO MÁS IMPORTANTE: Ver el error real en la terminal del servidor
-      console.error("DETALLE ERROR RPC:", error);
-      return { success: false, error: `Error DB: ${error.message} (Código: ${error.code})` };
+      console.error("ERROR EN RPC:", error);
+      return { success: false, error: error.message };
     }
 
     revalidatePath('/dashboard');
     return { success: true };
   } catch (error: any) {
-    console.error("EXCEPCIÓN EN ACTION:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: "Error de conexión." };
   }
 }

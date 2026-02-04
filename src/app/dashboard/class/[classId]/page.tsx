@@ -10,13 +10,13 @@ import { createClient } from '@/lib/supabaseClient'
 interface ClassDetails { id: string; name: string; subject?: string; grade_level?: string; }
 interface Evaluation { id: string; name: string; class_id: string; created_at?: string; type: 'exam' | 'assignment'; subject?: string; } 
 interface Student { id: string; full_name: string; student_email: string; tutor_email?: string; class_id: string; created_at?: string; }
-interface Profile { subjects_taught: string | null; }
+interface Profile { subjects_taught: string[] | string | null; }
 
 export default function ClassDetailPage() {
   const supabase = createClient()
-  const params = useParams() // Asegúrate de que useParams esté importado de 'next/navigation'
+  const params = useParams()
 
-  // Esta es la forma segura para Next.js 15
+  // 🛡️ RED DE SEGURIDAD: Manejo seguro del classId para Next.js 15
   const classId = useMemo(() => {
     if (!params?.classId) return undefined
     return Array.isArray(params.classId) ? params.classId[0] : params.classId
@@ -57,11 +57,14 @@ export default function ClassDetailPage() {
   const exams = useMemo(() => allEvaluations.filter(e => e.type === 'exam'), [allEvaluations])
   const assignments = useMemo(() => allEvaluations.filter(e => e.type === 'assignment'), [allEvaluations])
 
-  // --- Lógica de materias procesadas ---
+  // 🔧 FIX CRÍTICO: Manejo de materias como array O string
   const subjectsList = useMemo(() => {
-    if (!profile?.subjects_taught) return []
-    return profile.subjects_taught.split(',').map(s => s.trim()).filter(Boolean)
-  }, [profile])
+    // PROTECCIÓN: Si el perfil aún no carga, devuelve lista vacía y no hagas split
+    if (!profile || !profile.subjects_taught) return [];
+
+    const raw = profile.subjects_taught;
+    return Array.isArray(raw) ? raw : raw.split(',').map((s: any) => s.trim()).filter(Boolean);
+  }, [profile]);
 
   // Efecto para asignar materia automática si solo hay una
   useEffect(() => {
@@ -276,18 +279,47 @@ export default function ClassDetailPage() {
     if (csvFile) processCSVFile(csvFile)
   }
 
-  if (loading) {
+  // 🛡️ PROTECCIÓN 1: Si no hay classId, mostrar loading
+  if (!classId) {
     return (
       <div className="flex h-screen items-center justify-center neu-container">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando información del salón...</p>
+        </div>
       </div>
     )
   }
 
+  // 🛡️ PROTECCIÓN 2: Si está cargando datos, mostrar loading
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center neu-container">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando datos...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // 🛡️ PROTECCIÓN 3: Si no se encontró la clase, mostrar error
   if (!classDetails) {
     return (
-      <div className="p-8 text-center text-lg text-red-600 neu-container">
-        Error: Clase no encontrada o no tienes permiso para verla.
+      <div className="p-8 text-center neu-container">
+        <div className="max-w-md mx-auto">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-red-600 mb-2">Clase no encontrada</h2>
+          <p className="text-gray-600 mb-6">
+            No se pudo cargar la información de esta clase o no tienes permiso para verla.
+          </p>
+          <Link 
+            href="/dashboard"
+            className="neu-button inline-flex items-center text-gray-700 font-medium py-3 px-6"
+          >
+            ← Volver al Dashboard
+          </Link>
+        </div>
       </div>
     )
   }
