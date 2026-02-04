@@ -42,7 +42,7 @@ export default function DashboardPage() {
     }
 
     // Actualizado: traemos también subjects_taught
-    const profilePromise = supabase.from('profiles').select('profile_completed, subjects_taught').eq('id', user.id).single();
+    const profilePromise = supabase.from('profiles').select('onboarding_completed, subjects_taught').eq('id', user.id).single();
     const classesPromise = supabase.from('classes').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
 
     const [profileResult, classesResult] = await Promise.all([profilePromise, classesPromise]);
@@ -51,6 +51,11 @@ export default function DashboardPage() {
     else {
         setProfile(profileResult.data);
         setSubjectsInput(profileResult.data.subjects_taught || '');
+    }
+    
+    if (profileResult.data && profileResult.data.onboarding_completed === false) {
+      router.push('/onboarding');
+      return;
     }
 
     if (classesResult.error) console.error("Error al cargar clases:", classesResult.error);
@@ -70,8 +75,10 @@ export default function DashboardPage() {
 
     const { error } = await supabase
       .from('profiles')
-      .update({ subjects_taught: subjectsInput })
-      .eq('id', user?.id);
+      .update({ 
+        subjects_taught: subjectsInput.split(',').map(s => s.trim()).filter(Boolean), 
+        onboarding_completed: true 
+      })
 
     if (error) {
       alert("Error al actualizar materias");
@@ -92,7 +99,7 @@ export default function DashboardPage() {
   }, [activeMenuId]);
 
   const handleCreateClassClick = () => {
-    if (profile?.profile_completed === false) {
+    if (profile?.onboarding_completed === false) {
       router.push('/onboarding');
     } else {
       setIsCreateModalOpen(true);
@@ -160,7 +167,7 @@ export default function DashboardPage() {
       </div>
 
       {/* --- Banner de Materias (Solo si está vacío) --- */}
-      {!profile?.subjects_taught && (
+      {profile && profile.subjects_taught?.length === 0 && (
         <div 
           onClick={() => setIsSubjectModalOpen(true)}
           className="mb-8 p-4 rounded-2xl bg-[#e0e5ec] shadow-[9px_9px_16px_#b8c1ce,-9px_-9px_16px_#ffffff] cursor-pointer flex items-center justify-between group hover:scale-[1.01] transition-all"
