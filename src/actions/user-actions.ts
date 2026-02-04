@@ -5,12 +5,12 @@ import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
 import Papa from 'papaparse'
 import { Resend } from 'resend'
+import { logEvent } from './audit-actions'
 
 // Inicializar Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 // --- Tipos para el CSV ---
-// NOTA: password ya no es obligatorio en el CSV de entrada
 type CSVUser = {
   full_name: string
   email: string
@@ -28,8 +28,8 @@ type BulkImportResult = {
 
 // --- OBTENER PERFIL (LIMPIO) ---
 export async function getCurrentUserProfile() {
-  const cookieStore = cookies();
-  const supabase = createClient()
+  const cookieStore = await cookies();
+  const supabase = await createClient()
 
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
@@ -37,6 +37,7 @@ export async function getCurrentUserProfile() {
     return null
   }
 
+  // El asterisco trae todas las columnas, incluyendo onboarding_completed
   const { data: profile, error } = await supabase
     .from('profiles')
     .select('*')
@@ -100,7 +101,7 @@ export async function createUser(data: {
   organizationId: string
   fullName: string
 }) {
-  const supabase = createAdminClient()
+  const supabase = await createAdminClient()
 
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email: data.email,
@@ -116,27 +117,34 @@ export async function createUser(data: {
     return { success: false, error: 'No se pudo crear el usuario en Auth' }
   }
 
+  await new Promise(resolve => setTimeout(resolve, 1000));
+
   const { error: profileError } = await supabase
     .from('profiles')
-    .insert({
-      id: authData.user.id,
+    .update({
       full_name: data.fullName,
       role: data.role,
       organization_id: data.organizationId,
       onboarding_completed: true
     })
+    .eq('id', authData.user.id);
 
   if (profileError) {
     await supabase.auth.admin.deleteUser(authData.user.id)
-    return { success: false, error: 'Error de base de datos creando el perfil: ' + profileError.message }
+    return { success: false, error: 'Error actualizando el perfil: ' + profileError.message }
   }
+
+  await logEvent('CREATE_USER', 'profile', authData.user.id, { 
+    email: data.email, 
+    role: data.role 
+  })
 
   revalidatePath('/admin/users')
   return { success: true }
 }
 
 export async function getUsers() {
-  const supabase = createAdminClient()
+  const supabase = await createAdminClient()
 
   const { data, error } = await supabase
     .from('profiles')
@@ -160,9 +168,10 @@ export async function updateUser(
     fullName?: string
     role?: string
     organizationId?: string
+    onboardingCompleted?: boolean
   }
 ) {
-  const supabase = createAdminClient()
+  const supabase = await createAdminClient()
 
   try {
     const profileUpdates: any = {}
@@ -170,6 +179,7 @@ export async function updateUser(
     if (updates.fullName !== undefined) profileUpdates.full_name = updates.fullName
     if (updates.role !== undefined) profileUpdates.role = updates.role
     if (updates.organizationId !== undefined) profileUpdates.organization_id = updates.organizationId
+    if (updates.onboardingCompleted !== undefined) profileUpdates.onboarding_completed = updates.onboardingCompleted
 
     const { error } = await supabase
       .from('profiles')
@@ -177,6 +187,8 @@ export async function updateUser(
       .eq('id', userId)
 
     if (error) throw error
+
+    await logEvent('UPDATE_USER', 'profile', userId, updates)
 
     revalidatePath('/admin/users')
     return { success: true }
@@ -186,9 +198,13 @@ export async function updateUser(
 }
 
 export async function deleteUser(userId: string) {
-  const supabase = createAdminClient()
+  const supabase = await createAdminClient()
 
   try {
+    await logEvent('DELETE_USER', 'profile', userId, { 
+      note: 'Usuario eliminado del sistema' 
+    })
+
     const { error: authError } = await supabase.auth.admin.deleteUser(userId)
     if (authError) throw authError
 
@@ -214,7 +230,7 @@ export async function createUsersFromCSV(csvContent: string): Promise<BulkImport
   let createdCount = 0
   let failedCount = 0
   const errors: string[] = []
-  const supabase = createAdminClient()
+  const supabase = await createAdminClient()
 
   try {
     const { data: allOrgs } = await supabase.from('organizations').select('id, name')
@@ -230,13 +246,11 @@ export async function createUsersFromCSV(csvContent: string): Promise<BulkImport
           throw new Error(`Organización '${user.organization_name}' no encontrada.`)
         }
 
-        // 1. Generar contraseña aleatoria de 10 caracteres
         const generatedPassword = Math.random().toString(36).slice(-10);
 
-        // 2. Crear usuario
         const result = await createUser({
           email: user.email,
-          password: generatedPassword, // Usamos la generada
+          password: generatedPassword,
           fullName: user.full_name,
           role: user.role,
           organizationId: org.id,
@@ -244,12 +258,7 @@ export async function createUsersFromCSV(csvContent: string): Promise<BulkImport
 
         if (result.success) {
           createdCount++
-
-          // 3. Enviar correo de bienvenida con credenciales
-          // No esperamos (await) obligatoriamente para no bloquear el loop masivo,
-          // pero logueamos si falla.
           sendWelcomeEmail(user.email, user.full_name, generatedPassword);
-
         } else {
           throw new Error(result.error)
         }
@@ -275,14 +284,14 @@ export async function createUsersFromCSV(csvContent: string): Promise<BulkImport
 // --- ACTUALIZAR LÍMITE (Seguro) ---
 export async function updateUserCreditLimit(targetUserId: string, newLimit: number) {
   try {
-    const supabaseAuth = createClient();
+    const supabaseAuth = await createClient();
     const { data: { user: currentUser }, error: authError } = await supabaseAuth.auth.getUser()
 
     if (authError || !currentUser) {
       throw new Error('No estás autenticado.')
     }
 
-    const supabaseAdmin = createAdminClient();
+    const supabaseAdmin = await createAdminClient();
 
     const { data: adminProfile, error: adminProfileError } = await supabaseAdmin
       .from('profiles')
@@ -329,7 +338,7 @@ export async function updateUserCreditLimit(targetUserId: string, newLimit: numb
   }
 }
 
-// --- ENVIAR REPORTE A PADRES (DOMINIO PIXELGO VERIFICADO) ---
+// --- ENVIAR REPORTE A PADRES ---
 export async function sendStudentReportToParent(data: {
   studentId: string
   studentName: string
@@ -337,10 +346,9 @@ export async function sendStudentReportToParent(data: {
   finalGrade: number
   swot: any
 }) {
-  const supabase = createAdminClient();
+  const supabase = await createAdminClient();
 
   try {
-    // 1. Obtener correos del estudiante y tutor
     const { data: student, error: studentError } = await supabase
       .from('students')
       .select('student_email, tutor_email')
@@ -348,87 +356,74 @@ export async function sendStudentReportToParent(data: {
       .single();
 
     if (studentError || !student) {
-      throw new Error('Información del alumno no encontrada en la base de datos.');
+      throw new Error('Información del alumno no encontrada.');
     }
 
     const recipients = [student.tutor_email, student.student_email].filter(Boolean) as string[];
 
     if (recipients.length === 0) {
-      throw new Error('El alumno no tiene correos electrónicos registrados para recibir el reporte.');
+      throw new Error('No hay correos registrados.');
     }
 
-    // 2. Construir diseño de correo profesional
     const emailHtml = `
       <div style="background-color: #d1d9e6; padding: 40px; font-family: sans-serif; color: #444;">
         <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 40px; padding: 40px; box-shadow: 0 15px 35px rgba(0,0,0,0.1);">
-
           <div style="text-align: center; margin-bottom: 30px;">
             <h1 style="color: #2563eb; margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 1px;">Reporte Académico Pixelgo</h1>
-            <p style="color: #666; font-size: 14px;">Diagnóstico de desempeño mediante Inteligencia Artificial</p>
           </div>
-
           <div style="background: #f8fafc; border-radius: 25px; padding: 30px; text-align: center; margin-bottom: 30px; border: 1px solid #e2e8f0;">
-            <p style="text-transform: uppercase; font-size: 11px; font-weight: 900; color: #94a3b8; margin-bottom: 5px;">Estudiante</p>
             <h2 style="margin: 0; color: #1e293b; font-size: 26px;">${data.studentName}</h2>
             <p style="margin: 5px 0 0 0; color: #64748b; font-weight: bold;">Clase: ${data.className}</p>
-
             <div style="margin-top: 25px;">
-              <span style="font-size: 12px; font-weight: 800; color: #3b82f6; text-transform: uppercase;">Promedio General Proyectado</span>
               <div style="font-size: 56px; font-weight: 900; color: #2563eb;">${data.finalGrade}%</div>
             </div>
-          </div>
-
-          <h3 style="color: #1e293b; font-size: 18px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 20px;">🚀 Análisis FODA Académico</h3>
-
-          <div style="margin-bottom: 15px;">
-            <div style="background: #ecfdf5; padding: 15px; border-radius: 15px; border-left: 6px solid #10b981; margin-bottom: 10px;">
-              <strong style="color: #059669; font-size: 13px; text-transform: uppercase;">💪 Fortalezas</strong>
-              <p style="margin: 5px 0 0 0; font-size: 14px; line-height: 1.5; color: #064e3b;">${data.swot?.fortalezas || 'Pendiente de análisis'}</p>
-            </div>
-
-            <div style="background: #eff6ff; padding: 15px; border-radius: 15px; border-left: 6px solid #3b82f6; margin-bottom: 10px;">
-              <strong style="color: #2563eb; font-size: 13px; text-transform: uppercase;">🚀 Oportunidades</strong>
-              <p style="margin: 5px 0 0 0; font-size: 14px; line-height: 1.5; color: #1e3a8a;">${data.swot?.oportunidades || 'Pendiente de análisis'}</p>
-            </div>
-
-            <div style="background: #fffbeb; padding: 15px; border-radius: 15px; border-left: 6px solid #f59e0b; margin-bottom: 10px;">
-              <strong style="color: #d97706; font-size: 13px; text-transform: uppercase;">⚠️ Debilidades</strong>
-              <p style="margin: 5px 0 0 0; font-size: 14px; line-height: 1.5; color: #78350f;">${data.swot?.debilidades || 'Pendiente de análisis'}</p>
-            </div>
-
-            <div style="background: #fef2f2; padding: 15px; border-radius: 15px; border-left: 6px solid #ef4444;">
-              <strong style="color: #dc2626; font-size: 13px; text-transform: uppercase;">🚩 Amenazas</strong>
-              <p style="margin: 5px 0 0 0; font-size: 14px; line-height: 1.5; color: #7f1d1d;">${data.swot?.amenazas || 'Pendiente de análisis'}</p>
-            </div>
-          </div>
-
-          <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
-            <p style="font-size: 11px; color: #94a3b8; line-height: 1.6;">
-              Este reporte ha sido generado automáticamente por la plataforma Pixelgo AI.<br>
-              Para más información, consulte con el asesor académico.
-            </p>
           </div>
         </div>
       </div>
     `;
 
-    // 3. Enviar correo usando el dominio verificado
-    const { data: resData, error: resError } = await resend.emails.send({
+    const { error: resError } = await resend.emails.send({
       from: 'Reportes Académicos <reportes@pixelgo.com.mx>', 
       to: recipients,
       subject: `📈 Reporte de Desempeño: ${data.studentName}`,
       html: emailHtml,
     });
 
-    if (resError) {
-      console.error('Resend Error:', resError);
-      throw new Error(resError.message);
-    }
+    if (resError) throw new Error(resError.message);
 
     return { success: true, message: 'Reporte enviado con éxito.' };
 
   } catch (error) {
     console.error('Error en sendStudentReportToParent:', error);
     return { success: false, error: (error as Error).message };
+  }
+}
+
+/**
+ * ACTUALIZAR MATERIAS DEL MAESTRO
+ */
+export async function updateUserSubjects(subjectsString: string) {
+  const supabase = await createClient(); 
+
+  try {
+    const subjectsArray = subjectsString
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+
+    // LLAMAMOS AL NUEVO NOMBRE DE FUNCIÓN RPC
+    const { error } = await supabase.rpc('set_teacher_subjects', {
+      input_subjects: subjectsArray
+    });
+
+    if (error) {
+      console.error("ERROR EN RPC:", error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/dashboard');
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: "Error de conexión." };
   }
 }

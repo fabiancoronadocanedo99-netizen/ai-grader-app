@@ -352,6 +352,7 @@ export default function UsersManagementPage() {
                     <option value="teacher">Teacher (Profesor)</option>
                     <option value="admin">Admin (Administrador)</option>
                     <option value="director">Director</option>
+                    <option value="institutional_manager">Gerente Institucional (Secretario/Director Gral)</option>
                   </select>
                   <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">▼</div>
                 </div>
@@ -414,6 +415,7 @@ export default function UsersManagementPage() {
                     <option value="teacher">Teacher (Profesor)</option>
                     <option value="admin">Admin (Administrador)</option>
                     <option value="director">Director</option>
+                    <option value="institutional_manager">Gerente Institucional (Secretario/Director Gral)</option>
                   </select>
                   <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">▼</div>
                 </div>

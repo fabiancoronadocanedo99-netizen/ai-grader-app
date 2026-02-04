@@ -8,17 +8,24 @@ import { createClient } from '@/lib/supabaseClient'
 
 // --- INTERFACES ---
 interface ClassDetails { id: string; name: string; subject?: string; grade_level?: string; }
-interface Evaluation { id: string; name: string; class_id: string; created_at?: string; type: 'exam' | 'assignment'; } 
+interface Evaluation { id: string; name: string; class_id: string; created_at?: string; type: 'exam' | 'assignment'; subject?: string; } 
 interface Student { id: string; full_name: string; student_email: string; tutor_email?: string; class_id: string; created_at?: string; }
+interface Profile { subjects_taught: string[] | string | null; }
 
 export default function ClassDetailPage() {
   const supabase = createClient()
   const params = useParams()
-  const classId = params.classId as string
+
+  // 🛡️ RED DE SEGURIDAD: Manejo seguro del classId para Next.js 15
+  const classId = useMemo(() => {
+    if (!params?.classId) return undefined
+    return Array.isArray(params.classId) ? params.classId[0] : params.classId
+  }, [params])
 
   const [classDetails, setClassDetails] = useState<ClassDetails | null>(null)
   const [allEvaluations, setAllEvaluations] = useState<Evaluation[]>([])
   const [students, setStudents] = useState<Student[]>([])
+  const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
   // Tabs
@@ -28,6 +35,7 @@ export default function ClassDetailPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [newEvaluationName, setNewEvaluationName] = useState('')
   const [newEvaluationType, setNewEvaluationType] = useState<'exam' | 'assignment'>('exam')
+  const [selectedSubject, setSelectedSubject] = useState('')
 
   // CSV
   const [isCSVModalOpen, setIsCSVModalOpen] = useState(false)
@@ -48,6 +56,35 @@ export default function ClassDetailPage() {
 
   const exams = useMemo(() => allEvaluations.filter(e => e.type === 'exam'), [allEvaluations])
   const assignments = useMemo(() => allEvaluations.filter(e => e.type === 'assignment'), [allEvaluations])
+
+  // 🔧 FIX CRÍTICO: Manejo de materias como array O string
+  const subjectsList = useMemo(() => {
+    // PROTECCIÓN: Si el perfil aún no carga, devuelve lista vacía y no hagas split
+    if (!profile || !profile.subjects_taught) return [];
+
+    const raw = profile.subjects_taught;
+    return Array.isArray(raw) ? raw : raw.split(',').map((s: any) => s.trim()).filter(Boolean);
+  }, [profile]);
+
+  // Efecto para asignar materia automática si solo hay una
+  useEffect(() => {
+    if (subjectsList.length === 1) {
+      setSelectedSubject(subjectsList[0])
+    }
+  }, [subjectsList])
+
+  // Efecto para resetear materia cuando se abre el modal
+  useEffect(() => {
+    if (isCreateModalOpen) {
+      // Si solo hay una materia, seleccionarla automáticamente
+      if (subjectsList.length === 1) {
+        setSelectedSubject(subjectsList[0])
+      } else {
+        // Si hay varias, limpiar la selección para forzar al usuario a elegir
+        setSelectedSubject('')
+      }
+    }
+  }, [isCreateModalOpen, subjectsList])
 
   const fetchClassDetails = useCallback(async () => {
     if (!classId) return
@@ -70,14 +107,21 @@ export default function ClassDetailPage() {
     else { setAllEvaluations(data as Evaluation[] || []) }
   }, [classId, supabase])
 
+  const fetchProfile = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data } = await supabase.from('profiles').select('subjects_taught').eq('id', user.id).single()
+    setProfile(data)
+  }, [supabase])
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true)
-      await Promise.all([fetchClassDetails(), fetchEvaluations(), fetchStudents()])
+      await Promise.all([fetchClassDetails(), fetchEvaluations(), fetchStudents(), fetchProfile()])
       setLoading(false)
     }
     if (classId) loadData()
-  }, [classId, fetchClassDetails, fetchEvaluations, fetchStudents])
+  }, [classId, fetchClassDetails, fetchEvaluations, fetchStudents, fetchProfile])
 
   // Cerrar menú si se hace clic fuera
   useEffect(() => {
@@ -150,6 +194,16 @@ export default function ClassDetailPage() {
   const handleCreateEvaluation = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newEvaluationName.trim() || !classId) return
+
+    // 🎯 VALIDACIÓN INTELIGENTE: Solo validar si hay varias materias
+    if (subjectsList.length > 1 && !selectedSubject) {
+        alert("Por favor selecciona una materia");
+        return;
+    }
+
+    // 🎯 MATERIA FINAL: Si solo hay una, usar esa; si hay varias, usar la seleccionada
+    const finalSubject = subjectsList.length === 1 ? subjectsList[0] : selectedSubject;
+
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError || !user) {
@@ -163,16 +217,23 @@ export default function ClassDetailPage() {
       if (classError || !classData) {
         throw new Error("No se pudo encontrar la clase para obtener la organización.")
       }
+
+      // 🎯 GUARDAR CON LA MATERIA CORRECTA
       const { error } = await supabase.from('exams').insert([{ 
         name: newEvaluationName, 
         class_id: classId, 
         type: newEvaluationType,
+        subject: finalSubject, // ← Aquí guardamos la materia
         user_id: user.id,
         organization_id: classData.organization_id
       }])
+
       if (error) throw error
+
+      // Limpiar formulario
       setNewEvaluationName('')
       setNewEvaluationType('exam')
+      setSelectedSubject('')
       setIsCreateModalOpen(false)
       await fetchEvaluations()
     } catch (error) {
@@ -240,18 +301,47 @@ export default function ClassDetailPage() {
     if (csvFile) processCSVFile(csvFile)
   }
 
-  if (loading) {
+  // 🛡️ PROTECCIÓN 1: Si no hay classId, mostrar loading
+  if (!classId) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="flex h-screen items-center justify-center neu-container">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando información del salón...</p>
+        </div>
       </div>
     )
   }
 
+  // 🛡️ PROTECCIÓN 2: Si está cargando datos, mostrar loading
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center neu-container">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando datos...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // 🛡️ PROTECCIÓN 3: Si no se encontró la clase, mostrar error
   if (!classDetails) {
     return (
-      <div className="p-8 text-center text-lg text-red-600">
-        Error: Clase no encontrada o no tienes permiso para verla.
+      <div className="p-8 text-center neu-container">
+        <div className="max-w-md mx-auto">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-red-600 mb-2">Clase no encontrada</h2>
+          <p className="text-gray-600 mb-6">
+            No se pudo cargar la información de esta clase o no tienes permiso para verla.
+          </p>
+          <Link 
+            href="/dashboard"
+            className="neu-button inline-flex items-center text-gray-700 font-medium py-3 px-6"
+          >
+            ← Volver al Dashboard
+          </Link>
+        </div>
       </div>
     )
   }
@@ -367,9 +457,12 @@ export default function ClassDetailPage() {
                     <div key={exam.id} className="neu-card p-4 relative">
                       <EvaluationCardMenu item={exam} />
                       <div className="pr-8">
-                         <h4 className="font-semibold text-gray-800 text-base sm:text-lg mb-4 break-words">
+                         <h4 className="font-semibold text-gray-800 text-base sm:text-lg mb-1 break-words">
                            {exam.name}
                          </h4>
+                         {exam.subject && (
+                             <p className="text-xs text-blue-500 font-bold mb-3 uppercase tracking-wider">{exam.subject}</p>
+                         )}
                       </div>
                       <Link 
                         href={`/dashboard/class/${classId}/exam/${exam.id}`} 
@@ -395,9 +488,12 @@ export default function ClassDetailPage() {
                     <div key={task.id} className="neu-card p-4 relative">
                        <EvaluationCardMenu item={task} />
                       <div className="pr-8">
-                        <h4 className="font-semibold text-gray-800 text-base sm:text-lg mb-4 break-words">
+                        <h4 className="font-semibold text-gray-800 text-base sm:text-lg mb-1 break-words">
                           {task.name}
                         </h4>
+                        {task.subject && (
+                             <p className="text-xs text-blue-500 font-bold mb-3 uppercase tracking-wider">{task.subject}</p>
+                         )}
                       </div>
                       <Link 
                         href={`/dashboard/class/${classId}/exam/${task.id}`} 
@@ -479,28 +575,30 @@ export default function ClassDetailPage() {
         )}
       </div>
 
-      {/* MODAL CREAR */}
+      {/* MODAL CREAR EVALUACIÓN */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
             className="absolute inset-0 bg-black/50" 
             onClick={() => setIsCreateModalOpen(false)} 
           />
-          <div className="relative neu-card p-6 sm:p-8 w-full max-w-lg bg-white">
-            <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-center">
-              Crear Nueva Evaluación
+          <div className="relative bg-[#e0e5ec] p-8 rounded-[30px] shadow-[20px_20px_60px_#a3b1c6,-20px_-20px_60px_#ffffff] w-full max-w-lg z-50 animate-in fade-in zoom-in duration-200">
+            <h2 className="text-2xl font-bold mb-6 text-center text-gray-700">
+              Nueva Evaluación
             </h2>
             <form onSubmit={handleCreateEvaluation}>
-              <div className="mb-4 sm:mb-6">
-                <label className="block text-sm font-bold mb-3">Tipo de Evaluación</label>
-                <div className="flex flex-col sm:flex-row gap-2">
+
+              {/* Selector de Tipo (Neumórfico) */}
+              <div className="mb-6">
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Tipo de Evaluación</label>
+                <div className="flex gap-2 p-2 shadow-[inset_4px_4px_8px_#b8c1ce,inset_-4px_-4px_8px_#ffffff] rounded-2xl">
                   <button 
                     type="button" 
                     onClick={() => setNewEvaluationType('exam')} 
-                    className={`flex-1 py-3 rounded-lg font-semibold text-sm sm:text-base ${
+                    className={`flex-1 py-3 rounded-xl font-bold transition-all ${
                       newEvaluationType === 'exam' 
-                        ? 'neu-button-active shadow-inner' 
-                        : 'neu-button'
+                        ? 'bg-[#e0e5ec] shadow-[4px_4px_8px_#b8c1ce,-4px_-4px_8px_#ffffff] text-blue-600' 
+                        : 'text-gray-400'
                     }`}
                   >
                     📝 Examen
@@ -508,39 +606,79 @@ export default function ClassDetailPage() {
                   <button 
                     type="button" 
                     onClick={() => setNewEvaluationType('assignment')} 
-                    className={`flex-1 py-3 rounded-lg font-semibold text-sm sm:text-base ${
+                    className={`flex-1 py-3 rounded-xl font-bold transition-all ${
                       newEvaluationType === 'assignment' 
-                        ? 'neu-button-active shadow-inner' 
-                        : 'neu-button'
+                        ? 'bg-[#e0e5ec] shadow-[4px_4px_8px_#b8c1ce,-4px_-4px_8px_#ffffff] text-blue-600' 
+                        : 'text-gray-400'
                     }`}
                   >
                     📚 Tarea
                   </button>
                 </div>
               </div>
-              <div className="mb-4">
-                <label htmlFor="evaluationName" className="block text-sm font-bold mb-2">
+
+              {/* Selector de Materia (INTELIGENTE) */}
+              {subjectsList.length > 0 && (
+                <div className="mb-6">
+                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">
+                    Materia {subjectsList.length === 1 && <span className="text-blue-500">(Asignada automáticamente)</span>}
+                  </label>
+
+                  {subjectsList.length === 1 ? (
+                    // Si solo hay una materia, mostrar badge informativo
+                    <div className="w-full p-4 rounded-xl bg-blue-50 border-2 border-blue-200 flex items-center justify-between">
+                      <span className="text-blue-700 font-bold">{subjectsList[0]}</span>
+                      <span className="text-blue-500 text-sm">✓ Auto-asignada</span>
+                    </div>
+                  ) : (
+                    // Si hay varias materias, mostrar el selector
+                    <div className="relative">
+                      <select 
+                        value={selectedSubject} 
+                        onChange={(e) => setSelectedSubject(e.target.value)}
+                        className="w-full p-4 rounded-xl bg-[#e0e5ec] shadow-[inset_6px_6px_10px_#b8c1ce,inset_-6px_-6px_10px_#ffffff] outline-none text-gray-700 appearance-none cursor-pointer"
+                        required
+                      >
+                        <option value="">Seleccionar Materia...</option>
+                        {subjectsList.map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                          ▼
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Nombre de la Evaluación */}
+              <div className="mb-8">
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">
                   Nombre de la Evaluación
                 </label>
                 <input 
-                  id="evaluationName" 
                   type="text" 
                   value={newEvaluationName} 
                   onChange={(e) => setNewEvaluationName(e.target.value)} 
-                  className="neu-input w-full p-3 sm:p-4 text-sm sm:text-base" 
+                  className="w-full p-4 rounded-xl bg-[#e0e5ec] shadow-[inset_6px_6px_10px_#b8c1ce,inset_-6px_-6px_10px_#ffffff] outline-none text-gray-700"
                   placeholder={newEvaluationType === 'exam' ? "Ej: Parcial de Álgebra" : "Ej: Guía Capítulo 5"} 
                   required 
                 />
               </div>
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-4 sm:mt-6">
+
+              <div className="flex gap-4">
                 <button 
                   type="button" 
                   onClick={() => setIsCreateModalOpen(false)} 
-                  className="flex-1 neu-button text-sm sm:text-base py-3"
+                  className="flex-1 py-4 rounded-2xl font-bold text-gray-500 shadow-[6px_6px_12px_#b8c1ce,-6px_-6px_12px_#ffffff] active:shadow-[inset_4px_4px_8px_#b8c1ce,inset_-4px_-4px_8px_#ffffff] transition-all"
                 >
                   Cancelar
                 </button>
-                <button type="submit" className="flex-1 neu-button text-sm sm:text-base py-3">
+                <button 
+                    type="submit" 
+                    className="flex-1 py-4 rounded-2xl font-bold text-blue-600 shadow-[6px_6px_12px_#b8c1ce,-6px_-6px_12px_#ffffff] active:shadow-[inset_4px_4px_8px_#b8c1ce,inset_-4px_-4px_8px_#ffffff] transition-all"
+                >
                   Crear
                 </button>
               </div>
