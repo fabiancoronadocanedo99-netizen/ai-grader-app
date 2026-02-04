@@ -37,7 +37,6 @@ export async function getCurrentUserProfile() {
     return null
   }
 
-  // El asterisco trae todas las columnas, incluyendo onboarding_completed
   const { data: profile, error } = await supabase
     .from('profiles')
     .select('*')
@@ -162,38 +161,54 @@ export async function getUsers() {
   });
 }
 
+/**
+ * ACTUALIZAR USUARIO (Versión Blindada)
+ */
 export async function updateUser(
   userId: string,
   updates: {
     fullName?: string
     role?: string
     organizationId?: string
-    onboardingCompleted?: boolean
   }
 ) {
+  // USAMOS EL CLIENTE ADMIN PARA SALTAR RLS
   const supabase = await createAdminClient()
 
   try {
     const profileUpdates: any = {}
 
+    // Mapeo exacto de nombres de columnas de tu base de datos
     if (updates.fullName !== undefined) profileUpdates.full_name = updates.fullName
     if (updates.role !== undefined) profileUpdates.role = updates.role
     if (updates.organizationId !== undefined) profileUpdates.organization_id = updates.organizationId
-    if (updates.onboardingCompleted !== undefined) profileUpdates.onboarding_completed = updates.onboardingCompleted
 
-    const { error } = await supabase
+    console.log(`Intentando actualizar usuario ${userId} con:`, profileUpdates);
+
+    // Ejecutamos la actualización
+    const { data, error } = await supabase
       .from('profiles')
       .update(profileUpdates)
       .eq('id', userId)
+      .select(); // El .select() es vital para confirmar que se hizo
 
-    if (error) throw error
+    if (error) {
+      console.error("ERROR REAL EN UPDATE USER:", error);
+      throw new Error(`Error DB: ${error.message}`);
+    }
 
+    if (!data || data.length === 0) {
+      throw new Error("No se encontró el usuario o no se aplicaron cambios.");
+    }
+
+    // Registro de auditoría (Solo si la DB confirmó el cambio)
     await logEvent('UPDATE_USER', 'profile', userId, updates)
 
     revalidatePath('/admin/users')
     return { success: true }
-  } catch (error) {
-    return { success: false, error: (error as Error).message }
+  } catch (error: any) {
+    console.error("FALLO CRÍTICO EN updateUser:", error);
+    return { success: false, error: error.message }
   }
 }
 
