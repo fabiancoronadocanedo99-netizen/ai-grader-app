@@ -43,7 +43,7 @@ export default function UsersManagementPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null)
 
-  // CORRECCIÓN: Estado editFormData incluye ID explícitamente
+  // Estado editFormData (Mantiene el ID para el servidor)
   const [editFormData, setEditFormData] = useState({
     id: '', 
     fullName: '',
@@ -74,7 +74,6 @@ export default function UsersManagementPage() {
         getUsers(),
         getOrganizations()
       ])
-      console.log("✅ Datos recargados");
       setUsers((usersData as unknown) as UserProfile[] || [])
       setOrganizations(orgsData || [])
     } catch (error) {
@@ -116,18 +115,20 @@ export default function UsersManagementPage() {
     }
   }
 
-  // --- 3. handleEditClick (Captura de ID) ---
-  const openEditModal = (user: UserProfile) => {
-    setEditingUser(user)
-    // CORRECCIÓN SOLICITADA: id: user.id
+  // --- 3. handleEditClick (ULTRA-PRECISA) ---
+  const handleEditClick = (user: any) => {
+    // LOG PARA TI: Ver el ID real en la consola antes de abrir el modal
+    console.log("ID Real del usuario seleccionado:", user.id);
+
+    setEditingUser(user);
     setEditFormData({
-      id: user.id, 
+      id: user.id, // <-- Aquí es donde aseguramos que viaje el UUID real de Supabase
       fullName: user.full_name || '',
-      role: user.role || '',
+      role: user.role || 'teacher',
       organizationId: user.organization_id || ''
-    })
-    setIsEditModalOpen(true)
-  }
+    });
+    setIsEditModalOpen(true);
+  };
 
   // --- 4. handleUpdateUser (Lógica de Guardado) ---
   const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -138,7 +139,7 @@ export default function UsersManagementPage() {
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // --- ALERT DE PRUEBA SOLICITADO ---
+    // Alert de prueba para confirmar que el ID sigue ahí al momento de enviar
     alert("Intentando actualizar ID: " + editFormData.id); 
 
     if (!editFormData.id) {
@@ -154,7 +155,6 @@ export default function UsersManagementPage() {
     setIsUpdating(true)
 
     try {
-      // Pasamos editFormData.id como primer argumento
       const result = await updateUser(editFormData.id, {
         fullName: editFormData.fullName,
         role: editFormData.role,
@@ -198,7 +198,7 @@ export default function UsersManagementPage() {
     }
   }
 
-  // --- Estilos Neumórficos ---
+  // Estilos Neumórficos
   const neuBase = "bg-[#e0e5ec] text-gray-700"
   const neuShadow = "shadow-[9px_9px_16px_rgb(163,177,198),-9px_-9px_16px_rgba(255,255,255,0.5)]"
   const neuInset = "shadow-[inset_6px_6px_10px_rgb(163,177,198),inset_-6px_-6px_10px_rgba(255,255,255,0.5)]"
@@ -267,7 +267,10 @@ export default function UsersManagementPage() {
                     </td>
                     <td className="p-4 text-right">
                       <div className="flex gap-2 justify-end">
-                        <button onClick={() => openEditModal(user)} className={`${neuIconButton} text-blue-600`}>
+                        <button 
+                          onClick={() => handleEditClick(user)} 
+                          className={`${neuIconButton} text-blue-600`}
+                        >
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                             <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
                           </svg>
@@ -336,7 +339,7 @@ export default function UsersManagementPage() {
         </div>
       )}
 
-      {/* --- Modal Editar (CORREGIDO) --- */}
+      {/* --- Modal Editar (USANDO handleUpdateUser) --- */}
       {isEditModalOpen && editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4 text-left">
           <div className={`${neuCard} bg-[#e0e5ec] w-full max-w-lg p-8 relative animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto`}>

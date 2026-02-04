@@ -162,9 +162,17 @@ export async function getUsers() {
 }
 
 /**
- * ACTUALIZAR USUARIO (Versión Estricta pero Relajada en cambios vacíos)
+ * ACTUALIZAR USUARIO
+ * ✅ Usa nombres EXACTOS de columnas de la base de datos
  */
-export async function updateUser(userId: string, updates: any) {
+export async function updateUser(
+  userId: string, 
+  updates: {
+    fullName?: string
+    role?: string
+    organizationId?: string
+  }
+) {
   const supabase = await createAdminClient();
 
   if (!userId) {
@@ -172,25 +180,46 @@ export async function updateUser(userId: string, updates: any) {
   }
 
   try {
+    // Construir el objeto de actualización solo con los campos que vienen
+    const updateData: any = {};
+
+    // ✅ full_name es el nombre EXACTO de la columna en la BD
+    if (updates.fullName !== undefined) {
+      updateData.full_name = updates.fullName;
+    }
+
+    // ✅ role es el nombre EXACTO de la columna en la BD
+    if (updates.role !== undefined) {
+      updateData.role = updates.role;
+    }
+
+    // ✅ organization_id es el nombre EXACTO de la columna en la BD
+    if (updates.organizationId !== undefined) {
+      updateData.organization_id = updates.organizationId;
+    }
+
+    // Si no hay nada que actualizar, retornar éxito
+    if (Object.keys(updateData).length === 0) {
+      return { success: true };
+    }
+
+    // Ejecutar actualización
     const { data, error } = await supabase
       .from('profiles')
-      .update({
-        full_name: updates.fullName,
-        role: updates.role,
-        organization_id: updates.organizationId
-      })
-      .eq('id', userId)
+      .update(updateData)
+      .eq('id', userId)  // ← userId debe ser el UUID real
       .select();
 
-    if (error) throw error;
-
-    // Relajamos la seguridad: ya no lanzamos error si data está vacío.
-    // Esto evita errores cuando el usuario guarda sin haber modificado nada.
+    if (error) {
+      console.error("Error en updateUser:", error);
+      throw error;
+    }
 
     await logEvent('UPDATE_USER', 'profile', userId, updates);
 
     revalidatePath('/admin/users');
     return { success: true };
+
   } catch (error: any) {
     console.error("FALLO EN UPDATE:", error);
     return { success: false, error: error.message };
@@ -400,30 +429,51 @@ export async function sendStudentReportToParent(data: {
 }
 
 /**
- * ACTUALIZAR MATERIAS DEL MAESTRO
+ * ACTUALIZAR MATERIAS DEL MAESTRO usando RPC
+ * ✅ Usa la función RPC correcta con el parámetro input_subjects
  */
 export async function updateUserSubjects(subjectsString: string) {
   const supabase = await createClient(); 
 
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error("Sesión expirada. Por favor, vuelve a iniciar sesión.");
+    }
+
+    // Convertir string a array
     const subjectsArray = subjectsString
       .split(',')
       .map(s => s.trim())
       .filter(s => s.length > 0);
 
-    // LLAMAMOS AL NUEVO NOMBRE DE FUNCIÓN RPC
-    const { error } = await supabase.rpc('set_teacher_subjects', {
+    if (subjectsArray.length === 0) {
+      throw new Error("Debes proporcionar al menos una materia.");
+    }
+
+    console.log('📚 Actualizando materias:', subjectsArray);
+
+    // ✅ IMPORTANTE: Usar 'update_my_subjects' con parámetro 'input_subjects'
+    const { error: rpcError } = await supabase.rpc('update_my_subjects', {
       input_subjects: subjectsArray
     });
 
-    if (error) {
-      console.error("ERROR EN RPC:", error);
-      return { success: false, error: error.message };
+    if (rpcError) {
+      console.error("❌ Error en RPC update_my_subjects:", rpcError);
+      throw new Error(`Error al actualizar materias: ${rpcError.message}`);
     }
+
+    console.log('✅ Materias actualizadas exitosamente');
 
     revalidatePath('/dashboard');
     return { success: true };
+
   } catch (error: any) {
-    return { success: false, error: "Error de conexión." };
+    console.error("❌ FALLO EN ACTUALIZACIÓN DE MATERIAS:", error);
+    return { 
+      success: false, 
+      error: error.message || "Error de conexión con la base de datos." 
+    };
   }
 }
