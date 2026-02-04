@@ -42,8 +42,10 @@ export default function UsersManagementPage() {
   // Estados para edición
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null)
+
+  // CORRECCIÓN: Estado editFormData incluye ID explícitamente
   const [editFormData, setEditFormData] = useState({
-    id: '', // <-- Agregado para rastrear el UUID del usuario
+    id: '', 
     fullName: '',
     role: '',
     organizationId: ''
@@ -64,25 +66,20 @@ export default function UsersManagementPage() {
     organizationId: ''
   })
 
-  // --- 1. Cargar Datos (USANDO SERVER ACTIONS) ---
+  // --- 1. Cargar Datos ---
   const fetchData = async () => {
     try {
       setLoading(true)
-
       const [usersData, orgsData] = await Promise.all([
         getUsers(),
         getOrganizations()
       ])
-
-      console.log("✅ Usuarios cargados:", usersData?.length)
-      console.log("✅ Organizaciones cargadas:", orgsData?.length)
-
+      console.log("✅ Datos recargados");
       setUsers((usersData as unknown) as UserProfile[] || [])
       setOrganizations(orgsData || [])
-
     } catch (error) {
       console.error('Error al cargar datos:', error)
-      alert('Error al cargar los datos. Revisa la consola.')
+      alert('Error al cargar los datos.')
     } finally {
       setLoading(false)
     }
@@ -92,7 +89,7 @@ export default function UsersManagementPage() {
     fetchData()
   }, [])
 
-  // --- 2. Manejo del Formulario de Creación ---
+  // --- 2. Manejo de Creación ---
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
@@ -100,49 +97,31 @@ export default function UsersManagementPage() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
-
     if (!formData.email || !formData.password || !formData.fullName) {
-      alert('Por favor completa todos los campos obligatorios.')
+      alert('Completa los campos obligatorios.')
       return
     }
-
     setIsSaving(true)
-
     try {
       const result = await createUser(formData)
-
-      if (!result.success) {
-        throw new Error(result.error)
-      }
-
+      if (!result.success) throw new Error(result.error)
       alert('Usuario creado exitosamente')
       setIsModalOpen(false)
-      setFormData({
-        email: '',
-        password: '',
-        fullName: '',
-        role: 'teacher',
-        organizationId: ''
-      })
-
+      setFormData({ email: '', password: '', fullName: '', role: 'teacher', organizationId: '' })
       await fetchData() 
-
-    } catch (error) {
-      if ((error as Error).message === 'NEXT_REDIRECT') {
-        throw error;
-      }
-      console.error('Error creando usuario:', error)
-      alert(`Error al crear usuario: ${(error as Error).message}`)
+    } catch (error: any) {
+      alert(`Error: ${error.message}`)
     } finally {
       setIsSaving(false)
     }
   }
 
-  // --- 3. Abrir Modal de Edición (ID CAPTURADO AQUÍ) ---
+  // --- 3. handleEditClick (Captura de ID) ---
   const openEditModal = (user: UserProfile) => {
     setEditingUser(user)
+    // CORRECCIÓN SOLICITADA: id: user.id
     setEditFormData({
-      id: user.id, // <-- CRÍTICO: Guardamos el ID del usuario seleccionado
+      id: user.id, 
       fullName: user.full_name || '',
       role: user.role || '',
       organizationId: user.organization_id || ''
@@ -150,7 +129,7 @@ export default function UsersManagementPage() {
     setIsEditModalOpen(true)
   }
 
-  // --- 4. Manejo del Formulario de Edición ---
+  // --- 4. handleUpdateUser (Lógica de Guardado) ---
   const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setEditFormData(prev => ({ ...prev, [name]: value }))
@@ -159,77 +138,67 @@ export default function UsersManagementPage() {
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!editFormData.id || !editFormData.fullName.trim()) {
-      alert('Por favor completa todos los campos obligatorios.')
-      return
+    // --- ALERT DE PRUEBA SOLICITADO ---
+    alert("Intentando actualizar ID: " + editFormData.id); 
+
+    if (!editFormData.id) {
+      alert("¡ERROR! El formulario no tiene el ID del usuario.");
+      return;
+    }
+
+    if (!editFormData.fullName.trim()) {
+      alert('El nombre es obligatorio.');
+      return;
     }
 
     setIsUpdating(true)
 
     try {
-      // LLAMADA A LA SERVER ACTION CON EL ID DEL ESTADO
+      // Pasamos editFormData.id como primer argumento
       const result = await updateUser(editFormData.id, {
         fullName: editFormData.fullName,
         role: editFormData.role,
         organizationId: editFormData.organizationId
       })
 
-      if (!result.success) {
-        throw new Error(result.error)
-      }
+      if (!result.success) throw new Error(result.error)
 
       alert('Usuario actualizado exitosamente')
       setIsEditModalOpen(false)
       setEditingUser(null)
       await fetchData()
 
-    } catch (error) {
-      if ((error as Error).message === 'NEXT_REDIRECT') {
-        throw error;
-      }
-      console.error('Error actualizando usuario:', error)
-      alert(`Error al actualizar usuario: ${(error as Error).message}`)
+    } catch (error: any) {
+      console.error('Error actualizando:', error)
+      alert(`Error al actualizar usuario: ${error.message}`)
     } finally {
       setIsUpdating(false)
     }
   }
 
-  // --- 5. Abrir Modal de Eliminación ---
+  // --- 5. Eliminación ---
   const openDeleteModal = (user: UserProfile) => {
     setDeletingUser(user)
     setIsDeleteModalOpen(true)
   }
 
-  // --- 6. Eliminar Usuario ---
   const handleDeleteUser = async () => {
     if (!deletingUser) return
-
     setIsDeleting(true)
-
     try {
       const result = await deleteUser(deletingUser.id)
-
-      if (!result.success) {
-        throw new Error(result.error)
-      }
-
+      if (!result.success) throw new Error(result.error)
       alert('Usuario eliminado exitosamente')
       setIsDeleteModalOpen(false)
-      setDeletingUser(null)
       await fetchData()
-
-    } catch (error) {
-      if ((error as Error).message === 'NEXT_REDIRECT') {
-        throw error;
-      }
-      console.error('Error eliminando usuario:', error)
-      alert(`Error al eliminar usuario: ${(error as Error).message}`)
+    } catch (error: any) {
+      alert(error.message)
     } finally {
       setIsDeleting(false)
     }
   }
 
-  // --- Estilos ---
+  // --- Estilos Neumórficos ---
   const neuBase = "bg-[#e0e5ec] text-gray-700"
   const neuShadow = "shadow-[9px_9px_16px_rgb(163,177,198),-9px_-9px_16px_rgba(255,255,255,0.5)]"
   const neuInset = "shadow-[inset_6px_6px_10px_rgb(163,177,198),inset_-6px_-6px_10px_rgba(255,255,255,0.5)]"
@@ -240,8 +209,8 @@ export default function UsersManagementPage() {
 
   return (
     <div className={`min-h-screen ${neuBase} p-8 font-sans text-left`}>
-      <header className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
-        <div>
+      <header className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4 text-left">
+        <div className="text-left w-full">
           <h1 className="text-3xl font-bold text-gray-800">Usuarios</h1>
           <p className="text-gray-500 text-sm mt-1">Administra profesores, directores y admins</p>
         </div>
@@ -259,7 +228,6 @@ export default function UsersManagementPage() {
         <div className={`${neuCard} p-10 text-center flex flex-col items-center justify-center min-h-[300px]`}>
           <span className="text-6xl mb-4">👥</span>
           <h3 className="text-xl font-bold text-gray-600">No hay usuarios registrados</h3>
-          <p className="text-gray-500 mt-2">Crea el primer usuario para comenzar.</p>
         </div>
       ) : (
         <div className={`${neuCard} overflow-hidden`}>
@@ -297,20 +265,14 @@ export default function UsersManagementPage() {
                     <td className="p-4 text-gray-600 italic text-xs">
                       {user.organizations?.name || "Sin Asignar"}
                     </td>
-                    <td className="p-4">
+                    <td className="p-4 text-right">
                       <div className="flex gap-2 justify-end">
-                        <button 
-                          onClick={() => openEditModal(user)}
-                          className={`${neuIconButton} text-blue-600 hover:text-blue-700`}
-                        >
+                        <button onClick={() => openEditModal(user)} className={`${neuIconButton} text-blue-600`}>
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                             <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
                           </svg>
                         </button>
-                        <button 
-                          onClick={() => openDeleteModal(user)}
-                          className={`${neuIconButton} text-red-600 hover:text-red-700`}
-                        >
+                        <button onClick={() => openDeleteModal(user)} className={`${neuIconButton} text-red-600`}>
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                             <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
                           </svg>
@@ -374,7 +336,7 @@ export default function UsersManagementPage() {
         </div>
       )}
 
-      {/* --- Modal Editar (ID INTEGRADO) --- */}
+      {/* --- Modal Editar (CORREGIDO) --- */}
       {isEditModalOpen && editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4 text-left">
           <div className={`${neuCard} bg-[#e0e5ec] w-full max-w-lg p-8 relative animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto`}>
@@ -449,7 +411,7 @@ export default function UsersManagementPage() {
 
       {/* --- Modal Eliminar --- */}
       {isDeleteModalOpen && deletingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4 text-left">
           <div className={`${neuCard} bg-[#e0e5ec] w-full max-w-md p-8 relative text-center`}>
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-red-600">
@@ -457,7 +419,7 @@ export default function UsersManagementPage() {
                 </svg>
             </div>
             <h2 className="text-xl font-bold text-gray-700 mb-2">¿Eliminar Usuario?</h2>
-            <p className="text-gray-600 mb-8">
+            <p className="text-gray-600 mb-8 text-center">
                 Esta acción es permanente para <strong>{deletingUser.full_name}</strong>.
             </p>
             <div className="flex gap-4">

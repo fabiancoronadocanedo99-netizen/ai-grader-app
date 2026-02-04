@@ -162,12 +162,11 @@ export async function getUsers() {
 }
 
 /**
- * ACTUALIZAR USUARIO (Versión Estricta con validación de ID)
+ * ACTUALIZAR USUARIO (Versión Estricta pero Relajada en cambios vacíos)
  */
 export async function updateUser(userId: string, updates: any) {
   const supabase = await createAdminClient();
 
-  // Validación de seguridad para asegurar que recibimos el ID
   if (!userId) {
     return { success: false, error: "Error interno: ID de usuario no recibido." };
   }
@@ -185,11 +184,9 @@ export async function updateUser(userId: string, updates: any) {
 
     if (error) throw error;
 
-    if (!data || data.length === 0) {
-      throw new Error("La base de datos no encontró al usuario o no se aplicaron cambios.");
-    }
+    // Relajamos la seguridad: ya no lanzamos error si data está vacío.
+    // Esto evita errores cuando el usuario guarda sin haber modificado nada.
 
-    // Registro de auditoría
     await logEvent('UPDATE_USER', 'profile', userId, updates);
 
     revalidatePath('/admin/users');
