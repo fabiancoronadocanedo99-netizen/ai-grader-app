@@ -7,8 +7,20 @@ import { createClient } from '@/lib/supabaseClient'
 import CreateClassModal from '../../components/CreateClassModal'
 import { BookOpen, X, Save, AlertCircle } from 'lucide-react'
 
-interface Class { id: string; name: string | null; subject: string | null; grade_level: string | null; }
-interface Profile { profile_completed: boolean; subjects_taught: string | null; }
+// IMPORTACIÓN DE LAS SERVER ACTIONS
+import { updateUserSubjects } from '@/actions/user-actions'
+
+interface Class { 
+  id: string; 
+  name: string | null; 
+  subject: string | null; 
+  grade_level: string | null; 
+}
+
+interface Profile { 
+  onboarding_completed: boolean; // Actualizado de profile_completed
+  subjects_taught: string | null; 
+}
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -28,7 +40,7 @@ export default function DashboardPage() {
   const [classToEdit, setClassToEdit] = useState<Class | null>(null)
   const [newClassName, setNewClassName] = useState('')
 
-  // Nuevo: Estados para materias
+  // Estados para materias
   const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false)
   const [subjectsInput, setSubjectsInput] = useState('')
   const [isSavingSubjects, setIsSavingSubjects] = useState(false)
@@ -41,25 +53,39 @@ export default function DashboardPage() {
       return;
     }
 
-    // Actualizado: traemos también subjects_taught
-    const profilePromise = supabase.from('profiles').select('onboarding_completed, subjects_taught').eq('id', user.id).single();
-    const classesPromise = supabase.from('classes').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+    const profilePromise = supabase
+      .from('profiles')
+      .select('onboarding_completed, subjects_taught')
+      .eq('id', user.id)
+      .single();
+
+    const classesPromise = supabase
+      .from('classes')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
 
     const [profileResult, classesResult] = await Promise.all([profilePromise, classesPromise]);
 
-    if (profileResult.error) console.error("Error al cargar perfil:", profileResult.error);
-    else {
-        setProfile(profileResult.data);
-        setSubjectsInput(profileResult.data.subjects_taught || '');
+    if (profileResult.error) {
+      console.error("Error al cargar perfil:", profileResult.error);
+    } else {
+      setProfile(profileResult.data as Profile);
+      // Si subjects_taught es un array en la DB, lo unimos con comas para el textarea
+      const subjects = profileResult.data.subjects_taught;
+      setSubjectsInput(Array.isArray(subjects) ? subjects.join(', ') : (subjects || ''));
     }
-    
+
     if (profileResult.data && profileResult.data.onboarding_completed === false) {
       router.push('/onboarding');
       return;
     }
 
-    if (classesResult.error) console.error("Error al cargar clases:", classesResult.error);
-    else setClasses(classesResult.data || []);
+    if (classesResult.error) {
+      console.error("Error al cargar clases:", classesResult.error);
+    } else {
+      setClasses(classesResult.data || []);
+    }
 
     setLoading(false);
   }, [router, supabase]);
@@ -68,25 +94,31 @@ export default function DashboardPage() {
     fetchData();
   }, [fetchData]);
 
-  // --- Lógica de Materias ---
+  // --- Lógica de Materias (CORREGIDA CON SERVER ACTION) ---
   const handleUpdateSubjects = async () => {
-    setIsSavingSubjects(true);
-    const { data: { user } } = await supabase.auth.getUser();
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({ 
-        subjects_taught: subjectsInput.split(',').map(s => s.trim()).filter(Boolean), 
-        onboarding_completed: true 
-      })
-
-    if (error) {
-      alert("Error al actualizar materias");
-    } else {
-      await fetchData();
-      setIsSubjectModalOpen(false);
+    if (!subjectsInput.trim()) {
+      alert("Por favor, escribe al menos una materia.");
+      return;
     }
-    setIsSavingSubjects(false);
+
+    setIsSavingSubjects(true);
+    try {
+      // LLAMADA A LA SERVER ACTION
+      const result = await updateUserSubjects(subjectsInput);
+
+      if (result.success) {
+        alert("¡Materias configuradas con éxito!");
+        setIsSubjectModalOpen(false);
+        // Refrescamos los datos locales
+        await fetchData();
+      } else {
+        alert(`Error: ${result.error}`);
+      }
+    } catch (error) {
+      alert("Error de comunicación con el servidor.");
+    } finally {
+      setIsSavingSubjects(false);
+    }
   };
 
   // --- Lógica de UI y CRUD ---
@@ -166,8 +198,8 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* --- Banner de Materias (Solo si está vacío) --- */}
-      {profile && profile.subjects_taught?.length === 0 && (
+      {/* --- Banner de Materias (Solo si no hay materias configuradas) --- */}
+      {profile && (!profile.subjects_taught || profile.subjects_taught.length === 0) && (
         <div 
           onClick={() => setIsSubjectModalOpen(true)}
           className="mb-8 p-4 rounded-2xl bg-[#e0e5ec] shadow-[9px_9px_16px_#b8c1ce,-9px_-9px_16px_#ffffff] cursor-pointer flex items-center justify-between group hover:scale-[1.01] transition-all"
@@ -226,7 +258,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* --- Modal Materias (NUEVO) --- */}
+      {/* --- Modal Materias --- */}
       {isSubjectModalOpen && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[#e0e5ec] p-8 rounded-[30px] shadow-[20px_20px_60px_#a3b1c6,-20px_-20px_60px_#ffffff] w-full max-w-md animate-in fade-in zoom-in duration-200">
@@ -257,7 +289,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* --- Otros Modales Existentes --- */}
+      {/* --- Otros Modales --- */}
       {isCreateModalOpen && (
         <CreateClassModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onClassCreated={fetchData} />
       )}
