@@ -18,6 +18,9 @@ export default function StudentDashboardPage() {
   const [examWeight, setExamWeight] = useState(60)
   const [homeworkWeight, setHomeworkWeight] = useState(40)
 
+  // 🎯 NUEVO: Estado del filtro de materia
+  const [selectedSubject, setSelectedSubject] = useState('Todas')
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -34,17 +37,99 @@ export default function StudentDashboardPage() {
     fetchData()
   }, [studentId, supabase])
 
+  // 🎯 NUEVO: Calcular materias disponibles desde las calificaciones
+  const availableSubjects = useMemo(() => {
+    if (!dashboardData?.grades || dashboardData.grades.length === 0) return []
+
+    // Extraer materias únicas de los exámenes
+    const subjects = dashboardData.grades
+      .map((g: any) => g.exams?.subject)
+      .filter((subject: string) => subject && subject.trim() !== '')
+
+    // Obtener valores únicos
+    const uniqueSubjects = Array.from(new Set(subjects))
+
+    return uniqueSubjects as string[]
+  }, [dashboardData])
+
+  // 🎯 NUEVO: Filtrar calificaciones según la materia seleccionada
+  const filteredGrades = useMemo(() => {
+    if (!dashboardData?.grades || dashboardData.grades.length === 0) return []
+
+    // Si está en "Todas", devolver todas las calificaciones
+    if (selectedSubject === 'Todas') {
+      return dashboardData.grades
+    }
+
+    // Filtrar solo las calificaciones de la materia seleccionada
+    return dashboardData.grades.filter((grade: any) => 
+      grade.exams?.subject === selectedSubject
+    )
+  }, [dashboardData, selectedSubject])
+
+  // 🎯 ACTUALIZADO: Procesar datos usando filteredGrades en lugar de dashboardData.grades
   const processed = useMemo(() => {
-    if (!dashboardData?.grades || dashboardData.grades.length === 0) return null
-    const exams = dashboardData.grades.filter((g: any) => g.type === 'exam')
-    const homeworks = dashboardData.grades.filter((g: any) => g.type === 'assignment')
+    if (!filteredGrades || filteredGrades.length === 0) return null
+
+    const exams = filteredGrades.filter((g: any) => g.type === 'exam')
+    const homeworks = filteredGrades.filter((g: any) => g.type === 'assignment')
     const avgExams = exams.length ? exams.reduce((s:any, g:any) => s + g.percentage, 0) / exams.length : 0
     const avgHomeworks = homeworks.length ? homeworks.reduce((s:any, g:any) => s + g.percentage, 0) / homeworks.length : 0
     const final = homeworks.length === 0 ? avgExams : (avgExams * (examWeight / 100)) + (avgHomeworks * (homeworkWeight / 100))
-    const sorted = [...dashboardData.grades].sort((a, b) => b.percentage - a.percentage)
-    const worst = [...dashboardData.grades].sort((a, b) => a.percentage - b.percentage)[0]
-    return { exams, homeworks, avgExams: Math.round(avgExams), avgHomeworks: Math.round(avgHomeworks), finalGrade: Math.round(final), best: sorted[0], worst: worst }
-  }, [dashboardData, examWeight, homeworkWeight])
+    const sorted = [...filteredGrades].sort((a, b) => b.percentage - a.percentage)
+    const worst = [...filteredGrades].sort((a, b) => a.percentage - b.percentage)[0]
+
+    return { 
+      exams, 
+      homeworks, 
+      avgExams: Math.round(avgExams), 
+      avgHomeworks: Math.round(avgHomeworks), 
+      finalGrade: Math.round(final), 
+      best: sorted[0], 
+      worst: worst 
+    }
+  }, [filteredGrades, examWeight, homeworkWeight])
+
+  // 🎯 NUEVO: Calcular puntos totales filtrados
+  const filteredTotalPoints = useMemo(() => {
+    if (!filteredGrades || filteredGrades.length === 0) {
+      return { obtained: 0, possible: 0 }
+    }
+
+    const obtained = filteredGrades.reduce((sum: number, g: any) => sum + (g.pointsObtained || 0), 0)
+    const possible = filteredGrades.reduce((sum: number, g: any) => sum + (g.pointsPossible || 0), 0)
+
+    return { obtained, possible }
+  }, [filteredGrades])
+
+  // 🎯 NUEVO: Calcular evolución mensual filtrada
+  const filteredMonthlyAverages = useMemo(() => {
+    if (!filteredGrades || filteredGrades.length === 0) return []
+
+    // Agrupar por mes
+    const monthsMap = new Map<string, { total: number; count: number }>()
+
+    filteredGrades.forEach((grade: any) => {
+      const date = new Date(grade.createdAt)
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+
+      if (!monthsMap.has(monthKey)) {
+        monthsMap.set(monthKey, { total: 0, count: 0 })
+      }
+
+      const current = monthsMap.get(monthKey)!
+      current.total += grade.percentage
+      current.count += 1
+    })
+
+    // Convertir a array y calcular promedios
+    return Array.from(monthsMap.entries())
+      .map(([month, data]) => ({
+        month: month.split('-')[1], // Solo el mes
+        average: Math.round(data.total / data.count)
+      }))
+      .sort((a, b) => parseInt(a.month) - parseInt(b.month))
+  }, [filteredGrades])
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-[#d1d9e6] font-black italic text-gray-400 animate-pulse uppercase tracking-[0.3em]">Cargando Ficha Académica...</div>
 
@@ -52,8 +137,33 @@ export default function StudentDashboardPage() {
     <div className="min-h-screen bg-[#d1d9e6] p-4 md:p-8 text-gray-700 font-sans">
       <div className="max-w-7xl mx-auto">
 
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
           <button onClick={() => router.back()} className="neu-button px-6 py-2 font-bold tracking-tighter">← VOLVER</button>
+
+          {/* 🎯 NUEVO: Selector de Materia */}
+          {availableSubjects.length > 0 && (
+            <div className="flex items-center gap-4">
+              <label className="text-xs font-black uppercase opacity-40 tracking-widest">Filtrar por Materia:</label>
+              <select 
+                value={selectedSubject}
+                onChange={(e) => setSelectedSubject(e.target.value)}
+                className="neu-button px-6 py-2 font-bold tracking-tighter cursor-pointer outline-none appearance-none pr-10 bg-[#d1d9e6]"
+                style={{ 
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 1rem center'
+                }}
+              >
+                <option value="Todas">📚 Todas las Materias</option>
+                {availableSubjects.map((subject) => (
+                  <option key={subject} value={subject}>
+                    📘 {subject}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <button 
             onClick={async () => {
               setSending(true);
@@ -75,6 +185,12 @@ export default function StudentDashboardPage() {
           <div className="z-10">
             <h1 className="text-5xl font-black text-gray-800 mb-2 tracking-tighter italic uppercase">{dashboardData.student.fullName}</h1>
             <p className="text-xl font-bold text-blue-600 flex items-center gap-2">📚 {dashboardData.class.name}</p>
+            {/* 🎯 NUEVO: Mostrar materia seleccionada si no es "Todas" */}
+            {selectedSubject !== 'Todas' && (
+              <p className="text-sm font-bold text-purple-600 mt-2">
+                🔍 Filtrando por: {selectedSubject}
+              </p>
+            )}
             <div className="mt-4 flex gap-6 text-[10px] font-black opacity-40 uppercase tracking-widest">
               <span>📧 {dashboardData.student.studentEmail}</span>
               <span>👨‍👩‍👧 Tutor: {dashboardData.student.tutorEmail}</span>
@@ -85,8 +201,8 @@ export default function StudentDashboardPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10 text-center">
           <StatCard title="Promedio Final" value={`${processed?.finalGrade || 0}%`} sub="Calificación Ponderada" icon="📊" color="text-blue-700" />
-          <StatCard title="Evaluaciones" value={dashboardData.stats.totalEvaluations} sub="Pruebas Realizadas" icon="📝" color="text-purple-700" />
-          <StatCard title="Puntos Totales" value={`${dashboardData.stats.totalPoints.obtained}/${dashboardData.stats.totalPoints.possible}`} sub="Puntos Acumulados" icon="🎯" color="text-orange-600" />
+          <StatCard title="Evaluaciones" value={filteredGrades.length} sub="Pruebas Realizadas" icon="📝" color="text-purple-700" />
+          <StatCard title="Puntos Totales" value={`${filteredTotalPoints.obtained}/${filteredTotalPoints.possible}`} sub="Puntos Acumulados" icon="🎯" color="text-orange-600" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 mb-12">
@@ -99,18 +215,24 @@ export default function StudentDashboardPage() {
           </div>
           <div className="neu-card p-8 lg:col-span-2 min-h-[300px]">
             <h3 className="text-xs font-black uppercase opacity-40 mb-6 tracking-[0.2em] italic">📈 Evolución Mensual del Rendimiento</h3>
-            <div className="h-[250px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={dashboardData.stats.monthlyAverages} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs><linearGradient id="colorG" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#2563eb" stopOpacity={0.4}/><stop offset="95%" stopColor="#2563eb" stopOpacity={0}/></linearGradient></defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#bec8d9" opacity={0.5} />
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} interval={0} tick={{fontSize: 10, fontWeight: 'bold', fill: '#888'}} />
-                  <YAxis domain={[0, 100]} hide />
-                  <Tooltip contentStyle={{ borderRadius: '20px', border: 'none', backgroundColor: '#d1d9e6', boxShadow: '10px 10px 20px #b1b9c5' }} />
-                  <Area type="monotone" dataKey="average" stroke="#2563eb" strokeWidth={5} fill="url(#colorG)" connectNulls={true} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            {filteredMonthlyAverages.length > 0 ? (
+              <div className="h-[250px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={filteredMonthlyAverages} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs><linearGradient id="colorG" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#2563eb" stopOpacity={0.4}/><stop offset="95%" stopColor="#2563eb" stopOpacity={0}/></linearGradient></defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#bec8d9" opacity={0.5} />
+                    <XAxis dataKey="month" axisLine={false} tickLine={false} interval={0} tick={{fontSize: 10, fontWeight: 'bold', fill: '#888'}} />
+                    <YAxis domain={[0, 100]} hide />
+                    <Tooltip contentStyle={{ borderRadius: '20px', border: 'none', backgroundColor: '#d1d9e6', boxShadow: '10px 10px 20px #b1b9c5' }} />
+                    <Area type="monotone" dataKey="average" stroke="#2563eb" strokeWidth={5} fill="url(#colorG)" connectNulls={true} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[250px] flex items-center justify-center text-sm font-bold italic text-gray-400">
+                No hay datos para mostrar en esta materia
+              </div>
+            )}
           </div>
         </div>
 
@@ -198,20 +320,26 @@ function ListContainer({ title, items, color }: any) {
     return (
         <div className="neu-card p-8">
             <h3 className={`text-lg font-black mb-6 ${color} uppercase tracking-widest italic`}>📝 {title}</h3>
-            <div className="space-y-4">
-                {items.map((g:any) => (
-                    <div key={g.id} className="p-5 rounded-3xl bg-[#d1d9e6] shadow-[inset_4px_4px_8px_#b1b9c5,inset_-4px_-4px_8px_#f1f9ff] flex justify-between items-center group">
-                        <div>
-                            <p className="font-black text-gray-800 uppercase text-xs tracking-tighter">{g.examName}</p>
-                            <p className="text-[9px] opacity-40 font-bold uppercase mt-1">{new Date(g.createdAt).toLocaleDateString()}</p>
-                        </div>
-                        <div className="text-right">
-                            <p className="text-2xl font-black text-blue-600 tracking-tighter">{g.percentage}%</p>
-                            <p className="text-[8px] font-black opacity-20 uppercase tracking-widest">Puntuación</p>
-                        </div>
-                    </div>
-                ))}
-            </div>
+            {items.length > 0 ? (
+              <div className="space-y-4">
+                  {items.map((g:any) => (
+                      <div key={g.id} className="p-5 rounded-3xl bg-[#d1d9e6] shadow-[inset_4px_4px_8px_#b1b9c5,inset_-4px_-4px_8px_#f1f9ff] flex justify-between items-center group">
+                          <div>
+                              <p className="font-black text-gray-800 uppercase text-xs tracking-tighter">{g.examName}</p>
+                              <p className="text-[9px] opacity-40 font-bold uppercase mt-1">{new Date(g.createdAt).toLocaleDateString()}</p>
+                          </div>
+                          <div className="text-right">
+                              <p className="text-2xl font-black text-blue-600 tracking-tighter">{g.percentage}%</p>
+                              <p className="text-[8px] font-black opacity-20 uppercase tracking-widest">Puntuación</p>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-sm font-bold italic text-gray-400">
+                No hay {title.toLowerCase()} en esta materia
+              </div>
+            )}
         </div>
     )
 }

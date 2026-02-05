@@ -17,9 +17,20 @@ export async function POST(request: NextRequest) {
     const { studentId } = await request.json()
     const supabaseAdmin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
+    // --- MEJORA: Se añade 'subject' en el select de exams ---
     const { data: studentData, error: studentError } = await supabaseAdmin
       .from('students')
-      .select(`*, classes ( name ), grades ( score_obtained, score_possible, ai_feedback, created_at, exams ( name, type ) )`)
+      .select(`
+        *, 
+        classes ( name ), 
+        grades ( 
+          score_obtained, 
+          score_possible, 
+          ai_feedback, 
+          created_at, 
+          exams ( name, type, subject ) 
+        )
+      `)
       .eq('id', studentId)
       .single()
 
@@ -52,6 +63,7 @@ export async function POST(request: NextRequest) {
       grades: allEvaluations.map((g: any) => ({
         examName: g.exams?.name || 'Evaluación',
         type: g.exams?.type || 'exam',
+        subject: g.exams?.subject || 'General', // <-- ENVIANDO LA MATERIA
         percentage: g.score_possible ? Math.round((g.score_obtained / g.score_possible) * 100) : 0,
         createdAt: g.created_at
       })),
@@ -61,7 +73,7 @@ export async function POST(request: NextRequest) {
           obtained: allEvaluations.reduce((acc: number, curr: any) => acc + (curr.score_obtained || 0), 0),
           possible: allEvaluations.reduce((acc: number, curr: any) => acc + (curr.score_possible || 0), 0)
         },
-        monthlyAverages: calculateMonthly(allEvaluations) // <-- AQUÍ SE APLICA LA MEJORA
+        monthlyAverages: calculateMonthly(allEvaluations)
       },
       pedagogicalInsights: {
         mastered: Array.from(masteredTopics).slice(0, 4),
@@ -78,24 +90,18 @@ export async function POST(request: NextRequest) {
   } catch (e) { return NextResponse.json({ error: 'Error' }, { status: 500 }) }
 }
 
-// --- FUNCIÓN CORREGIDA: FALLBACK DE AÑO PARA 2026/2025 ---
 function calculateMonthly(gs: any[]) {
   const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   const stats = Array.from({ length: 12 }, (_, i) => ({ month: months[i], sum: 0, count: 0 }));
 
   let targetYear = new Date().getFullYear();
-
-  // Verificamos si el alumno tiene algún dato en el año actual (ej. 2026)
   const hasDataThisYear = gs.some(g => new Date(g.created_at).getFullYear() === targetYear);
-
-  // Si no hay datos en 2026, bajamos a 2025 automáticamente
   if (!hasDataThisYear) {
       targetYear = targetYear - 1;
   }
 
   gs.forEach(g => {
     const d = new Date(g.created_at);
-    // Filtramos solo por el año objetivo (2026 o 2025)
     if (d.getFullYear() === targetYear && g.score_possible) {
       const idx = d.getMonth();
       stats[idx].sum += (g.score_obtained / g.score_possible) * 100;
