@@ -8,6 +8,13 @@ interface StudentSummary {
   name: string
 }
 
+interface ExamInfo {
+  id: string
+  name: string
+  subject: string | null
+  gradeCount: number
+}
+
 interface GradeDistribution {
   range: string
   count: number
@@ -38,6 +45,7 @@ interface ClassAnalytics {
     totalStudents: number
     totalGrades: number
   }
+  examsInfo: ExamInfo[]
   generalStats: {
     classAverage: number
     highestScore: number
@@ -127,7 +135,8 @@ export async function POST(request: NextRequest) {
         ai_feedback,
         exams!inner (
           class_id,
-          name
+          name,
+          subject
         ),
         students (
           id,
@@ -174,12 +183,39 @@ export async function POST(request: NextRequest) {
           totalStudents: uniqueStudents,
           totalGrades: 0
         },
+        examsInfo: [],
         generalStats: { classAverage: 0, highestScore: 0, lowestScore: 0, passingRate: 0 },
         gradeDistribution: [],
         topFailedQuestions: [],
         errorTypesFrequency: []
       })
     }
+
+    // --- INFORMACIÓN DE EXÁMENES ---
+    const examsMap = new Map<string, { name: string; subject: string | null; count: number }>()
+
+    validGrades.forEach(grade => {
+      const exam = Array.isArray(grade.exams) ? grade.exams[0] : grade.exams
+      if (exam && exam.class_id) {
+        const examId = grade.exam_id
+        if (examsMap.has(examId)) {
+          examsMap.get(examId)!.count++
+        } else {
+          examsMap.set(examId, {
+            name: exam.name || 'Sin nombre',
+            subject: exam.subject || null,
+            count: 1
+          })
+        }
+      }
+    })
+
+    const examsInfo: ExamInfo[] = Array.from(examsMap.entries()).map(([id, data]) => ({
+      id,
+      name: data.name,
+      subject: data.subject,
+      gradeCount: data.count
+    }))
 
     // Calcular porcentajes
     const gradesWithPercentage = validGrades.map(g => ({
@@ -314,6 +350,7 @@ export async function POST(request: NextRequest) {
         totalStudents: uniqueStudents,
         totalGrades: validGrades.length
       },
+      examsInfo,
       generalStats: { classAverage, highestScore, lowestScore, passingRate },
       gradeDistribution,
       topFailedQuestions,
