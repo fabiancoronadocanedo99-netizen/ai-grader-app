@@ -20,6 +20,19 @@ interface ExamInfo {
   gradeCount: number
 }
 
+interface GradeEvaluation {
+  gradeId: string
+  studentId: string
+  studentName: string
+  examId: string
+  examName: string
+  examSubject: string | null
+  scoreObtained: number
+  scorePossible: number
+  percentage: number
+  aiFeedback: any
+}
+
 interface ClassInfo {
   id: string
   name: string
@@ -60,6 +73,7 @@ interface AnalyticsData {
   success: boolean
   classInfo: ClassInfo
   examsInfo: ExamInfo[]
+  evaluations: GradeEvaluation[]
   generalStats: GeneralStats
   gradeDistribution: GradeDistribution[]
   topFailedQuestions: QuestionError[]
@@ -236,33 +250,150 @@ export default function ClassAnalyticsPage() {
     return ['Todas', ...Array.from(new Set(subjects))];
   }, [analytics?.examsInfo]);
 
-  // 🆕 4. FILTRAR DATOS POR MATERIA
+  // 🆕 4. FILTRAR EVALUACIONES POR MATERIA
+  const filteredEvaluations = useMemo(() => {
+    if (!analytics?.evaluations) return [];
+    if (selectedSubject === 'Todas') return analytics.evaluations;
+    return analytics.evaluations.filter(evaluation => evaluation.examSubject === selectedSubject);
+  }, [analytics?.evaluations, selectedSubject]);
+
+  // 🆕 5. RECALCULAR KPIs BASADO EN EVALUACIONES FILTRADAS
+  const recalculatedStats = useMemo(() => {
+    if (!analytics) return null;
+    if (filteredEvaluations.length === 0) {
+      return { classAverage: 0, highestScore: 0, lowestScore: 0, passingRate: 0 };
+    }
+
+    const percentages = filteredEvaluations.map(e => e.percentage);
+    const classAverage = Math.round(percentages.reduce((sum, p) => sum + p, 0) / percentages.length);
+    const highestScore = Math.max(...percentages);
+    const lowestScore = Math.min(...percentages);
+    const passingRate = Math.round((percentages.filter(p => p >= 60).length / percentages.length) * 100);
+
+    return { classAverage, highestScore, lowestScore, passingRate };
+  }, [analytics, filteredEvaluations]);
+
+  // 🆕 6. RECALCULAR PREGUNTAS FALLADAS DINÁMICAMENTE
+  const filteredFailedQuestions = useMemo(() => {
+    if (filteredEvaluations.length === 0) return [];
+
+    const questionErrors = new Map<string, { 
+      count: number; 
+      tema: string | null; 
+      students: StudentSummary[] 
+    }>();
+
+    filteredEvaluations.forEach(evaluation => {
+      const feedback = evaluation.aiFeedback;
+      const evaluaciones = feedback?.informe_evaluacion?.evaluacion_detallada || [];
+
+      evaluaciones.forEach((pregunta: any) => {
+        if (pregunta.evaluacion === 'INCORRECTO') {
+          const questionId = pregunta.pregunta_id || 'Pregunta sin ID';
+          const tema = pregunta.tema || null;
+          const studentId = evaluation.studentId;
+          const studentName = evaluation.studentName;
+
+          if (questionErrors.has(questionId)) {
+            const entry = questionErrors.get(questionId)!;
+            entry.count++;
+            // Evitar duplicados del mismo estudiante
+            if (!entry.students.find(s => s.id === studentId)) {
+              entry.students.push({ id: studentId, name: studentName });
+            }
+          } else {
+            questionErrors.set(questionId, { 
+              count: 1, 
+              tema, 
+              students: [{ id: studentId, name: studentName }] 
+            });
+          }
+        }
+      });
+    });
+
+    return Array.from(questionErrors.entries())
+      .map(([questionId, data]) => ({
+        questionId,
+        tema: data.tema,
+        errorCount: data.count,
+        percentage: Math.round((data.count / filteredEvaluations.length) * 100),
+        failingStudents: data.students
+      }))
+      .sort((a, b) => b.errorCount - a.errorCount)
+      .slice(0, 3);
+  }, [filteredEvaluations]);
+
+  // 🆕 7. RECALCULAR TIPOS DE ERROR DINÁMICAMENTE
+  const filteredErrorTypes = useMemo(() => {
+    if (filteredEvaluations.length === 0) return [];
+
+    const errorTypesData = new Map<string, { 
+      count: number; 
+      studentsMap: Map<string, string> 
+    }>();
+    let totalErrors = 0;
+
+    filteredEvaluations.forEach(evaluation => {
+      const feedback = evaluation.aiFeedback;
+      const evaluaciones = feedback?.informe_evaluacion?.evaluacion_detallada || [];
+
+      evaluaciones.forEach((pregunta: any) => {
+        if (pregunta.tipo_de_error && pregunta.tipo_de_error !== 'ninguno') {
+          const rawType = pregunta.tipo_de_error;
+          const errorType = rawType.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+
+          if (!errorTypesData.has(errorType)) {
+            errorTypesData.set(errorType, { count: 0, studentsMap: new Map() });
+          }
+
+          const entry = errorTypesData.get(errorType)!;
+          entry.count++;
+          entry.studentsMap.set(evaluation.studentId, evaluation.studentName);
+          totalErrors++;
+        }
+      });
+    });
+
+    return Array.from(errorTypesData.entries())
+      .map(([type, data]) => ({
+        name: type,
+        value: data.count,
+        percentage: totalErrors > 0 ? Math.round((data.count / totalErrors) * 100) : 0,
+        students: Array.from(data.studentsMap.entries()).map(([id, name]) => ({ id, name }))
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredEvaluations]);
+
+  // 🆕 8. RECALCULAR DISTRIBUCIÓN DE CALIFICACIONES DINÁMICAMENTE
+  const filteredGradeDistribution = useMemo(() => {
+    if (filteredEvaluations.length === 0) return [];
+
+    const distributionRanges = [
+      { range: '90-100', min: 90, max: 100 },
+      { range: '80-89', min: 80, max: 89 },
+      { range: '70-79', min: 70, max: 79 },
+      { range: '60-69', min: 60, max: 69 },
+      { range: '0-59', min: 0, max: 59 }
+    ];
+
+    return distributionRanges.map(({ range, min, max }) => {
+      const gradesInRange = filteredEvaluations.filter(e => e.percentage >= min && e.percentage <= max);
+      return {
+        range,
+        count: gradesInRange.length,
+        percentage: Math.round((gradesInRange.length / filteredEvaluations.length) * 100),
+        students: gradesInRange.map(e => ({ id: e.studentId, name: e.studentName }))
+      };
+    });
+  }, [filteredEvaluations]);
+
+  // ANTIGUA LÓGICA - La mantenemos como fallback si no hay evaluations
   const filteredExamsInfo = useMemo(() => {
     if (!analytics?.examsInfo) return [];
     if (selectedSubject === 'Todas') return analytics.examsInfo;
     return analytics.examsInfo.filter(exam => exam.subject === selectedSubject);
   }, [analytics?.examsInfo, selectedSubject]);
-
-  // 🆕 5. RECALCULAR KPIs BASADO EN FILTRO DE MATERIA
-  const recalculatedStats = useMemo(() => {
-    if (!analytics) return null;
-
-    // Si no hay filtro de materia o es "Todas", usar stats originales
-    if (selectedSubject === 'Todas') {
-      return analytics.generalStats;
-    }
-
-    // Aquí deberíamos recalcular basándonos en las calificaciones filtradas
-    // Como no tenemos acceso directo a las grades individuales por materia,
-    // necesitaremos hacer una nueva llamada a la API o almacenar más datos
-    // Por ahora, retornamos las stats originales con un indicador de que están filtradas
-
-    // NOTA: Para implementación completa, necesitarías:
-    // 1. Modificar la API para devolver grades agrupadas por examen
-    // 2. O hacer una nueva llamada con filtro de materia
-
-    return analytics.generalStats;
-  }, [analytics, selectedSubject]);
 
   // 🆕 6. DATOS PARA GRÁFICO COMPARATIVO DE MATERIAS
   const subjectComparisonData = useMemo(() => {
@@ -354,7 +485,20 @@ export default function ClassAnalyticsPage() {
 
   if (!analytics) return null;
 
-  const { classInfo, gradeDistribution, topFailedQuestions, errorTypesFrequency } = analytics
+  const { classInfo } = analytics
+
+  // Usar datos filtrados o datos originales como fallback
+  const displayGradeDistribution = filteredGradeDistribution.length > 0 
+    ? filteredGradeDistribution 
+    : analytics.gradeDistribution;
+
+  const displayFailedQuestions = filteredFailedQuestions.length > 0 
+    ? filteredFailedQuestions 
+    : analytics.topFailedQuestions;
+
+  const displayErrorTypes = filteredErrorTypes.length > 0 
+    ? filteredErrorTypes 
+    : analytics.errorTypesFrequency;
 
   // Función auxiliar colores
   const getAverageColor = (avg: number) => {
@@ -364,9 +508,10 @@ export default function ClassAnalyticsPage() {
   }
 
   // Datos transformados para PieChart
-  const errorTypeChartData = errorTypesFrequency.map(item => ({
+  const errorTypeChartData = displayErrorTypes.map(item => ({
     name: item.name,
     value: item.value,
+    percentage: item.percentage, // ✅ Asegurar que percentage esté disponible
     students: item.students
   }));
 
@@ -558,9 +703,9 @@ export default function ClassAnalyticsPage() {
           <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">Click en las barras para ver alumnos</span>
         </div>
 
-        {gradeDistribution.length > 0 ? (
+        {displayGradeDistribution.length > 0 ? (
           <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={gradeDistribution}>
+            <BarChart data={displayGradeDistribution}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="range" stroke="#6b7280" style={{ fontSize: '14px' }} />
               <YAxis stroke="#6b7280" style={{ fontSize: '14px' }} label={{ value: 'Cantidad', angle: -90, position: 'insideLeft' }} />
@@ -573,7 +718,7 @@ export default function ClassAnalyticsPage() {
                 onClick={handleBarClick}
                 className="cursor-pointer"
               >
-                {gradeDistribution.map((entry, index) => (
+                {displayGradeDistribution.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={DISTRIBUTION_COLORS[index % DISTRIBUTION_COLORS.length]} className="hover:opacity-80 transition-opacity" />
                 ))}
               </Bar>
@@ -588,9 +733,9 @@ export default function ClassAnalyticsPage() {
         {/* Top Preguntas */}
         <div className="neu-card p-6">
           <h2 className="text-2xl font-bold text-gray-700 mb-6">❌ Preguntas Más Falladas</h2>
-          {topFailedQuestions.length > 0 ? (
+          {displayFailedQuestions.length > 0 ? (
             <div className="space-y-4">
-              {topFailedQuestions.map((question, index) => (
+              {displayFailedQuestions.map((question, index) => (
                 <button 
                   key={question.questionId} 
                   onClick={() => openStudentModal(`Alumnos que fallaron: ${question.questionId}`, question.failingStudents)}
@@ -623,7 +768,7 @@ export default function ClassAnalyticsPage() {
         {/* Gráfico de Errores */}
         <div className="neu-card p-6">
           <h2 className="text-2xl font-bold text-gray-700 mb-6">🎯 Tipos de Error</h2>
-          {errorTypesFrequency.length > 0 ? (
+          {displayErrorTypes.length > 0 ? (
             <>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
@@ -639,7 +784,7 @@ export default function ClassAnalyticsPage() {
                     onClick={handlePieClick}
                     className="cursor-pointer"
                   >
-                    {errorTypesFrequency.map((entry, index) => (
+                    {displayErrorTypes.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={ERROR_COLORS[index % ERROR_COLORS.length]} className="hover:opacity-80" />
                     ))}
                   </Pie>
@@ -647,7 +792,7 @@ export default function ClassAnalyticsPage() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="mt-6 space-y-2">
-                {errorTypesFrequency.map((error, index) => (
+                {displayErrorTypes.map((error, index) => (
                   <div key={error.name} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="w-4 h-4 rounded" style={{ backgroundColor: ERROR_COLORS[index % ERROR_COLORS.length] }} />
