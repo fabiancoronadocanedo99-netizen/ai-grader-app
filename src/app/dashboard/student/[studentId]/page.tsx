@@ -37,37 +37,79 @@ export default function StudentDashboardPage() {
     fetchData()
   }, [studentId, supabase])
 
-  // 🎯 ACTUALIZADO: Calcular materias disponibles leyendo directamente 'g.subject'
+  // 🎯 Calcular materias disponibles
   const availableSubjects = useMemo(() => {
     if (!dashboardData?.grades || dashboardData.grades.length === 0) return []
-
-    // CAMBIO: Ahora accedemos directamente a g.subject
     const subjects = dashboardData.grades
       .map((g: any) => g.subject)
       .filter((subject: string) => subject && subject.trim() !== '')
-
-    // Obtener valores únicos
     const uniqueSubjects = Array.from(new Set(subjects))
-
     return uniqueSubjects as string[]
   }, [dashboardData])
 
-  // 🎯 ACTUALIZADO: Filtrar calificaciones leyendo directamente 'grade.subject'
+  // 🎯 Filtrar calificaciones
   const filteredGrades = useMemo(() => {
     if (!dashboardData?.grades || dashboardData.grades.length === 0) return []
-
-    // Si está en "Todas", devolver todas las calificaciones
-    if (selectedSubject === 'Todas') {
-      return dashboardData.grades
-    }
-
-    // CAMBIO: Comparación directa con grade.subject
-    return dashboardData.grades.filter((grade: any) => 
-      grade.subject === selectedSubject
-    )
+    if (selectedSubject === 'Todas') return dashboardData.grades
+    return dashboardData.grades.filter((grade: any) => grade.subject === selectedSubject)
   }, [dashboardData, selectedSubject])
 
-  // Procesar datos usando filteredGrades
+  // 🎯 NUEVO: Lógica de Insights Pedagógicos en el Cliente (Mining)
+  const filteredInsights = useMemo(() => {
+    // Valores por defecto
+    const defaultResult = { mastered: [], toReview: [], recommendation: "Continúa con el buen trabajo." };
+
+    if (!filteredGrades || filteredGrades.length === 0) {
+      // Si estamos en "Todas" y no hay grades filtrados (raro), intentamos usar el del servidor si existe
+      if (selectedSubject === 'Todas' && dashboardData?.pedagogicalInsights) {
+        return dashboardData.pedagogicalInsights;
+      }
+      return defaultResult;
+    }
+
+    const mastered = new Set<string>()
+    const toReview = new Set<string>()
+    let recommendation = "Sigue manteniendo este ritmo de estudio."
+
+    // 1. Recorrer todas las notas filtradas para extraer temas
+    filteredGrades.forEach((g: any) => {
+      // Soportamos camelCase (si la API lo manda así) o snake_case (directo de DB)
+      const feedback = g.aiFeedback || g.ai_feedback; 
+      const detail = feedback?.informe_evaluacion?.evaluacion_detallada || [];
+
+      detail.forEach((item: any) => {
+        if (item.evaluacion === 'CORRECTO') mastered.add(item.tema)
+        if (item.evaluacion === 'INCORRECTO' || item.evaluacion === 'PARCIAL') toReview.add(item.tema)
+      })
+    })
+
+    // 2. Buscar la recomendación más reciente dentro de lo filtrado
+    const sortedByDate = [...filteredGrades].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    // Encontrar el examen más reciente que tenga feedback
+    const latestWithFeedback = sortedByDate.find((g: any) => {
+        const fb = g.aiFeedback || g.ai_feedback;
+        return fb?.informe_evaluacion?.evaluacion_detallada;
+    });
+
+    if (latestWithFeedback) {
+        const fb = latestWithFeedback.aiFeedback || latestWithFeedback.ai_feedback;
+        const primaryIssue = fb.informe_evaluacion.evaluacion_detallada.find((i:any) => i.area_de_mejora);
+        if (primaryIssue) recommendation = primaryIssue.area_de_mejora;
+    } else if (selectedSubject === 'Todas' && dashboardData?.pedagogicalInsights?.recommendation) {
+        // Fallback al global si estamos viendo todo y no encontramos uno específico reciente
+        recommendation = dashboardData.pedagogicalInsights.recommendation;
+    }
+
+    return {
+      mastered: Array.from(mastered).slice(0, 4),
+      toReview: Array.from(toReview).slice(0, 4),
+      recommendation: recommendation
+    }
+  }, [filteredGrades, dashboardData, selectedSubject]);
+
+
+  // Procesar datos numéricos
   const processed = useMemo(() => {
     if (!filteredGrades || filteredGrades.length === 0) return null
 
@@ -90,44 +132,26 @@ export default function StudentDashboardPage() {
     }
   }, [filteredGrades, examWeight, homeworkWeight])
 
-  // Calcular puntos totales filtrados
   const filteredTotalPoints = useMemo(() => {
-    if (!filteredGrades || filteredGrades.length === 0) {
-      return { obtained: 0, possible: 0 }
-    }
-
+    if (!filteredGrades || filteredGrades.length === 0) return { obtained: 0, possible: 0 }
     const obtained = filteredGrades.reduce((sum: number, g: any) => sum + (g.pointsObtained || 0), 0)
     const possible = filteredGrades.reduce((sum: number, g: any) => sum + (g.pointsPossible || 0), 0)
-
     return { obtained, possible }
   }, [filteredGrades])
 
-  // Calcular evolución mensual filtrada
   const filteredMonthlyAverages = useMemo(() => {
     if (!filteredGrades || filteredGrades.length === 0) return []
-
-    // Agrupar por mes
     const monthsMap = new Map<string, { total: number; count: number }>()
-
     filteredGrades.forEach((grade: any) => {
       const date = new Date(grade.createdAt)
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-
-      if (!monthsMap.has(monthKey)) {
-        monthsMap.set(monthKey, { total: 0, count: 0 })
-      }
-
+      if (!monthsMap.has(monthKey)) monthsMap.set(monthKey, { total: 0, count: 0 })
       const current = monthsMap.get(monthKey)!
       current.total += grade.percentage
       current.count += 1
     })
-
-    // Convertir a array y calcular promedios
     return Array.from(monthsMap.entries())
-      .map(([month, data]) => ({
-        month: month.split('-')[1], // Solo el mes
-        average: Math.round(data.total / data.count)
-      }))
+      .map(([month, data]) => ({ month: month.split('-')[1], average: Math.round(data.total / data.count) }))
       .sort((a, b) => parseInt(a.month) - parseInt(b.month))
   }, [filteredGrades])
 
@@ -140,7 +164,6 @@ export default function StudentDashboardPage() {
         <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
           <button onClick={() => router.back()} className="neu-button px-6 py-2 font-bold tracking-tighter">← VOLVER</button>
 
-          {/* 🎯 Selector de Materia (Siempre visible ahora) */}
           <div className="flex items-center gap-4">
             <label className="text-xs font-black uppercase opacity-40 tracking-widest">Filtrar por Materia:</label>
             <select 
@@ -183,7 +206,6 @@ export default function StudentDashboardPage() {
           <div className="z-10">
             <h1 className="text-5xl font-black text-gray-800 mb-2 tracking-tighter italic uppercase">{dashboardData.student.fullName}</h1>
             <p className="text-xl font-bold text-blue-600 flex items-center gap-2">📚 {dashboardData.class.name}</p>
-            {/* Mostrar materia seleccionada si no es "Todas" */}
             {selectedSubject !== 'Todas' && (
               <p className="text-sm font-bold text-purple-600 mt-2">
                 🔍 Filtrando por: {selectedSubject}
@@ -234,14 +256,15 @@ export default function StudentDashboardPage() {
           </div>
         </div>
 
+        {/* 🎯 SECCIÓN ACTUALIZADA: Usa filteredInsights en lugar de dashboardData.pedagogicalInsights */}
         <div className="mb-12">
             <h2 className="text-2xl font-black mb-6 uppercase italic tracking-tighter opacity-80">🚀 Foco Pedagógico</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <InsightCard title="🏆 Temas Dominados" items={dashboardData.pedagogicalInsights.mastered} color="border-green-500" badge="bg-green-100 text-green-700" />
-                <InsightCard title="🔍 Temas a Reforzar" items={dashboardData.pedagogicalInsights.toReview} color="border-red-500" badge="bg-red-100 text-red-700" />
+                <InsightCard title="🏆 Temas Dominados" items={filteredInsights.mastered} color="border-green-500" badge="bg-green-100 text-green-700" />
+                <InsightCard title="🔍 Temas a Reforzar" items={filteredInsights.toReview} color="border-red-500" badge="bg-red-100 text-red-700" />
                 <div className="neu-card p-8 border-t-8 border-blue-500">
                     <h3 className="text-[10px] font-black uppercase opacity-40 mb-4 tracking-widest">💡 Sugerencia IA</h3>
-                    <p className="text-sm font-bold italic text-gray-600 leading-snug">"{dashboardData.pedagogicalInsights.recommendation}"</p>
+                    <p className="text-sm font-bold italic text-gray-600 leading-snug">"{filteredInsights.recommendation}"</p>
                 </div>
             </div>
         </div>
