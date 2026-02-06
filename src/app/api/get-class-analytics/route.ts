@@ -8,6 +8,26 @@ interface StudentSummary {
   name: string
 }
 
+interface ExamInfo {
+  id: string
+  name: string
+  subject: string | null
+  gradeCount: number
+}
+
+interface GradeEvaluation {
+  gradeId: string
+  studentId: string
+  studentName: string
+  examId: string
+  examName: string
+  examSubject: string | null
+  scoreObtained: number
+  scorePossible: number
+  percentage: number
+  aiFeedback: any // JSON crudo del feedback de IA
+}
+
 interface GradeDistribution {
   range: string
   count: number
@@ -38,6 +58,8 @@ interface ClassAnalytics {
     totalStudents: number
     totalGrades: number
   }
+  examsInfo: ExamInfo[]
+  evaluations: GradeEvaluation[] // 🆕 Array de todas las evaluaciones con feedback completo
   generalStats: {
     classAverage: number
     highestScore: number
@@ -127,7 +149,8 @@ export async function POST(request: NextRequest) {
         ai_feedback,
         exams!inner (
           class_id,
-          name
+          name,
+          subject
         ),
         students (
           id,
@@ -174,12 +197,69 @@ export async function POST(request: NextRequest) {
           totalStudents: uniqueStudents,
           totalGrades: 0
         },
+        examsInfo: [],
+        evaluations: [],
         generalStats: { classAverage: 0, highestScore: 0, lowestScore: 0, passingRate: 0 },
         gradeDistribution: [],
         topFailedQuestions: [],
         errorTypesFrequency: []
       })
     }
+
+    // --- INFORMACIÓN DE EXÁMENES ---
+    const examsMap = new Map<string, { name: string; subject: string | null; count: number }>()
+
+    validGrades.forEach(grade => {
+      const exam = Array.isArray(grade.exams) ? grade.exams[0] : grade.exams
+      if (exam && exam.class_id) {
+        const examId = grade.exam_id
+        if (examsMap.has(examId)) {
+          examsMap.get(examId)!.count++
+        } else {
+          examsMap.set(examId, {
+            name: exam.name || 'Sin nombre',
+            subject: exam.subject || null,
+            count: 1
+          })
+        }
+      }
+    })
+
+    const examsInfo: ExamInfo[] = Array.from(examsMap.entries()).map(([id, data]) => ({
+      id,
+      name: data.name,
+      subject: data.subject,
+      gradeCount: data.count
+    }))
+
+    // 🆕 --- ARRAY DE EVALUACIONES CON FEEDBACK COMPLETO ---
+    const evaluations: GradeEvaluation[] = validGrades.map(grade => {
+      const exam = Array.isArray(grade.exams) ? grade.exams[0] : grade.exams
+      const student = Array.isArray(grade.students) ? grade.students[0] : grade.students
+
+      // Parsear feedback si es string
+      let parsedFeedback = grade.ai_feedback
+      if (typeof parsedFeedback === 'string') {
+        try {
+          parsedFeedback = JSON.parse(parsedFeedback)
+        } catch (e) {
+          parsedFeedback = null
+        }
+      }
+
+      return {
+        gradeId: grade.id,
+        studentId: grade.student_id,
+        studentName: student?.full_name || 'Estudiante Desconocido',
+        examId: grade.exam_id,
+        examName: exam?.name || 'Sin nombre',
+        examSubject: exam?.subject || null,
+        scoreObtained: grade.score_obtained!,
+        scorePossible: grade.score_possible!,
+        percentage: Math.round((grade.score_obtained! / grade.score_possible!) * 100),
+        aiFeedback: parsedFeedback // Feedback de IA ya parseado o null
+      }
+    })
 
     // Calcular porcentajes
     const gradesWithPercentage = validGrades.map(g => ({
@@ -314,6 +394,8 @@ export async function POST(request: NextRequest) {
         totalStudents: uniqueStudents,
         totalGrades: validGrades.length
       },
+      examsInfo,
+      evaluations, // 🆕 Array completo de evaluaciones con feedback de IA
       generalStats: { classAverage, highestScore, lowestScore, passingRate },
       gradeDistribution,
       topFailedQuestions,
