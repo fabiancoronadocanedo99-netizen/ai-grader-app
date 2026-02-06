@@ -18,7 +18,7 @@ export default function StudentDashboardPage() {
   const [examWeight, setExamWeight] = useState(60)
   const [homeworkWeight, setHomeworkWeight] = useState(40)
 
-  // 🎯 NUEVO: Estado del filtro de materia
+  // 🎯 Estado del filtro de materia
   const [selectedSubject, setSelectedSubject] = useState('Todas')
 
   useEffect(() => {
@@ -37,13 +37,13 @@ export default function StudentDashboardPage() {
     fetchData()
   }, [studentId, supabase])
 
-  // 🎯 NUEVO: Calcular materias disponibles desde las calificaciones
+  // 🎯 ACTUALIZADO: Calcular materias disponibles leyendo directamente 'g.subject'
   const availableSubjects = useMemo(() => {
     if (!dashboardData?.grades || dashboardData.grades.length === 0) return []
 
-    // Extraer materias únicas de los exámenes
+    // CAMBIO: Ahora accedemos directamente a g.subject
     const subjects = dashboardData.grades
-      .map((g: any) => g.exams?.subject)
+      .map((g: any) => g.subject)
       .filter((subject: string) => subject && subject.trim() !== '')
 
     // Obtener valores únicos
@@ -52,7 +52,7 @@ export default function StudentDashboardPage() {
     return uniqueSubjects as string[]
   }, [dashboardData])
 
-  // 🎯 NUEVO: Filtrar calificaciones según la materia seleccionada
+  // 🎯 ACTUALIZADO: Filtrar calificaciones leyendo directamente 'grade.subject'
   const filteredGrades = useMemo(() => {
     if (!dashboardData?.grades || dashboardData.grades.length === 0) return []
 
@@ -61,13 +61,13 @@ export default function StudentDashboardPage() {
       return dashboardData.grades
     }
 
-    // Filtrar solo las calificaciones de la materia seleccionada
+    // CAMBIO: Comparación directa con grade.subject
     return dashboardData.grades.filter((grade: any) => 
-      grade.exams?.subject === selectedSubject
+      grade.subject === selectedSubject
     )
   }, [dashboardData, selectedSubject])
 
-  // 🎯 ACTUALIZADO: Procesar datos usando filteredGrades en lugar de dashboardData.grades
+  // Procesar datos usando filteredGrades
   const processed = useMemo(() => {
     if (!filteredGrades || filteredGrades.length === 0) return null
 
@@ -90,7 +90,7 @@ export default function StudentDashboardPage() {
     }
   }, [filteredGrades, examWeight, homeworkWeight])
 
-  // 🎯 NUEVO: Calcular puntos totales filtrados
+  // Calcular puntos totales filtrados
   const filteredTotalPoints = useMemo(() => {
     if (!filteredGrades || filteredGrades.length === 0) {
       return { obtained: 0, possible: 0 }
@@ -102,7 +102,7 @@ export default function StudentDashboardPage() {
     return { obtained, possible }
   }, [filteredGrades])
 
-  // 🎯 NUEVO: Calcular evolución mensual filtrada
+  // Calcular evolución mensual filtrada
   const filteredMonthlyAverages = useMemo(() => {
     if (!filteredGrades || filteredGrades.length === 0) return []
 
@@ -140,29 +140,27 @@ export default function StudentDashboardPage() {
         <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
           <button onClick={() => router.back()} className="neu-button px-6 py-2 font-bold tracking-tighter">← VOLVER</button>
 
-          {/* 🎯 NUEVO: Selector de Materia */}
-          {availableSubjects.length > 0 && (
-            <div className="flex items-center gap-4">
-              <label className="text-xs font-black uppercase opacity-40 tracking-widest">Filtrar por Materia:</label>
-              <select 
-                value={selectedSubject}
-                onChange={(e) => setSelectedSubject(e.target.value)}
-                className="neu-button px-6 py-2 font-bold tracking-tighter cursor-pointer outline-none appearance-none pr-10 bg-[#d1d9e6]"
-                style={{ 
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 1rem center'
-                }}
-              >
-                <option value="Todas">📚 Todas las Materias</option>
-                {availableSubjects.map((subject) => (
-                  <option key={subject} value={subject}>
-                    📘 {subject}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* 🎯 Selector de Materia (Siempre visible ahora) */}
+          <div className="flex items-center gap-4">
+            <label className="text-xs font-black uppercase opacity-40 tracking-widest">Filtrar por Materia:</label>
+            <select 
+              value={selectedSubject}
+              onChange={(e) => setSelectedSubject(e.target.value)}
+              className="neu-button px-6 py-2 font-bold tracking-tighter cursor-pointer outline-none appearance-none pr-10 bg-[#d1d9e6]"
+              style={{ 
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 1rem center'
+              }}
+            >
+              <option value="Todas">📚 Todas las Materias</option>
+              {availableSubjects.map((subject) => (
+                <option key={subject} value={subject}>
+                  📘 {subject}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <button 
             onClick={async () => {
@@ -185,7 +183,7 @@ export default function StudentDashboardPage() {
           <div className="z-10">
             <h1 className="text-5xl font-black text-gray-800 mb-2 tracking-tighter italic uppercase">{dashboardData.student.fullName}</h1>
             <p className="text-xl font-bold text-blue-600 flex items-center gap-2">📚 {dashboardData.class.name}</p>
-            {/* 🎯 NUEVO: Mostrar materia seleccionada si no es "Todas" */}
+            {/* Mostrar materia seleccionada si no es "Todas" */}
             {selectedSubject !== 'Todas' && (
               <p className="text-sm font-bold text-purple-600 mt-2">
                 🔍 Filtrando por: {selectedSubject}
