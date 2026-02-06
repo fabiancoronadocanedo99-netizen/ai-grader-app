@@ -161,10 +161,6 @@ export async function getUsers() {
   });
 }
 
-/**
- * ACTUALIZAR USUARIO
- * ✅ Usa nombres EXACTOS de columnas de la base de datos
- */
 export async function updateUser(
   userId: string, 
   updates: {
@@ -180,34 +176,28 @@ export async function updateUser(
   }
 
   try {
-    // Construir el objeto de actualización solo con los campos que vienen
     const updateData: any = {};
 
-    // ✅ full_name es el nombre EXACTO de la columna en la BD
     if (updates.fullName !== undefined) {
       updateData.full_name = updates.fullName;
     }
 
-    // ✅ role es el nombre EXACTO de la columna en la BD
     if (updates.role !== undefined) {
       updateData.role = updates.role;
     }
 
-    // ✅ organization_id es el nombre EXACTO de la columna en la BD
     if (updates.organizationId !== undefined) {
       updateData.organization_id = updates.organizationId;
     }
 
-    // Si no hay nada que actualizar, retornar éxito
     if (Object.keys(updateData).length === 0) {
       return { success: true };
     }
 
-    // Ejecutar actualización
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('profiles')
       .update(updateData)
-      .eq('id', userId)  // ← userId debe ser el UUID real
+      .eq('id', userId)
       .select();
 
     if (error) {
@@ -430,7 +420,7 @@ export async function sendStudentReportToParent(data: {
 
 /**
  * ACTUALIZAR MATERIAS DEL MAESTRO usando RPC
- * ✅ Usa la función RPC correcta con el parámetro input_subjects
+ * ✅ USA EL NOMBRE NUEVO QUE ES EL MÁS ESTABLE
  */
 export async function updateUserSubjects(subjectsString: string) {
   const supabase = await createClient(); 
@@ -442,7 +432,6 @@ export async function updateUserSubjects(subjectsString: string) {
       throw new Error("Sesión expirada. Por favor, vuelve a iniciar sesión.");
     }
 
-    // Convertir string a array
     const subjectsArray = subjectsString
       .split(',')
       .map(s => s.trim())
@@ -452,19 +441,15 @@ export async function updateUserSubjects(subjectsString: string) {
       throw new Error("Debes proporcionar al menos una materia.");
     }
 
-    console.log('📚 Actualizando materias:', subjectsArray);
-
-    // ✅ IMPORTANTE: Usar 'update_my_subjects' con parámetro 'input_subjects'
-    const { error: rpcError } = await supabase.rpc('update_my_subjects', {
+    // --- USA EL NOMBRE NUEVO QUE ES EL MÁS ESTABLE ---
+    const { error } = await supabase.rpc('set_teacher_subjects', {
       input_subjects: subjectsArray
     });
 
-    if (rpcError) {
-      console.error("❌ Error en RPC update_my_subjects:", rpcError);
-      throw new Error(`Error al actualizar materias: ${rpcError.message}`);
+    if (error) {
+      console.error("❌ Error en RPC set_teacher_subjects:", error);
+      throw new Error(`Error al actualizar materias: ${error.message}`);
     }
-
-    console.log('✅ Materias actualizadas exitosamente');
 
     revalidatePath('/dashboard');
     return { success: true };
