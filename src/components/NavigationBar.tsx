@@ -1,19 +1,9 @@
-export const revalidate = 0 // <-- Esto obliga a la barra a ser 100% fresca siempre
-import { getCurrentUserProfile } from '@/actions/user-actions'
+'use client'
+
 import NavigationClient from './NavigationClient'
 
-export default async function NavigationBar() {
-  // El servidor hace el trabajo pesado: obtiene la sesión y el perfil
-  // de forma asíncrona antes de renderizar nada en el cliente.
-  const profile = await getCurrentUserProfile()
-
-  // Enviamos los datos esenciales al 'NavigationClient'.
-  // He añadido el userId por si lo necesitas para lógicas internas o depuración.
-  return (
-    <NavigationClient 
-      userRole={profile?.role || undefined} 
-      userEmail={profile?.email || undefined}
-      userId={profile?.id || undefined}
-    />
-  )
+// Convertimos esto en un componente de cliente puro para evitar 
+// que Vercel guarde copias viejas de tu identidad.
+export default function NavigationBar() {
+  return <NavigationClient />
 }

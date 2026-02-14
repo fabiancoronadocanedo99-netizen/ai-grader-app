@@ -14,79 +14,78 @@ export default function NavigationClient() {
   const [role, setRole] = useState<string | null>(null)
   const [email, setEmail] = useState<string | null>(null)
 
-  useEffect(() => {
-    const syncUser = async () => {
-      // 1. Obtener usuario directamente del sistema de Auth
-      const { data: { user } } = await supabase.auth.getUser()
+  // Función para cargar la identidad real desde Supabase
+  const refreshIdentity = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
 
-      if (user) {
-        console.log("Usuario Auth detectado:", user.email)
-        setEmail(user.email || 'Usuario')
+    if (user) {
+      setEmail(user.email || null)
 
-        // 2. Intentar obtener el rol de la tabla profiles
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single()
+      // Buscamos el perfil (la política de Supabase 'USING true' nos permite leer esto)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
 
-        if (profile) {
-          console.log("Rol detectado:", profile.role)
-          setRole(profile.role)
-        }
+      if (profile) {
+        console.log("Identidad detectada:", profile.role)
+        setRole(profile.role)
       }
+    } else {
+      // Si no hay usuario, limpiamos todo
+      setEmail(null)
+      setRole(null)
     }
-    syncUser()
-  }, [supabase])
+  }
+
+  // Se ejecuta al cargar y cada vez que cambia la ruta
+  useEffect(() => {
+    refreshIdentity()
+  }, [pathname]) 
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
+    // El hard refresh limpia TODA la memoria del navegador
     window.location.href = '/login'
   }
 
-  // Definición de botones
   const adminBtn = role === 'superadmin' 
-    ? { href: '/admin', label: 'SUPER', icon: <ShieldCheck size={14} /> }
+    ? { href: '/admin', label: 'SUPER ADMIN', icon: <ShieldCheck size={14} /> }
     : role === 'admin'
-    ? { href: '/dashboard/admin', label: 'ADMIN', icon: <School size={14} /> }
+    ? { href: '/dashboard/admin', label: 'ADMIN ESCUELA', icon: <School size={14} /> }
     : role === 'institutional_manager'
-    ? { href: '/dashboard/institutional', label: 'MANDO', icon: <Landmark size={14} /> }
+    ? { href: '/dashboard/institutional', label: 'CENTRO DE MANDO', icon: <Landmark size={14} /> }
     : null
 
   return (
-    <div className="sticky top-0 z-40 bg-[#e0e5ec] shadow-[inset_0_-2px_4px_rgba(184,193,206,0.3)] h-16 flex items-center px-4">
+    <div className="sticky top-0 z-50 bg-[#e0e5ec] shadow-[inset_0_-2px_4px_rgba(184,193,206,0.3)] h-16 flex items-center px-4 md:px-8">
 
-      {/* Izquierda: Flechas */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center space-x-3">
         <button onClick={() => router.back()} className="neu-button p-2 text-gray-600"><ChevronLeft size={16} /></button>
         <button onClick={() => router.forward()} className="neu-button p-2 text-gray-600 hidden sm:block"><ChevronRight size={16} /></button>
       </div>
 
-      {/* Centro: Título */}
-      <div className="flex-1 text-center font-black text-[10px] tracking-[0.2em] text-gray-600 uppercase">
+      <div className="flex-1 text-center font-black text-[10px] tracking-[0.3em] text-gray-600 uppercase">
         {pathname.includes('institutional') ? 'CENTRO DE MANDO' : 'DASHBOARD'}
       </div>
 
-      {/* Derecha: Datos de Usuario */}
       <div className="flex items-center gap-3">
-
-        {/* Email - ¡Ahora sin condiciones de tamaño para que lo veas! */}
         {email && (
-          <div className="flex items-center gap-2 text-[9px] font-bold text-gray-500 bg-[#e0e5ec] shadow-[inset_2px_2px_5px_#b8c1ce,inset_-2px_-2px_5px_#ffffff] px-3 py-1.5 rounded-full uppercase">
+          <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500 bg-[#e0e5ec] shadow-[inset_2px_2px_5px_#b8c1ce,inset_-2px_-2px_5px_#ffffff] px-3 py-1.5 rounded-full uppercase">
             <UserCircle size={12} /> {email.split('@')[0]}
           </div>
         )}
 
-        {/* Botón Admin - Si el rol existe */}
         {adminBtn && (
           <Link href={adminBtn.href}>
-            <button className="neu-button px-3 py-2 flex items-center gap-1 text-[9px] font-black text-blue-600 uppercase shadow-[4px_4px_10px_#b8c1ce,-4px_-4px_10px_#ffffff]">
+            <button className="neu-button px-4 py-2 flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase shadow-[4px_4px_10px_#b8c1ce,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#b8c1ce]">
               {adminBtn.icon} {adminBtn.label}
             </button>
           </Link>
         )}
 
-        <button onClick={handleLogout} className="neu-button p-2 text-red-500 shadow-[4px_4px_10px_#b8c1ce,-4px_-4px_10px_#ffffff]">
+        <button onClick={handleLogout} className="neu-button p-2.5 text-red-500 shadow-[4px_4px_10px_#b8c1ce,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#b8c1ce]">
           <LogOut size={16} />
         </button>
       </div>
