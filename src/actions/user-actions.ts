@@ -2,7 +2,7 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { cookies } from 'next/headers'
+// Nota: Eliminamos 'cookies' de la importación estática superior para usarla dinámicamente
 import Papa from 'papaparse'
 import { Resend } from 'resend'
 import { logEvent } from './audit-actions'
@@ -26,29 +26,37 @@ type BulkImportResult = {
   errors: string[]
 }
 
-// --- OBTENER PERFIL (LIMPIO) ---
-// ✅ CORREGIDO: Uso de await para cookies() y createClient() según Next.js 15
+// --- OBTENER PERFIL (ULTRA-SEGURO PARA BUILD) ---
+/**
+ * Obtiene el perfil del usuario actual de forma segura.
+ * Optimizada para no romper el proceso de build de Vercel.
+ */
 export async function getCurrentUserProfile() {
-  const cookieStore = await cookies(); 
-  const supabase = await createClient();
+  try {
+    // 1. SEGURIDAD PARA EL BUILD:
+    // Si estamos en Vercel construyendo la app, cookies() lanzará un error.
+    const { cookies } = await import('next/headers');
+    const cookieStore = await cookies();
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // Si no hay cookies de sesión, no perdemos tiempo llamando a Supabase
+    if (cookieStore.getAll().length === 0) return null;
 
-  if (authError || !user) {
-    return null
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) return null;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    return profile;
+  } catch (error) {
+    // Durante el build o fallos de headers, devolvemos null silenciosamente
+    return null;
   }
-
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  if (error) {
-    return null
-  }
-
-  return profile
 }
 
 // --- NUEVA FUNCIÓN: Enviar correo de bienvenida ---
