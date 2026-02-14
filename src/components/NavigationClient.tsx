@@ -25,37 +25,35 @@ export default function NavigationClient({
   const [role, setRole] = useState(initialRole)
   const [email, setEmail] = useState(initialEmail)
 
-  // RESPALDO: Si el servidor no mandó los datos, los buscamos directamente desde el cliente
+  // RESPALDO INTELIGENTE: Prioriza la identidad (Auth) para mostrar UI rápido
   useEffect(() => {
-    // Si ya tenemos los datos, no hacemos nada
-    if (role && email) return;
+    const loadIdentity = async () => {
+      // 1. Preguntar a la cuenta (Auth) - Esto nunca falla si estás dentro
+      const { data: { user } } = await supabase.auth.getUser();
 
-    const loadProfileDirectly = async () => {
-      try {
-        // 1. Obtenemos el usuario directamente desde el navegador
-        const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Ponemos el email de inmediato (esto recupera la vista visualmente)
+        setEmail(user.email);
 
-        if (user) {
-          // 2. Buscamos su perfil en la tabla
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
+        // 2. Preguntar a la tabla (Perfil) - Para los botones de Admin
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
 
-          if (profile) {
-            console.log("Perfil cargado desde el cliente:", profile.role);
-            setRole(profile.role);
-            setEmail(profile.email);
-          }
+        if (profile) {
+          console.log("Identidad cargada:", profile.role);
+          setRole(profile.role);
+        } else {
+          console.log("Aviso: Usuario sin perfil en tabla, usando rol base");
+          setRole('teacher'); // Rol de seguridad por defecto para que no falle la UI
         }
-      } catch (error) {
-        console.error("Error cargando perfil desde el navegador:", error);
       }
     };
 
-    loadProfileDirectly();
-  }, [role, email, supabase]);
+    loadIdentity();
+  }, [supabase]);
 
   const handleBack = () => router.back()
   const handleForward = () => router.forward()
@@ -63,7 +61,6 @@ export default function NavigationClient({
   const handleLogout = async () => {
     await supabase.auth.signOut()
     // Forzamos una recarga completa del navegador para limpiar la memoria
-    // Esto evita que datos de la sesión anterior persistan en el estado de React
     window.location.href = '/login'
   }
 
@@ -116,7 +113,7 @@ export default function NavigationClient({
 
             {/* --- BLOQUE DE DEBUG (Bórralo después) --- */}
             <div className="absolute top-16 right-4 bg-black text-white text-[8px] p-2 rounded opacity-50 z-50">
-              UID: {role ? 'Con Perfil' : 'SIN PERFIL'} | Email: {email || 'Nulo'}
+              UID: {role ? 'Con Perfil' : 'SIN PERFIL'} | Email: {email || 'Cargando...'}
             </div>
 
             {/* Email del Usuario */}
