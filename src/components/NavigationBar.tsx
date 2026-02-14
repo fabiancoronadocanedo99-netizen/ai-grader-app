@@ -1,3 +1,4 @@
+export const revalidate = 0 // <-- Esto obliga a la barra a ser 100% fresca siempre
 import { getCurrentUserProfile } from '@/actions/user-actions'
 import NavigationClient from './NavigationClient'
 

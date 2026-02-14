@@ -62,8 +62,9 @@ export default function NavigationClient({
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
+    // Forzamos una recarga completa del navegador para limpiar la memoria
+    // Esto evita que datos de la sesión anterior persistan en el estado de React
+    window.location.href = '/login'
   }
 
   // Lógica de botones simplificada y robusta con useMemo

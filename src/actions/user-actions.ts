@@ -26,8 +26,12 @@ type BulkImportResult = {
   errors: string[]
 }
 
-// --- OBTENER PERFIL (VERSIÓN SIMPLIFICADA) ---
+// --- OBTENER PERFIL (VERSIÓN SIMPLIFICADA & SIN CACHÉ) ---
 export async function getCurrentUserProfile() {
+  // Forzamos a Next.js a que no use copias guardadas de esta función
+  // Esto refresca el layout completo para evitar "fantasmas" de sesión
+  revalidatePath('/', 'layout')
+
   try {
     const supabase = await createClient();
 
