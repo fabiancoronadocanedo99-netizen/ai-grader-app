@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { LayoutDashboard, ChevronLeft, ChevronRight, UserCircle, LogOut, ShieldCheck, School, Landmark } from 'lucide-react'
 import { createClient } from '@/lib/supabaseClient'
-import { getCurrentUserProfile } from '@/actions/user-actions'
 
 type NavigationClientProps = {
   userRole?: string;
@@ -21,19 +20,37 @@ export default function NavigationClient({ userRole: initialRole, userEmail: ini
   const [role, setRole] = useState(initialRole)
   const [email, setEmail] = useState(initialEmail)
 
-  // RESPALDO: Si el servidor no mandó los datos, los buscamos aquí mismo
+  // RESPALDO: Si el servidor no mandó los datos, los buscamos directamente desde el cliente
   useEffect(() => {
-    if (!role || !email) {
-      const loadProfile = async () => {
-        const profile = await getCurrentUserProfile()
-        if (profile) {
-          setRole(profile.role)
-          setEmail(profile.email)
+    // Si ya tenemos los datos, no hacemos nada
+    if (role && email) return;
+
+    const loadProfileDirectly = async () => {
+      try {
+        // 1. Obtenemos el usuario directamente desde el navegador
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (user) {
+          // 2. Buscamos su perfil en la tabla
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
+          if (profile) {
+            console.log("Perfil cargado desde el cliente:", profile.role);
+            setRole(profile.role);
+            setEmail(profile.email);
+          }
         }
+      } catch (error) {
+        console.error("Error cargando perfil desde el navegador:", error);
       }
-      loadProfile()
-    }
-  }, [role, email])
+    };
+
+    loadProfileDirectly();
+  }, [role, email, supabase]);
 
   const handleBack = () => router.back()
   const handleForward = () => router.forward()
