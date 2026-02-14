@@ -7,7 +7,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Cell
 } from 'recharts'
-import { getSchoolDetailedAnalytics } from '@/lib/actions/schoolAnalytics'
+// CORRECCIÓN 1: Ruta de importación actualizada
+import { getSchoolDetailedAnalytics } from '@/actions/institutional-actions'
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -232,7 +233,8 @@ function SectionCard({ title, children, style = {} }: { title: string; children:
 export default function SchoolAnalyticsPage() {
   const params = useParams()
   const router = useRouter()
-  const schoolId = params.schoolId as string
+  // CORRECCIÓN 2: Uso correcto del parámetro dinámico [id]
+  const schoolId = params.id as string
 
   const [data, setData] = useState<SchoolAnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -245,7 +247,10 @@ export default function SchoolAnalyticsPage() {
         setLoading(true)
         const result = await getSchoolDetailedAnalytics(schoolId)
         if (!result.success) throw new Error('No se pudieron cargar las analíticas')
-        setData(result as SchoolAnalyticsData)
+
+        // Nota: Asegúrate de que el objeto 'result' coincida con la interfaz SchoolAnalyticsData
+        // o realiza aquí el mapeo de datos necesario si el servidor devuelve nombres diferentes.
+        setData(result as unknown as SchoolAnalyticsData)
       } catch (err) {
         setError((err as Error).message)
       } finally {
