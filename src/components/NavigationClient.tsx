@@ -1,19 +1,35 @@
 'use client'
 
 import { useRouter, usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { LayoutDashboard, ChevronLeft, ChevronRight, UserCircle, LogOut, ShieldCheck, School, Landmark } from 'lucide-react'
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  UserCircle, 
+  LogOut, 
+  ShieldCheck, 
+  School, 
+  Landmark 
+} from 'lucide-react'
 import { createClient } from '@/lib/supabaseClient'
 
 type NavigationClientProps = {
   userRole?: string;
   userEmail?: string;
+  userId?: string;
 }
 
-export default function NavigationClient({ userRole, userEmail }: NavigationClientProps) {
+export default function NavigationClient({ userRole, userEmail, userId }: NavigationClientProps) {
   const router = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
+  const [mounted, setMounted] = useState(false)
+
+  // Evitamos errores de hidratación asegurando que el componente esté montado
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleBack = () => router.back()
   const handleForward = () => router.forward()
@@ -24,8 +40,9 @@ export default function NavigationClient({ userRole, userEmail }: NavigationClie
     router.refresh()
   }
 
-  // Lógica para definir el destino y texto del botón de administración
+  // --- CONFIGURACIÓN DE BOTONES POR ROL ---
   const getAdminButtonConfig = () => {
+    // 1. Super Administrador (Gestión Global)
     if (userRole === 'superadmin') {
       return {
         href: '/admin',
@@ -33,6 +50,8 @@ export default function NavigationClient({ userRole, userEmail }: NavigationClie
         icon: <ShieldCheck className="w-4 h-4" />
       }
     }
+
+    // 2. Administrador de Escuela (Panel Admin Local)
     if (userRole === 'admin') {
       return {
         href: '/dashboard/admin',
@@ -40,47 +59,42 @@ export default function NavigationClient({ userRole, userEmail }: NavigationClie
         icon: <School className="w-4 h-4" />
       }
     }
-    // NUEVO: Configuración para el Gerente Institucional
-    if (userRole === 'institutional_manager') {
+
+    // 3. Gerente Institucional (Centro de Mando / Dashboard de múltiples escuelas)
+    // ✅ Ajustado a 'institutional' para coincidir con la ruta /dashboard/institutional
+    if (userRole === 'institutional' || userRole === 'institutional_manager') {
       return {
         href: '/dashboard/institutional',
         label: 'Centro de Mando',
         icon: <Landmark className="w-4 h-4" />
       }
     }
+
     return null
   }
 
   const adminConfig = getAdminButtonConfig()
 
+  // --- LÓGICA DE BREADCRUMBS ---
   const getBreadcrumb = () => {
     const segments = pathname.split('/').filter(Boolean);
     if (segments.length === 0) return 'Inicio';
 
     switch (segments[0]) {
       case 'login': return 'Iniciar Sesión';
-      case 'admin':
-        if (segments[1] === 'organizations') {
-            if (segments[2]) return 'Admin > Organización';
-            return 'Admin > Organizaciones';
-        }
-        if (segments[1] === 'users') return 'Admin > Usuarios';
-        return 'Administración Global';
       case 'dashboard':
         if (segments.length === 1) return 'Dashboard';
         if (segments[1] === 'admin') return 'Gestión Escuela';
-        // NUEVO: Breadcrumb para institucional
         if (segments[1] === 'institutional') return 'Centro de Mando';
-        if (segments[1] === 'class' && segments[2]) {
-          if (segments.length === 3) return `Clase`;
-          if (segments[3] === 'exam' && segments[4]) {
-            return `Clase > Examen`;
-          }
-        }
+        if (segments[1] === 'class') return 'Clase';
+        if (segments[1] === 'student') return 'Perfil Alumno';
         return 'Dashboard';
-      default: return 'Página';
+      case 'admin': return 'Administración Global';
+      default: return 'AI Grader';
     }
   };
+
+  if (!mounted) return <div className="h-16 bg-[#e0e5ec]" />;
 
   return (
     <div className="sticky top-0 z-40 bg-[#e0e5ec]" style={{boxShadow: 'inset 0 -2px 4px rgba(184, 193, 206, 0.3)'}}>
@@ -97,31 +111,32 @@ export default function NavigationClient({ userRole, userEmail }: NavigationClie
             </button>
           </div>
 
-          {/* Breadcrumb */}
+          {/* Breadcrumb Central */}
           <div className="flex-1 text-center px-2">
-            <span className="text-gray-700 font-bold text-lg truncate block">
+            <span className="text-gray-700 font-bold text-lg truncate block uppercase tracking-tight">
               {getBreadcrumb()}
             </span>
           </div>
 
-          {/* Área derecha: Info Usuario, Admin y Logout */}
-          <div className="flex items-center justify-end gap-3 w-auto min-w-[6rem]">
+          {/* Área derecha: Info, Admin y Salir */}
+          <div className="flex items-center justify-end gap-3 min-w-[6rem]">
 
-            {/* Email del Usuario */}
+            {/* Perfil / Email */}
             {userEmail && (
-              <div className="hidden lg:flex items-center gap-2 text-[10px] font-bold text-gray-500 bg-[#e0e5ec] shadow-[inset_2px_2px_5px_#b8c1ce,inset_-2px_-2px_5px_#ffffff] px-3 py-1.5 rounded-full">
-                <UserCircle className="w-3 h-3" />
-                <span className="truncate max-w-[120px] uppercase tracking-wider">{userEmail.split('@')[0]}</span>
+              <div className="hidden lg:flex items-center gap-2 text-[10px] font-black text-gray-500 bg-[#e0e5ec] shadow-[inset_2px_2px_5px_#b8c1ce,inset_-2px_-2px_5px_#ffffff] px-4 py-2 rounded-full">
+                <UserCircle className="w-4 h-4 text-blue-500" />
+                <span className="truncate max-w-[120px] uppercase tracking-widest">
+                  {userEmail.split('@')[0]}
+                </span>
               </div>
             )}
 
-            {/* BOTÓN DE ADMINISTRACIÓN INTELIGENTE */}
+            {/* BOTÓN DE ACCESO SEGÚN ROL */}
             {adminConfig && (
               <Link href={adminConfig.href}>
-                <button className="neu-button px-4 py-2 flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors shadow-[4px_4px_10px_#b8c1ce,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#b8c1ce,inset_-2px_-2px_5px_#ffffff]">
+                <button className="neu-button px-4 py-2 flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-all shadow-[4px_4px_10px_#b8c1ce,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#b8c1ce,inset_-2px_-2px_5px_#ffffff]">
                   {adminConfig.icon}
-                  <span className="hidden sm:inline uppercase tracking-tight">{adminConfig.label}</span>
-                  <span className="sm:hidden">Admin</span>
+                  <span className="hidden sm:inline uppercase tracking-tighter">{adminConfig.label}</span>
                 </button>
               </Link>
             )}
