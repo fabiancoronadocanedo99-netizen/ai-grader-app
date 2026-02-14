@@ -2,7 +2,7 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-// Nota: Eliminamos 'cookies' de la importación estática superior para usarla dinámicamente
+import { headers } from 'next/headers' // Importado para forzar dinamismo
 import Papa from 'papaparse'
 import { Resend } from 'resend'
 import { logEvent } from './audit-actions'
@@ -26,11 +26,11 @@ type BulkImportResult = {
   errors: string[]
 }
 
-// --- OBTENER PERFIL (VERSIÓN SIMPLIFICADA & SIN CACHÉ) ---
+// --- OBTENER PERFIL (VERSIÓN CON HEADERS PARA EVITAR CACHÉ) ---
 export async function getCurrentUserProfile() {
-  // Forzamos a Next.js a que no use copias guardadas de esta función
-  // Esto refresca el layout completo para evitar "fantasmas" de sesión
-  revalidatePath('/', 'layout')
+  // Forzamos que la función sea dinámica leyendo los headers
+  // Esto evita que Vercel o Next.js sirvan una respuesta estática
+  const headerList = await headers();
 
   try {
     const supabase = await createClient();
@@ -46,19 +46,19 @@ export async function getCurrentUserProfile() {
       .eq('id', user.id)
       .single();
 
-    // 3. SI NO HAY PERFIL (Error PGRST116), devolvemos un objeto básico
-    // para que la barra no se rompa y podamos ver el ID
+    // 3. Fallback si no hay perfil (para evitar que la UI se rompa)
     if (profileError || !profile) {
       return {
         id: user.id,
         email: user.email,
-        role: 'teacher', // Rol temporal para debug
+        role: 'teacher',
         full_name: 'Usuario sin Perfil'
       };
     }
 
     return profile;
   } catch (e) {
+    console.error("Error en getCurrentUserProfile:", e);
     return null;
   }
 }
