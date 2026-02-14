@@ -3,6 +3,9 @@ import { Suspense } from 'react';
 import "./globals.css";
 import NavigationBar from '@/components/NavigationBar';
 
+// --- AÑADE ESTA LÍNEA AQUÍ PARA VERCEL ---
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: "AI Grader - Plataforma de Evaluación",
   description: "Automatiza tu calificación con IA",
@@ -16,8 +19,6 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className="neu-container min-h-screen">
-        {/* Envolvemos la NavigationBar con Suspense */}
-        {/* Esto previene errores de hidratación y fallos en el build de Vercel */}
         <Suspense fallback={<div className="h-16 bg-[#e0e5ec] animate-pulse" />}>
           <NavigationBar />
         </Suspense>
