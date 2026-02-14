@@ -1,6 +1,3 @@
-export const dynamic = 'force-dynamic'
-export const fetchCache = 'force-no-store'
-
 import type { Metadata } from "next";
 import { Suspense } from 'react';
 import "./globals.css";
@@ -19,9 +16,8 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className="neu-container min-h-screen">
-        {/* La combinación de 'force-dynamic' y Suspense asegura que 
-            NavigationBar nunca rompa el servidor ni el cliente.
-        */}
+        {/* Envolvemos la NavigationBar con Suspense */}
+        {/* Esto previene errores de hidratación y fallos en el build de Vercel */}
         <Suspense fallback={<div className="h-16 bg-[#e0e5ec] animate-pulse" />}>
           <NavigationBar />
         </Suspense>
