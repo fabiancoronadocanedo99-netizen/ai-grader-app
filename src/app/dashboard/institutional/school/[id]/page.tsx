@@ -4,10 +4,11 @@ import { useState, useEffect, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell
 } from 'recharts'
-// CORRECCIÓN 1: Ruta de importación actualizada
+
+// PASO 1: Importación corregida
 import { getSchoolDetailedAnalytics } from '@/actions/institutional-actions'
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
@@ -164,7 +165,6 @@ function StudentRow({ student, variant }: { student: StudentRanking; variant: 's
       onMouseEnter={e => (e.currentTarget.style.boxShadow = 'inset 3px 3px 8px #c8ccd1, inset -3px -3px 8px #ffffff')}
       onMouseLeave={e => (e.currentTarget.style.boxShadow = '3px 3px 8px #c8ccd1, -3px -3px 8px #ffffff')}
     >
-      {/* Avatar */}
       <div style={{
         width: '38px', height: '38px', borderRadius: '50%',
         background: isStar
@@ -178,7 +178,6 @@ function StudentRow({ student, variant }: { student: StudentRanking; variant: 's
         {student.name.charAt(0)}
       </div>
 
-      {/* Info */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontWeight: 700, color: '#2d3748', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {student.name}
@@ -188,7 +187,6 @@ function StudentRow({ student, variant }: { student: StudentRanking; variant: 's
         </p>
       </div>
 
-      {/* Score */}
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <p style={{
           fontWeight: 800, fontSize: '16px',
@@ -231,25 +229,29 @@ function SectionCard({ title, children, style = {} }: { title: string; children:
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
 export default function SchoolAnalyticsPage() {
+  // PASO 2: Arreglar el ID para Next.js 15
   const params = useParams()
   const router = useRouter()
-  // CORRECCIÓN 2: Uso correcto del parámetro dinámico [id]
-  const schoolId = params.id as string
+
+  const schoolId = useMemo(() => {
+    if (!params?.id) return null
+    return Array.isArray(params.id) ? params.id[0] : params.id
+  }, [params])
 
   const [data, setData] = useState<SchoolAnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // PASO 3: Asegurar que el efecto use el ID nuevo y seguro
   useEffect(() => {
     if (!schoolId) return
+
     const load = async () => {
       try {
         setLoading(true)
         const result = await getSchoolDetailedAnalytics(schoolId)
         if (!result.success) throw new Error('No se pudieron cargar las analíticas')
 
-        // Nota: Asegúrate de que el objeto 'result' coincida con la interfaz SchoolAnalyticsData
-        // o realiza aquí el mapeo de datos necesario si el servidor devuelve nombres diferentes.
         setData(result as unknown as SchoolAnalyticsData)
       } catch (err) {
         setError((err as Error).message)
@@ -263,7 +265,7 @@ export default function SchoolAnalyticsPage() {
   // ── DERIVED DATA ──
   const creditsSaved = useMemo(() => {
     if (!data) return 0
-    return data.schoolInfo.totalExams * 10 // 10 min por examen
+    return data.schoolInfo.totalExams * 10 
   }, [data])
 
   const radarData = useMemo(() => {
@@ -278,7 +280,7 @@ export default function SchoolAnalyticsPage() {
     return (data?.teacherStats || [])
       .sort((a, b) => b.average - a.average)
       .map(t => ({
-        name: t.name.split(' ')[0], // primer nombre para que quepa
+        name: t.name.split(' ')[0], 
         fullName: t.name,
         promedio: t.average,
         alumnos: t.totalStudents
@@ -590,7 +592,6 @@ export default function SchoolAnalyticsPage() {
               Sin datos de maestros
             </div>
           )}
-          {/* Legend manual */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
             {teacherBarData.map((t, i) => (
               <span key={t.name} style={{
@@ -611,7 +612,6 @@ export default function SchoolAnalyticsPage() {
         gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
         gap: '24px'
       }}>
-        {/* Estrellas */}
         <SectionCard title="⭐ Alumnos Estrella">
           {topStudents.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -627,7 +627,6 @@ export default function SchoolAnalyticsPage() {
           )}
         </SectionCard>
 
-        {/* Alertas */}
         <SectionCard title="🚨 Alumnos en Riesgo">
           {atRiskStudents.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
