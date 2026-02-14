@@ -2,7 +2,7 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { cookies } from 'next/headers'
+// Nota: Eliminamos 'cookies' de la importación estática superior para usarla dinámicamente
 import Papa from 'papaparse'
 import { Resend } from 'resend'
 import { logEvent } from './audit-actions'
@@ -26,28 +26,41 @@ type BulkImportResult = {
   errors: string[]
 }
 
-// --- OBTENER PERFIL (LIMPIO) ---
+// --- OBTENER PERFIL (VERSIÓN SIMPLIFICADA & SIN CACHÉ) ---
 export async function getCurrentUserProfile() {
-  const cookieStore = await cookies();
-  const supabase = await createClient()
+  // Forzamos a Next.js a que no use copias guardadas de esta función
+  // Esto refresca el layout completo para evitar "fantasmas" de sesión
+  revalidatePath('/', 'layout')
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  try {
+    const supabase = await createClient();
 
-  if (authError || !user) {
-    return null
+    // 1. Obtener el usuario de la autenticación
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return null;
+
+    // 2. Obtener el perfil
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    // 3. SI NO HAY PERFIL (Error PGRST116), devolvemos un objeto básico
+    // para que la barra no se rompa y podamos ver el ID
+    if (profileError || !profile) {
+      return {
+        id: user.id,
+        email: user.email,
+        role: 'teacher', // Rol temporal para debug
+        full_name: 'Usuario sin Perfil'
+      };
+    }
+
+    return profile;
+  } catch (e) {
+    return null;
   }
-
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  if (error) {
-    return null
-  }
-
-  return profile
 }
 
 // --- NUEVA FUNCIÓN: Enviar correo de bienvenida ---
@@ -420,7 +433,6 @@ export async function sendStudentReportToParent(data: {
 
 /**
  * ACTUALIZAR MATERIAS DEL MAESTRO usando RPC
- * ✅ USA EL NOMBRE NUEVO QUE ES EL MÁS ESTABLE
  */
 export async function updateUserSubjects(subjectsString: string) {
   const supabase = await createClient(); 
@@ -441,7 +453,6 @@ export async function updateUserSubjects(subjectsString: string) {
       throw new Error("Debes proporcionar al menos una materia.");
     }
 
-    // --- USA EL NOMBRE NUEVO QUE ES EL MÁS ESTABLE ---
     const { error } = await supabase.rpc('set_teacher_subjects', {
       input_subjects: subjectsArray
     });

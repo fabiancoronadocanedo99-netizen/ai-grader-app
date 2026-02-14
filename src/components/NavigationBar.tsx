@@ -1,35 +1,19 @@
-'use client'
-
-import { useEffect, useState } from 'react'
+export const revalidate = 0 // <-- Esto obliga a la barra a ser 100% fresca siempre
 import { getCurrentUserProfile } from '@/actions/user-actions'
 import NavigationClient from './NavigationClient'
 
-export default function NavigationBar() {
-  const [userRole, setUserRole] = useState<string | undefined>(undefined);
-  const [userEmail, setUserEmail] = useState<string | undefined>(undefined);
+export default async function NavigationBar() {
+  // El servidor hace el trabajo pesado: obtiene la sesión y el perfil
+  // de forma asíncrona antes de renderizar nada en el cliente.
+  const profile = await getCurrentUserProfile()
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        const profile = await getCurrentUserProfile();
-
-        if (profile) {
-          setUserRole(profile.role);
-          setUserEmail(profile.email); 
-        }
-      } catch (error) {
-        // Fallo silencioso en producción para no molestar al usuario
-        console.error("Error cargando perfil:", error); 
-      }
-    };
-
-    loadProfile();
-  }, []);
-
+  // Enviamos los datos esenciales al 'NavigationClient'.
+  // He añadido el userId por si lo necesitas para lógicas internas o depuración.
   return (
     <NavigationClient 
-      userRole={userRole} 
-      userEmail={userEmail} 
+      userRole={profile?.role || undefined} 
+      userEmail={profile?.email || undefined}
+      userId={profile?.id || undefined}
     />
   )
 }

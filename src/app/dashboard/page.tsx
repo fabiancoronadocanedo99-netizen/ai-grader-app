@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -18,7 +20,7 @@ interface Class {
 }
 
 interface Profile { 
-  onboarding_completed: boolean; // Actualizado de profile_completed
+  onboarding_completed: boolean;
   subjects_taught: string | null; 
 }
 
@@ -71,7 +73,6 @@ export default function DashboardPage() {
       console.error("Error al cargar perfil:", profileResult.error);
     } else {
       setProfile(profileResult.data as Profile);
-      // Si subjects_taught es un array en la DB, lo unimos con comas para el textarea
       const subjects = profileResult.data.subjects_taught;
       setSubjectsInput(Array.isArray(subjects) ? subjects.join(', ') : (subjects || ''));
     }
@@ -94,7 +95,7 @@ export default function DashboardPage() {
     fetchData();
   }, [fetchData]);
 
-  // --- Lógica de Materias (CORREGIDA CON SERVER ACTION) ---
+  // --- Lógica de Materias ---
   const handleUpdateSubjects = async () => {
     if (!subjectsInput.trim()) {
       alert("Por favor, escribe al menos una materia.");
@@ -103,13 +104,11 @@ export default function DashboardPage() {
 
     setIsSavingSubjects(true);
     try {
-      // LLAMADA A LA SERVER ACTION
       const result = await updateUserSubjects(subjectsInput);
 
       if (result.success) {
         alert("¡Materias configuradas con éxito!");
         setIsSubjectModalOpen(false);
-        // Refrescamos los datos locales
         await fetchData();
       } else {
         alert(`Error: ${result.error}`);
@@ -183,6 +182,9 @@ export default function DashboardPage() {
 
   return (
     <div className="p-8 neu-container min-h-screen relative">
+      {/* CIRUGÍA COMPLETADA: Se eliminó <NavigationBar /> de aquí 
+         porque ahora reside en el RootLayout.
+      */}
 
       {/* --- Encabezado --- */}
       <div className="flex justify-between items-center mb-6">
