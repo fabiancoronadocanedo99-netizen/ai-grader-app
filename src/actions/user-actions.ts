@@ -26,35 +26,35 @@ type BulkImportResult = {
   errors: string[]
 }
 
-// --- OBTENER PERFIL (ULTRA-SEGURO PARA BUILD) ---
-/**
- * Obtiene el perfil del usuario actual de forma segura.
- * Optimizada para no romper el proceso de build de Vercel.
- */
+// --- OBTENER PERFIL (CON RESPALDO DE AUTH) ---
 export async function getCurrentUserProfile() {
   try {
-    // 1. SEGURIDAD PARA EL BUILD:
-    // Si estamos en Vercel construyendo la app, cookies() lanzará un error.
-    const { cookies } = await import('next/headers');
-    const cookieStore = await cookies();
-
-    // Si no hay cookies de sesión, no perdemos tiempo llamando a Supabase
-    if (cookieStore.getAll().length === 0) return null;
-
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
+    // Si no hay usuario en la autenticación, devolvemos null
     if (authError || !user) return null;
 
-    const { data: profile } = await supabase
+    // Intentamos buscar el perfil
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .single();
 
+    // SI NO HAY PERFIL EN LA TABLA, devolvemos un perfil genérico con el email de auth
+    if (profileError || !profile) {
+      console.warn("Perfil no encontrado en tabla profiles, usando datos de auth");
+      return {
+        id: user.id,
+        email: user.email,
+        role: 'teacher', // Rol por defecto para que no se rompa la barra
+        full_name: user.email?.split('@')[0]
+      };
+    }
+
     return profile;
   } catch (error) {
-    // Durante el build o fallos de headers, devolvemos null silenciosamente
     return null;
   }
 }
