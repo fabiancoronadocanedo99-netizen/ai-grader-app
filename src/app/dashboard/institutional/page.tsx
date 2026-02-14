@@ -144,7 +144,10 @@ export default function InstitutionalDashboardPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-black text-gray-600">{school.average}%</span>
-                  <Link href={`/dashboard/admin`} className="p-1 neu-card rounded-lg text-blue-600">
+                  <Link
+                    href={`/dashboard/institutional/school/${school.id}`}
+                    className="p-1 neu-card rounded-lg text-blue-600"
+                  >
                     <ArrowRight size={14} />
                   </Link>
                 </div>
