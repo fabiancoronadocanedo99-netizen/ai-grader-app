@@ -27,9 +27,10 @@ type BulkImportResult = {
 }
 
 // --- OBTENER PERFIL (LIMPIO) ---
+// ✅ CORREGIDO: Uso de await para cookies() y createClient() según Next.js 15
 export async function getCurrentUserProfile() {
-  const cookieStore = await cookies();
-  const supabase = await createClient()
+  const cookieStore = await cookies(); 
+  const supabase = await createClient();
 
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
@@ -420,7 +421,6 @@ export async function sendStudentReportToParent(data: {
 
 /**
  * ACTUALIZAR MATERIAS DEL MAESTRO usando RPC
- * ✅ USA EL NOMBRE NUEVO QUE ES EL MÁS ESTABLE
  */
 export async function updateUserSubjects(subjectsString: string) {
   const supabase = await createClient(); 
@@ -441,7 +441,6 @@ export async function updateUserSubjects(subjectsString: string) {
       throw new Error("Debes proporcionar al menos una materia.");
     }
 
-    // --- USA EL NOMBRE NUEVO QUE ES EL MÁS ESTABLE ---
     const { error } = await supabase.rpc('set_teacher_subjects', {
       input_subjects: subjectsArray
     });
