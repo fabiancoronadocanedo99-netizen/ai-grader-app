@@ -112,7 +112,13 @@ export default function NavigationClient({
           </div>
 
           <div className="flex items-center justify-end gap-3 min-w-[6rem]">
-            {/* Email con respaldo de estado */}
+
+            {/* --- BLOQUE DE DEBUG (Bórralo después) --- */}
+            <div className="absolute top-16 right-4 bg-black text-white text-[8px] p-2 rounded opacity-50 z-50">
+              UID: {role ? 'Con Perfil' : 'SIN PERFIL'} | Email: {email || 'Nulo'}
+            </div>
+
+            {/* Email del Usuario */}
             {email && (
               <div className="hidden lg:flex items-center gap-2 text-[10px] font-bold text-gray-500 bg-[#e0e5ec] shadow-[inset_2px_2px_5px_#b8c1ce,inset_-2px_-2px_5px_#ffffff] px-3 py-1.5 rounded-full">
                 <UserCircle className="w-3 h-3" />

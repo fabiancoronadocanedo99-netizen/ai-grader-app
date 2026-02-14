@@ -26,35 +26,35 @@ type BulkImportResult = {
   errors: string[]
 }
 
-// --- OBTENER PERFIL (CON RESPALDO DE AUTH) ---
+// --- OBTENER PERFIL (VERSIÓN SIMPLIFICADA) ---
 export async function getCurrentUserProfile() {
   try {
     const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    // Si no hay usuario en la autenticación, devolvemos null
+    // 1. Obtener el usuario de la autenticación
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return null;
 
-    // Intentamos buscar el perfil
+    // 2. Obtener el perfil
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .single();
 
-    // SI NO HAY PERFIL EN LA TABLA, devolvemos un perfil genérico con el email de auth
+    // 3. SI NO HAY PERFIL (Error PGRST116), devolvemos un objeto básico
+    // para que la barra no se rompa y podamos ver el ID
     if (profileError || !profile) {
-      console.warn("Perfil no encontrado en tabla profiles, usando datos de auth");
       return {
         id: user.id,
         email: user.email,
-        role: 'teacher', // Rol por defecto para que no se rompa la barra
-        full_name: user.email?.split('@')[0]
+        role: 'teacher', // Rol temporal para debug
+        full_name: 'Usuario sin Perfil'
       };
     }
 
     return profile;
-  } catch (error) {
+  } catch (e) {
     return null;
   }
 }
