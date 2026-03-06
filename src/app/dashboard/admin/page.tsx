@@ -248,6 +248,23 @@ export default function AdminDashboardPage() {
             </div>
           ) : analyticsData ? (
             <>
+              {/* HEADER PLANTEL CON PROMEDIO GENERAL */}
+              <div className="rounded-3xl bg-[#e0e5ec] p-8 shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff] flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-widest text-blue-600 mb-2">Análisis de Plantel</p>
+                  <h2 className="text-3xl md:text-4xl font-black text-slate-700 uppercase">{data.organization.name}</h2>
+                  <p className="text-sm text-slate-400 font-bold mt-2 uppercase tracking-wider">
+                    {analyticsData.schoolInfo.totalTeachers} Maestros
+                    <span className="mx-3 opacity-30">·</span>
+                    {analyticsData.schoolInfo.totalStudents} Alumnos
+                  </p>
+                </div>
+                <div className="p-6 rounded-2xl shadow-[inset_6px_6px_12px_#b8b9be,inset_-6px_-6px_12px_#ffffff] text-center min-w-[140px]">
+                  <p className="text-[10px] font-black uppercase opacity-40 tracking-widest mb-1">Promedio General</p>
+                  <h3 className="text-5xl font-black text-blue-600">{analyticsData.generalStats.schoolAverage}%</h3>
+                </div>
+              </div>
+
               {/* KPI CARDS */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="p-6 rounded-3xl bg-[#e0e5ec] shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
