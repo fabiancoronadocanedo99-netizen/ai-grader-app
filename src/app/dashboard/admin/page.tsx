@@ -3,7 +3,12 @@ export const dynamic = 'force-dynamic'
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { updateUserCreditLimit } from '@/actions/user-actions'; 
+import { updateUserCreditLimit } from '@/actions/user-actions';
+import { getSchoolDetailedAnalytics } from '@/actions/institutional-actions';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
+} from 'recharts';
 import { 
   Users, 
   GraduationCap, 
@@ -63,6 +68,9 @@ export default function AdminDashboardPage() {
   const [newCreditLimit, setNewCreditLimit] = useState<number>(0);
   const [updatingUser, setUpdatingUser] = useState(false);
 
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -82,6 +90,20 @@ export default function AdminDashboardPage() {
 
     fetchData();
   }, []);
+
+  useEffect(() => {
+    async function loadAnalytics() {
+      if (activeTab === 'analiticas' && data?.organization?.id && !analyticsData) {
+        setLoadingAnalytics(true);
+        const result = await getSchoolDetailedAnalytics(data.organization.id);
+        if (result.success) {
+          setAnalyticsData(result);
+        }
+        setLoadingAnalytics(false);
+      }
+    }
+    loadAnalytics();
+  }, [activeTab, data, analyticsData]);
 
   const handleOpenEditModal = (user: UserProfile) => {
     setSelectedUser(user);
@@ -146,28 +168,45 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="max-w-7xl mx-auto mb-10 flex gap-6">
-        <button onClick={() => setActiveTab('gestion')} className={cn("px-6 py-3 rounded-xl font-bold transition-all", activeTab === 'gestion' ? "text-blue-600 shadow-[inset_4px_4px_8px_#b8b9be,inset_-4px_-4px_8px_#ffffff]" : "text-slate-500 shadow-[6px_6px_12px_#b8b9be,-6px_-6px_12px_#ffffff]")}>Gestión</button>
-        <button onClick={() => setActiveTab('analiticas')} className={cn("px-6 py-3 rounded-xl font-bold transition-all", activeTab === 'analiticas' ? "text-blue-600 shadow-[inset_4px_4px_8px_#b8b9be,inset_-4px_-4px_8px_#ffffff]" : "text-slate-500 shadow-[6px_6px_12px_#b8b9be,-6px_-6px_12px_#ffffff]")}>Métricas</button>
+        <button
+          onClick={() => setActiveTab('gestion')}
+          className={cn("px-6 py-3 rounded-xl font-bold transition-all", activeTab === 'gestion'
+            ? "text-blue-600 shadow-[inset_4px_4px_8px_#b8b9be,inset_-4px_-4px_8px_#ffffff]"
+            : "text-slate-500 shadow-[6px_6px_12px_#b8b9be,-6px_-6px_12px_#ffffff]"
+          )}
+        >
+          Gestión
+        </button>
+        <button
+          onClick={() => setActiveTab('analiticas')}
+          className={cn("px-6 py-3 rounded-xl font-bold transition-all", activeTab === 'analiticas'
+            ? "text-blue-600 shadow-[inset_4px_4px_8px_#b8b9be,inset_-4px_-4px_8px_#ffffff]"
+            : "text-slate-500 shadow-[6px_6px_12px_#b8b9be,-6px_-6px_12px_#ffffff]"
+          )}
+        >
+          Métricas
+        </button>
       </div>
 
+      {/* ── TAB: GESTIÓN ── */}
       {activeTab === 'gestion' && (
         <div className="max-w-7xl mx-auto space-y-10">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-             <div className="neu-card p-6 rounded-3xl shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
-               <Coins className="mb-2 text-yellow-600" />
-               <h3 className="text-3xl font-bold">{data.organization.credits_remaining.toLocaleString()}</h3>
-               <p className="text-xs text-slate-500">Créditos institucionales</p>
-             </div>
-             <div className="neu-card p-6 rounded-3xl shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
-               <Users className="mb-2 text-blue-600" />
-               <h3 className="text-3xl font-bold">{data.users.length}</h3>
-               <p className="text-xs text-slate-500">Maestros activos</p>
-             </div>
-             <div className="neu-card p-6 rounded-3xl shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
-               <GraduationCap className="mb-2 text-green-600" />
-               <h3 className="text-xl font-bold">{data.organization.subscription_plan || 'Estándar'}</h3>
-               <p className="text-xs text-slate-500">Plan actual</p>
-             </div>
+            <div className="neu-card p-6 rounded-3xl shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
+              <Coins className="mb-2 text-yellow-600" />
+              <h3 className="text-3xl font-bold">{data.organization.credits_remaining.toLocaleString()}</h3>
+              <p className="text-xs text-slate-500">Créditos institucionales</p>
+            </div>
+            <div className="neu-card p-6 rounded-3xl shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
+              <Users className="mb-2 text-blue-600" />
+              <h3 className="text-3xl font-bold">{data.users.length}</h3>
+              <p className="text-xs text-slate-500">Maestros activos</p>
+            </div>
+            <div className="neu-card p-6 rounded-3xl shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
+              <GraduationCap className="mb-2 text-green-600" />
+              <h3 className="text-xl font-bold">{data.organization.subscription_plan || 'Estándar'}</h3>
+              <p className="text-xs text-slate-500">Plan actual</p>
+            </div>
           </div>
 
           <div className="rounded-3xl bg-[#e0e5ec] p-8 shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff] overflow-x-auto">
@@ -184,7 +223,10 @@ export default function AdminDashboardPage() {
                   <tr key={user.id} className="border-b border-slate-200/50">
                     <td className="p-4 font-bold">{user.full_name}</td>
                     <td className="p-4 text-center">
-                      <button onClick={() => handleOpenEditModal(user)} className="px-4 py-2 rounded-xl shadow-[4px_4px_8px_#b8b9be,-4px_-4px_8px_#ffffff] hover:text-blue-600 flex items-center gap-2 mx-auto">
+                      <button
+                        onClick={() => handleOpenEditModal(user)}
+                        className="px-4 py-2 rounded-xl shadow-[4px_4px_8px_#b8b9be,-4px_-4px_8px_#ffffff] hover:text-blue-600 flex items-center gap-2 mx-auto"
+                      >
                         {user.monthly_credit_limit} <Edit2 size={12}/>
                       </button>
                     </td>
@@ -197,6 +239,147 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
+      {/* ── TAB: MÉTRICAS / ANALÍTICAS ── */}
+      {activeTab === 'analiticas' && (
+        <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
+          {loadingAnalytics ? (
+            <div className="flex justify-center py-20">
+              <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+            </div>
+          ) : analyticsData ? (
+            <>
+              {/* KPI CARDS */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="p-6 rounded-3xl bg-[#e0e5ec] shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
+                  <div className="text-green-600 mb-2 text-xl">✅</div>
+                  <p className="text-xs font-black uppercase opacity-40">Tasa Aprobación</p>
+                  <h3 className="text-3xl font-black text-blue-600">{analyticsData.generalStats.passRate}%</h3>
+                  <p className="text-[10px] opacity-60">Alumnos con nota &gt; 60%</p>
+                </div>
+                <div className="p-6 rounded-3xl bg-[#e0e5ec] shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
+                  <div className="text-amber-600 mb-2 text-xl">📋</div>
+                  <p className="text-xs font-black uppercase opacity-40">Evaluaciones</p>
+                  <h3 className="text-3xl font-black text-blue-600">{analyticsData.schoolInfo.totalExams}</h3>
+                  <p className="text-[10px] opacity-60">Procesadas por AI Grader</p>
+                </div>
+                <div className="p-6 rounded-3xl bg-[#e0e5ec] shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
+                  <div className="text-yellow-500 mb-2 text-xl">⭐</div>
+                  <p className="text-xs font-black uppercase opacity-40">Excelencia</p>
+                  <h3 className="text-3xl font-black text-blue-600">{analyticsData.topStudents.length}</h3>
+                  <p className="text-[10px] opacity-60">Alumnos destacados</p>
+                </div>
+                <div className="p-6 rounded-3xl bg-[#e0e5ec] shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
+                  <div className="text-red-600 mb-2 text-xl">🚨</div>
+                  <p className="text-xs font-black uppercase opacity-40">En Riesgo</p>
+                  <h3 className="text-3xl font-black text-blue-600">{analyticsData.atRiskStudents.length}</h3>
+                  <p className="text-[10px] opacity-60">Atención psicopedagógica</p>
+                </div>
+              </div>
+
+              {/* BANNER ROI */}
+              <div className="rounded-3xl bg-[#e0e5ec] p-8 shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff] flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="flex items-center gap-6">
+                  <div className="w-16 h-16 rounded-full bg-[#e0e5ec] shadow-[6px_6px_12px_#b8b9be,-6px_-6px_12px_#ffffff] flex items-center justify-center text-2xl">
+                    🕒
+                  </div>
+                  <div>
+                    <p className="text-xs font-black uppercase opacity-40">Carga Administrativa Eliminada</p>
+                    <h2 className="text-5xl font-black text-slate-700">
+                      {analyticsData.schoolInfo.totalExams * 10} min
+                    </h2>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-black uppercase opacity-40">Impacto Mensual:</p>
+                  <h2 className="text-3xl font-black text-blue-600">
+                    {Math.round((analyticsData.schoolInfo.totalExams * 10) / 60)} HORAS DOCENTES
+                  </h2>
+                  <p className="text-[10px] font-bold opacity-40 uppercase">Recuperadas para el acompañamiento</p>
+                </div>
+              </div>
+
+              {/* GRÁFICAS */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="rounded-3xl bg-[#e0e5ec] p-6 shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
+                  <h3 className="text-lg font-black mb-6 uppercase tracking-widest opacity-40">Radar de Materias</h3>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RadarChart data={analyticsData.subjectAverages}>
+                        <PolarGrid />
+                        <PolarAngleAxis dataKey="subject" />
+                        <PolarRadiusAxis domain={[0, 100]} tick={false} />
+                        <Radar name="Promedio" dataKey="average" stroke="#2563eb" fill="#2563eb" fillOpacity={0.6} />
+                      </RadarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div className="rounded-3xl bg-[#e0e5ec] p-6 shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
+                  <h3 className="text-lg font-black mb-6 uppercase tracking-widest opacity-40">Ranking Docente</h3>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={analyticsData.teacherStats}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                        <YAxis domain={[0, 100]} />
+                        <Tooltip />
+                        <Bar dataKey="average" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+
+              {/* ALUMNOS DESTACADOS Y EN RIESGO */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="rounded-3xl bg-[#e0e5ec] p-6 shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
+                  <h3 className="text-lg font-black mb-4 uppercase tracking-widest opacity-40">⭐ Alumnos Estrella</h3>
+                  <div className="space-y-3">
+                    {analyticsData.topStudents.length === 0 ? (
+                      <p className="text-sm opacity-40 text-center py-6">Sin datos suficientes</p>
+                    ) : analyticsData.topStudents.map((s: any, i: number) => (
+                      <div key={s.id} className="flex items-center justify-between p-3 rounded-2xl shadow-[inset_3px_3px_6px_#b8b9be,inset_-3px_-3px_6px_#ffffff]">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-black opacity-30">#{i + 1}</span>
+                          <div>
+                            <p className="font-bold text-sm">{s.name}</p>
+                            <p className="text-[10px] opacity-40">{s.subject} · {s.teacher}</p>
+                          </div>
+                        </div>
+                        <span className="font-black text-green-600">{s.average}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-3xl bg-[#e0e5ec] p-6 shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff]">
+                  <h3 className="text-lg font-black mb-4 uppercase tracking-widest opacity-40">🚨 Alumnos en Riesgo</h3>
+                  <div className="space-y-3">
+                    {analyticsData.atRiskStudents.length === 0 ? (
+                      <p className="text-sm opacity-40 text-center py-6">¡Sin alumnos en riesgo!</p>
+                    ) : analyticsData.atRiskStudents.map((s: any, i: number) => (
+                      <div key={s.id} className="flex items-center justify-between p-3 rounded-2xl shadow-[inset_3px_3px_6px_#b8b9be,inset_-3px_-3px_6px_#ffffff]">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-black opacity-30">#{i + 1}</span>
+                          <div>
+                            <p className="font-bold text-sm">{s.name}</p>
+                            <p className="text-[10px] opacity-40">{s.subject} · {s.teacher}</p>
+                          </div>
+                        </div>
+                        <span className="font-black text-red-500">{s.average}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-3xl bg-[#e0e5ec] p-20 text-center shadow-[8px_8px_16px_#b8b9be,-8px_-8px_16px_#ffffff] opacity-40">
+              <p className="text-xl font-black">No hay suficientes datos para generar analíticas aún.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── MODAL EDITAR LÍMITE ── */}
       {isModalOpen && selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
           <div className="w-full max-w-md bg-[#e0e5ec] rounded-[40px] p-10 shadow-[20px_20px_60px_#b8b9be,-20px_-20px_60px_#ffffff]">
@@ -204,10 +387,21 @@ export default function AdminDashboardPage() {
             <div className="mb-6 p-4 rounded-2xl shadow-[inset_4px_4px_8px_#b8b9be,inset_-4px_-4px_8px_#ffffff]">
               <p className="text-lg font-bold">{selectedUser.full_name}</p>
             </div>
-            <input type="number" value={newCreditLimit} onChange={(e) => setNewCreditLimit(parseInt(e.target.value) || 0)} className="w-full bg-[#e0e5ec] rounded-2xl p-5 text-2xl font-black shadow-[inset_6px_6px_12px_#b8b9be,inset_-6px_-6px_12px_#ffffff] outline-none mb-8"/>
+            <input
+              type="number"
+              value={newCreditLimit}
+              onChange={(e) => setNewCreditLimit(parseInt(e.target.value) || 0)}
+              className="w-full bg-[#e0e5ec] rounded-2xl p-5 text-2xl font-black shadow-[inset_6px_6px_12px_#b8b9be,inset_-6px_-6px_12px_#ffffff] outline-none mb-8"
+            />
             <div className="flex gap-4">
-              <button onClick={handleCloseModal} className="flex-1 py-4 rounded-2xl font-black shadow-[4px_4px_8px_#b8b9be,-4px_-4px_8px_#ffffff]">Cancelar</button>
-              <button onClick={handleSaveLimit} disabled={updatingUser} className="flex-1 py-4 rounded-2xl font-black text-blue-600 shadow-[4px_4px_8px_#b8b9be,-4px_-4px_8px_#ffffff] flex justify-center items-center gap-2">
+              <button onClick={handleCloseModal} className="flex-1 py-4 rounded-2xl font-black shadow-[4px_4px_8px_#b8b9be,-4px_-4px_8px_#ffffff]">
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveLimit}
+                disabled={updatingUser}
+                className="flex-1 py-4 rounded-2xl font-black text-blue-600 shadow-[4px_4px_8px_#b8b9be,-4px_-4px_8px_#ffffff] flex justify-center items-center gap-2"
+              >
                 {updatingUser ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} Guardar
               </button>
             </div>
